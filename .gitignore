@@ -1,0 +1,12 @@
+venv/
+results/
+hdfs/
+odbs/
+dist/
+
+src/*.egg-info
+src/odbp/__pycache__/*
+
+*.txt
+
+*.zip

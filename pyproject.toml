@@ -1,0 +1,31 @@
+[project]
+name = "odb-plotter"
+description = "Python3 API for Abaqus FEA .odb Files and related Command Line Visualization Tool"
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["TODO"]
+authors = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
+maintainers = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
+dependencies = [
+"h5py",
+"numpy",
+"pandas",
+"matplotlib",
+"pyvista",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://www.cmml.me.msstate.edu"
+"Bug Reports" = "https://www.github.com/mwpriddy/ABQplotterODB/issues"
+"Source" = "https://www.github.com/mwpriddy/ABQplotterODB"
+
+[tool.setuptools]
+package-data = {"odbp" = ["views.json", "odb_to_npz.py"]}
+
+[tool.setuptools.dynamic]
+version = {attr = "odbp.__version__"}
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
