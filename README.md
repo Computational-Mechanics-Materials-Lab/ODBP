@@ -1,5 +1,8 @@
 # ODB Plotter
 
+## Constraints:
+ODB Plotter is being developed by [CMML](cmml.me.msstate.edu), and as such has a focus on Additive Manufacturing and Temperature Data.
+
 ## Install with pip
 ```shell
 pip install odb-plotter

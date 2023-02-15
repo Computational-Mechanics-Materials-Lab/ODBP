@@ -33,22 +33,22 @@ class OdbVisualizer(Odb):
 
         self.views_list: list[str] = list(self.views.keys())
 
-        self.angle: str = self.views_list[49]
+        #self.angle: str = self.views_list[49]
+        self.angle: str = self.views_list[0]
         self.elev: int = self.views[self.angle][0]
         self.azim: int = self.views[self.angle][1]
         self.roll: int = self.views[self.angle][2]
 
         self.colormap_name: str = kwargs.get("colormap_name", "turbo")
-        self.colormap: plt.cm.ScalarMappable
+        self.colormap: pv.LookupTable
 
 
     def select_colormap(self) -> None:
         if not (hasattr(self, "meltpoint") or hasattr(self, "colormap_name")):
             raise MeltpointNotSetError
 
-        norm: mcolors.Normalize = mcolors.Normalize(0, self.meltpoint)
-        self.colormap = plt.cm.ScalarMappable(norm=norm, cmap=self.colormap_name)
-        self.colormap.set_array([])
+        # TODO different melt color? Don't plot from as low as 0?
+        self.colormap = pv.LookupTable(cmap=self.colormap_name, scalar_range=(0, self.meltpoint), above_range_color=(0.25, 0.25, 0.25, 1.0))
 
 
     # Overload parent's set_meltpoint method to always select colormap
@@ -79,121 +79,45 @@ class OdbVisualizer(Odb):
             self.roll = view[2]
 
 
-    def plot_time_3d(self, time: float, label: str, title: str)-> Any:
+    def plot_time_3d(self, time: float, label: str, interactive: bool)-> Any:
         curr_nodes: Any = self.out_nodes[self.out_nodes["Time"] == time]
 
         formatted_time: str = format(round(time, 2), ".2f")
         combined_label = f"{label}-{formatted_time}"
 
-        # PLT does not play nice with type hints, we use "any"
-        # fig: Any = plt.figure(figsize=(19.2, 10.8))
-        # ax: Any = plt.axes(projection="3d", label=combined_label)
-        #
-        # ax.set_xlabel(self.x.name)
-        # ax.set_ylabel(self.y.name)
-        # ax.set_zlabel(self.z.name)
-        #
-        # ax.set_box_aspect((self.x.size, self.y.size, self.z.size))
-        # ax.view_init(elev=self.elev, azim=self.azim, roll=self.roll)
-        #
-        # ax.set_title(f"{title}, time step: {formatted_time}")
-        # fig.add_axes(ax, label=ax.title)
-
-        plotter = pv.Plotter()
+        off_screen: bool = not interactive
+        plotter = pv.Plotter(off_screen=off_screen)
+        plotter.add_text(combined_label, position="upper_edge", color="white", font="courier", )
         faces: list[str] = ["x_low", "x_high", "y_low", "y_high", "z_low", "z_high"]
         face: str
         for face in faces:
-            # X: Any
-            # Y: Any
-            # Z: Any
-            temp_mask: Any
-            indices: list[str] = ["X", "Y", "Z"]
-            direction: tuple[int, int, int]
-            center: tuple[float, float, float]
-            i_size: int
-            j_size: int
-            i_resolution: int
-            j_resolution: int
+            selected_nodes: Any
 
             # TODO This whole idea could be parameterized, but it might be less readable
             if "x" in face:
-                indices.remove("X")
-                direction = (1, 0, 0)
-                i_size = self.z.size
-                i_resolution = self.z.size
-                j_size = self.y.size
-                j_resolution = self.y.size
                 if "low" in face:
-                    temp_mask = curr_nodes["X"] == self.x.vals[0]
-                    center = (0, self.y.size / 2, self.z.size / 2)
+                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.vals[0]]
                 else: # if "high" in face:
-                    temp_mask = curr_nodes["X"] == self.x.vals[-1]
-                    center = (self.x.size, self.y.size / 2, self.z.size / 2)
+                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.vals[-1]]
 
             elif "y" in face:
-                indices.remove("Y")
-                direction = (0, 1, 0)
-                i_size = self.x.size
-                i_resolution = self.x.size
-                j_size = self.z.size
-                j_resolution = self.z.size
                 if "low" in face:
-                    temp_mask = curr_nodes["Y"] == self.y.vals[0]
-                    center = (self.x.size / 2, 0, self.z.size / 2)
+                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.vals[0]]
                 else: # if "high" in face:
-                    temp_mask = curr_nodes["Y"] == self.y.vals[-1]
-                    center = (self.x.size / 2, self.y.size, self.z.size / 2)
+                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.vals[-1]]
 
             else: # if "z" in face
-                indices.remove("Z")
-                direction = (0, 0, 1)
-                i_size = self.x.size
-                i_resolution = self.x.size
-                j_size = self.y.size
-                j_resolution = self.y.size
                 if "low" in face:
-                    temp_mask = curr_nodes["Z"] == self.z.vals[0]
-                    center = (self.x.size / 2, self.y.size / 2, 0)
+                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.vals[0]]
                 else: # if "high" in face:
-                    temp_mask = curr_nodes["Z"] == self.z.vals[-1]
-                    center = (self.x.size / 2, self.y.size / 2, self.z.size)
+                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.vals[-1]]
 
-            temp_nodes: Any = curr_nodes[temp_mask]
-            # TODO
-            #first_offset: float = temp_nodes[indices[0]].min()
-            #second_offset: float = temp_nodes[indices[1]].min()
-
-            colors: Any = np.zeros((i_size * j_size, 3))
-            face_xs: list[float] = list()
-            face_ys: list[float] = list()
-            face_zs: list[float] = list()
-            node: Any
-            i = 0
-            for _, node in temp_nodes.iterrows():
-                print(i)
-                temp = node["Temp"]
-                face_xs.append(node["X"])
-                face_ys.append(node["Y"])
-                face_zs.append(node["Z"])
-                print(temp)
-                # TODO
-                #second_index: int = int((node[indices[0]] - first_offset) / self.mesh_seed_size)
-                #first_index: int = int((node[indices[1]] - second_offset) / self.mesh_seed_size)
-
-                if temp >= self.meltpoint:
-                    colors[i] = (0.25, 0.25, 0.25)
-                else:
-                    colors[i] = self.colormap.to_rgba(temp)[:3]
-
-                i += 1
-
-            curr_surface = np.vstack((face_xs, face_ys, face_zs)).T
-            surface: Any = pv.Plane(center=center, direction=direction, i_size=i_size, j_size=j_size, i_resolution=i_resolution, j_resolution=j_resolution)
-            #surface.cell_data["colors"] = colors
-            surface = surface.interpolate(pv.PolyData(curr_surface))
-            #plotter.add_mesh(surface, scalars="colors", rgb=True)
-            plotter.add_mesh(surface, rgb=True)
-            plotter.view_isometric()
+            dims_columns: list[str] = ["X", "Y", "Z"]
+            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - set(dims_columns))).to_numpy())
+            points["Temp"] = selected_nodes["Temp"].to_numpy()
+            surface: Any = points.delaunay_2d()
+            plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (Kelvins)"})
+            plotter.view_vector((self.elev, self.azim, self.roll))
 
         return plotter
 
