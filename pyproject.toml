@@ -19,7 +19,7 @@ dynamic = ["version"]
 [project.urls]
 "Homepage" = "https://www.cmml.me.msstate.edu"
 "Bug Reports" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter/issues"
-"Source" = "https://www.github.com/mwpriddy/Computational-Mechanics-Materials-Lab/ODBPlotter"
+"Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [tool.setuptools]
 package-data = {"odbp" = ["views.json", "odb_to_npz.py"]}
