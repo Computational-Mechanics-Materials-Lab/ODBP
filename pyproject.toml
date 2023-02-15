@@ -1,6 +1,6 @@
 [project]
 name = "odb-plotter"
-description = "Python3 API for Abaqus FEA .odb Files and related Command Line Visualization Tool"
+description = "Python3 API for Abaqus FEA .odb Files and related Command Line Visualization Tool, with an Additive Manufacturing Focus"
 readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["TODO"]
@@ -11,6 +11,7 @@ dependencies = [
 "numpy",
 "pandas",
 "matplotlib",
+"vtk==9.2.2", # pyvista is unstable on some platforms with vtk 9.2.5 or greater
 "pyvista",
 ]
 dynamic = ["version"]

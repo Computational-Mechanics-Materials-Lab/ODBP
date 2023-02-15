@@ -8,11 +8,11 @@ import os
 import sys
 import json
 import argparse
+import PIL
 import numpy as np
 import matplotlib.pyplot as plt
 #from mpt_toolkits.mplot3d import Axes3D
 from typing import Any, Union, TypeAlias
-from multiprocessing import Pool
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from odbp import __version__
@@ -93,7 +93,7 @@ class CLIOptions():
         self.angle_help: str = "Update the viewing angle"
         self.angle_options_formatted: str = ", ".join(self.angle_options)
 
-        self.show_all_options: list[str] = ["show-all"]
+        self.show_all_options: list[str] = ["show-all", "plot-all"]
         self.show_all_help: str = "Toggle if each time step will be shown in te matplotlib interactive viewer"
         self.show_all_options_formatted: str = ", ".join(self.show_all_options)
 
@@ -200,8 +200,8 @@ def cli():
                 set_views(state)
 
             elif user_input in cli_options.show_all_options:
-                state.show_plots = not state.show_plots
-                print(f"Plots will now {'BE' if state.show_plots else 'NOT BE'} shown")
+                state.interactive = not state.interactive
+                print(f"Plots will now {'BE' if state.interactive else 'NOT BE'} shown")
 
             elif user_input in cli_options.plot_options:
                 plot_time_range(state, user_options)
@@ -387,7 +387,7 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
     while True:
         user_input: str
         default_label = user_options.image_title
-        user_input = input(f"Please Enter the Title for your Images (Leave blank for the Default value: {default_title}): ")
+        user_input = input(f"Please Enter the Label for your Images (Leave blank for the Default value: {default_label}): ")
         if user_input == "":
             user_input = default_label
 
@@ -651,7 +651,7 @@ def process_input(state: OdbVisualizer) -> UserOptions:
         results_dir = os.path.abspath(args.results_directory)
 
     if not os.path.exists(results_dir):
-        print(f"Directory {args.results_dir} does not exist. Creating it now.")
+        print(f"Directory {results_dir} does not exist. Creating it now.")
         os.makedirs(results_dir)
 
     json_file: ConfigFiletype = None
@@ -911,20 +911,11 @@ def plot_time_range(state: OdbVisualizer, user_options: UserOptions):
     # Divide length by len(bounded_nodes), go up to that
     times: Any = state.out_nodes["Time"]
     final_time_idx: int = int(len(times) / len(state.bounded_nodes))
-    # If you're showing every plot, do it slowly, in order
-    if state.show_plots:
-        for time in times[:final_time_idx]:
-            plot_time_slice(time, state, user_options)
 
-    # If each plot is not shown, batch-process, out of order.
-    else:
-        with Pool() as pool:
-            print("Please wait while the plotter prepares your images...")
-            # TODO can imap_unordered by used? starimap_unordered?
-            data = list()
-            for time in times[:final_time_idx]:
-                data.append((time, state, user_options))
-            pool.starmap(plot_time_slice, data)
+    if state.show_plots:
+        print("Please wait while the plotter prepares your images...")
+    for time in times[:final_time_idx]:
+        plot_time_slice(time, state, user_options)
 
 
 def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions) -> None:
@@ -934,11 +925,16 @@ def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions
         print(f"Plotting time step {formatted_time}")
 
     save_str: str = os.path.join(user_options.results_directory, f"{user_options.image_title}-{formatted_time}.png")
-    plot: Any = state.plot_time_3d(time, user_options.image_label, user_options.image_title)
+    plot: Any = state.plot_time_3d(time, user_options.image_label, state.interactive)
 
-    #plt.figure(fig.number)
-
-    #plt.savefig(save_str)
     if state.interactive:
         plot.show()
-    #plt.close(fig)
+        plot.screenshot(save_str)
+
+    else:
+        plot.screenshot(save_str)
+        # with plot.window_size_context((1920, 1080)):
+        #     plot.screenshot(save_str)
+
+    del plot
+

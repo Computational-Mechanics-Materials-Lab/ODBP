@@ -86,7 +86,6 @@ class Odb:
         time_high (float): upper time value to process
         meltpoint (float): melting point of the sample
         time_sample (int): N for "extract from every Nth frame" (Default 1)
-        colormap_name (str): name of the colormap to use (Default "turbo")
         abaqus_program (str): name of the version of abaqus (or path to that executable if it is not on your path) (Default "abaqus")
         """
 
