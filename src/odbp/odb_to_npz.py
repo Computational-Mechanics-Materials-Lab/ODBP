@@ -42,11 +42,11 @@ def read_nodeset_items(nodeset_dir, nodeset_name, filename, config):
     odb = openOdb(filename, readOnly=True)
     assembly = odb.rootAssembly
     nodesets = assembly.instances[config["first_part"]].nodeSets # returns a dictionary of ODB objects
-    print("\tExtracting nodeset data from nodeset {}".format(nodeset_name))
+    #print("\tExtracting nodeset data from nodeset {}".format(nodeset_name))
     out_nodeset_name = os.path.join(nodeset_dir, nodeset_name)
     out_nodeset_name += ".npz"
     np.savez_compressed(out_nodeset_name, np.array([node.label for node in nodesets[nodeset_name].nodes]))
-    print("\tFinished processing nodeset {}".format(nodeset_name))
+    #print("\tFinished processing nodeset {}".format(nodeset_name))
     odb.close()
 
 
@@ -56,7 +56,7 @@ def read_step_data(out_dir, temps_dir, time_dir, step_name, base_time, frame_ste
     steps = odb.steps
     assembly = odb.rootAssembly
 
-    print("Working on temperatures from step: {}".format(step_name))
+    #print("Working on temperatures from step: {}".format(step_name))
     curr_step_dir = os.path.join(temps_dir, step_name)
     if not os.path.exists(curr_step_dir):
         os.mkdir(curr_step_dir)
@@ -114,7 +114,7 @@ def access_odb(filename, config):
     steps = odb.steps
     for step_key in steps.keys():
         frame_list = steps[step_key].frames
-        print(frame_list[1])
+        #print(frame_list[1])
 
     odb.close()
 

@@ -81,7 +81,7 @@ class CLIOptions():
         self.title_label_help: str = "Set the title and label of the output plots"
         self.title_label_options_formatted: str = ", ".join(self.title_label_options)
 
-        self.directory_options: list[str] = ["dir", "dir", "directory", "directories"]
+        self.directory_options: list[str] = ["dir", "dirs", "directory", "directories"]
         self.directory_help: str = "Set the source and output directories"
         self.directory_options_formatted: str = ", ".join(self.directory_options)
 
@@ -229,11 +229,12 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
     hdf_options: tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
     user_input: str
 
+    # select odb
     while True:
         user_input = input('Please enter either "hdf" if you plan to open .hdf5 file or "odb" if you plan to open a .odb file: ').strip().lower()
 
         if user_input in odb_options or user_input in hdf_options:
-            if(confirm(f"You entered {user_input}", "yes")):
+            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
                 break
 
         else:
@@ -243,50 +244,72 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
         # process odb
         while True:
             user_input = input("Please enter the path of the odb file: ")
-            if(confirm(f"You entered {user_input}", "yes")):
-                odb = user_input
+            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
+                if not os.path.exists(os.path.join(options.odb_source_directory, user_input)):
+                    if not os.path.exists(os.path.join(os.getcwd(), user_input)):
+                        if not os.path.exists(user_input):
+                            print(f"Error: {user_input} file could not be found")
+                        else:
+                            state.odb_file = user_input
+                    else:
+                        state.odb_file = os.path.join(os.getcwd(), user_input)
+                else:
+                    state.odb_file = os.path.join(options.odb_source_directory, user_input)
+
+            if hasattr(state, "odb_file") and state.odb_file is not None and state.odb_file != "":
                 break
 
+        gen_time_sample: bool = False
         if hasattr(state, "time_sample"):
-            if(confirm(f"Time Sample is already set as {state.time_sample}. Would you like to overwrite it?")):
-                while True:
-                        
-                    user_input = input("The Program will extract every Nth frame where N = ")
-                    if(confirm(f"You entered {user_input}", "yes")):
+            gen_time_sample = confirm(f"Time Sample is already set as {state.time_sample}.", "Would you like to overwrite it?")
+
+        else:
+            gen_time_sample = True
+
+        if gen_time_sample:
+            while True:
+                user_input = input("The Program will extract every Nth frame where N = ")
+                if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
+                    try:
                         state.time_sample = int(user_input)
                         break
+                    except ValueError:
+                        print("Error: time sample must be an integer")
 
-        state.odb_file = odb
         print("Converting this .odb file to a .hdf file")
-        default: str = state.odb_file.split(".")[0] + ".hdf5"
+        default: str = os.path.join(options.hdf_source_directory, state.odb_file.split(os.sep)[-1].split(".")[0] + ".hdf5")
         hdf_file_path: str
         while True:
-            user_input = input(f"Please enter the name for this generated hdf file, or leave blank for the default: {default}")
+            user_input = input(f"Please enter the name for this generated hdf file (leave blank for the default {default}): ")
             if user_input == "":
                 user_input = default
             
-            if(confirm(f"You entered {user_input}", "yes")):
+            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
                 hdf_file_path = os.path.join(options.hdf_source_directory, user_input)
                 break
 
         state.odb_to_hdf(hdf_file_path)
 
-
     elif user_input in hdf_options:
         # process hdf
         while True:
             user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
-            if(confirm(f"You entered {user_input}", "yes")):
+            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
+                # If the config file exists, it will be under this name
+                json_config_file: str = user_input.split(".")[0] + ".json"
                 if not os.path.exists(os.path.join(options.hdf_source_directory, user_input)):
                     if not os.path.exists(os.path.join(os.getcwd(), user_input)):
                         if not os.path.exists(user_input):
                             print(f"Error: {user_input} file could not be found")
                         else:
                             state.hdf_file = user_input
+                            options.json_config_file = json_config_file
                     else:
                         state.hdf_file = os.path.join(os.getcwd(), user_input)
+                        options.json_config_file = os.path.join(os.getcwd(), json_config_file)
                 else:
                     state.hdf_file = os.path.join(options.hdf_source_directory, user_input)
+                    options.json_config_file = os.path.join(options.hdf_source_directory, json_config_file)
 
             if hasattr(state, "hdf_file") and state.hdf_file is not None and state.hdf_file != "":
                 break
@@ -317,28 +340,52 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
         if "time_sample" in json_config:
             time_sample = json_config["time_sample"]
 
+        # Manage mesh_seed_size
         if hasattr(state, "mesh_seed_size") and mesh_seed_size is not None and state.mesh_seed_size != mesh_seed_size:
             print(f"INFO: Overwriting stored config file value for Mesh Seed Size of {mesh_seed_size} with value given by command line: {state.mesh_seed_size}")
 
-        elif not hasattr(state, "mesh_seed_size") and mesh_seed_size is not None:
-            print(f"Setting Default Seed Size of the Mesh to stored value of {state.mesh_seed_size}")
+        elif hasattr(state, "mesh_seed_size"):
+            print(f"Setting Default Seed Size of the Mesh to given value of {state.mesh_seed_size}")
+
+        elif mesh_seed_size is not None:
+            print(f"Setting Mesh Seed Size to stored value of {mesh_seed_size}")
             state.mesh_seed_size = mesh_seed_size
 
+        else: # Neither the stored value or the given value exist
+            print("No Mesh Seed Size found. You must set it:")
+            set_seed_size(state)
+
+        # Manage meltpoint
         if hasattr(state, "meltpoint") and meltpoint is not None and state.meltpoint != meltpoint:
             print(f"INFO: Overwriting stored config file value for Melting Point of {meltpoint} with value given by command line: {state.meltpoint}")
 
-        elif not hasattr(state, "meltpoint") and meltpoint is not None:
-            print(f"Setting Default Melting Point to stored value of {state.meltpoint}")
+        elif hasattr(state, "meltpoint"):
+            print(f"Setting Default Melting Point to given value of {state.meltpoint}")
+        
+        elif meltpoint is not None:
+            print(f"Setting Melting Point to stored value of {meltpoint}")
             state.meltpoint = meltpoint
 
+        else: # Neither the stored value nor the given value exist
+            print("No Melting Point found. You must set it:")
+            set_meltpoint(state)
+
+        # Manage time sample
         if hasattr(state, "time_sample") and time_sample is not None and state.time_sample != time_sample:
             print(f"INFO: Overwriting stored config file value for Time Sample of {time_sample} with value given by command line: {state.time_sample}")
 
-        elif not hasattr(state, "time_sample") and time_sample is not None:
-            print(f"Setting Default Time Sample to stored value of {state.time_sample}")
+        elif hasattr(state, "time_sample"):
+            print(f"Setting Default Time Sample to given value of {state.time_sample}")
+
+        elif time_sample is not None:
+            print(f"Setting Time Sample to stored value of {time_sample}")
             state.time_sample = time_sample
 
-    if None in (mesh_seed_size, meltpoint, time_sample):
+        else: # Neither the stored value nor the given value exist
+            print("No Time Sample found. You must set it:")
+            set_time_sample(state)
+
+    if not all((hasattr(state, "mesh_seed_size"), hasattr(state, "meltpoint"), hasattr(state, "time_sample"))):
 
         # here, we need to set at least one of the things
         if mesh_seed_size is None:
@@ -371,7 +418,7 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
             if user_input == "":
                 user_input = default_title
 
-            if confirm(f"You entered {user_input}", "yes"):
+            if confirm(f"You entered {user_input}", "Is this correct", "yes"):
                 user_options.image_title = user_input
                 break
 
@@ -380,7 +427,7 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
             if user_input == "":
                 print("Error: You must enter a non-empty value")
             else:
-                if confirm(f"You entered {user_input}", "yes"):
+                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
                     user_options.image_title = user_input
                     break
 
@@ -391,7 +438,7 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
         if user_input == "":
             user_input = default_label
 
-        if confirm(f"You entered {user_input}", "yes"):
+        if confirm(f"You entered {user_input}", "Is this correct", "yes"):
             user_options.image_label = user_input
             break
 
@@ -400,32 +447,65 @@ def set_directories(user_options: UserOptions):
     print(f"For setting all of these data directories, Please enter either absolute paths, or paths relative to your present working directory: {os.getcwd()}")
     user_input: str
 
-    while True:
-        user_input = input("Please enter the directory of your .hdf5 files and associated data: ")
-        if os.path.exists(user_input):
-            if confirm(f"You entered {user_input}", "yes"):
-                user_options.hdf_source_directory = user_input
-                break
-        else:
-            print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+    gen_hdf_dir: bool = False
+    if hasattr(user_options, "hdf_source_directory"):
+        gen_hdf_dir = confirm(f".hdf5 source directory is currently set to {user_options.hdf_source_directory}.", "Would you like to overwrite it?")
+    else:
+        gen_hdf_dir = True
 
-    while True:
-        user_input = input("Please enter the directory of your .odb files: ")
-        if os.path.exists(user_input):
-            if confirm(f"You entered {user_input}", "yes"):
-                user_options.odb_source_directory = user_input
-                break
-        else:
-            print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+    if gen_hdf_dir:
+        while True:
+            user_input = input("Please enter the directory of your .hdf5 files and associated data: ")
+            if os.path.exists(user_input):
+                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
+                    if os.path.isabs(user_input):
+                        user_options.hdf_source_directory = user_input
+                    else:
+                        user_options.hdf_source_directory = os.path.join(os.getcwd(), user_input)
+                    break
+            else:
+                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
 
-    while True:
-        user_input = input("Please enter the directory where you would like your results to be written: ")
-        if os.path.exists(user_input):
-            if confirm(f"You entered {user_input}", "yes"):
-                user_options.results_directory = user_input
-                break
-        else:
-            print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+    gen_odb_dir: bool = False
+    if hasattr(user_options, "odb_source_directory"):
+        gen_odb_dir = confirm(f".odb source directory is currently set to {user_options.odb_source_directory}.", "Would you like to overwrite it?")
+    else:
+        gen_odb_dir = True
+
+    if gen_odb_dir:
+        while True:
+            user_input = input("Please enter the directory of your .odb files: ")
+            if os.path.exists(user_input):
+                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
+                    if os.path.isabs(user_input):
+                        user_options.odb_source_directory = user_input
+                    else:
+                        user_options.odb_source_directory = os.path.join(os.getcwd(), user_input)
+                    break
+            else:
+                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+
+    gen_results_dir: bool = False
+    if hasattr(user_options, "results_directory"):
+        gen_results_dir = confirm(f"The results directory is currently set to {user_options.results_directory}.", "Would you like to overwrite it?")
+    else:
+        gen_results_dir = True
+    
+    if gen_results_dir:
+        while True:
+            user_input = input("Please enter the directory where you would like your results to be written: ")
+            if os.path.exists(user_input):
+                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
+                    if os.path.isabs(user_input):
+                        user_options.results_directory = user_input
+                    else:
+                        user_options.results_directory = os.path.join(os.getcwd(), user_input)
+                    break
+            else:
+                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
 
 
 def set_extrema(state: OdbVisualizer):
@@ -450,7 +530,7 @@ def set_extrema(state: OdbVisualizer):
         y_low, y_high = extrema[("lower Y", "upper Y")]
         z_low, z_high = extrema[("lower Z", "upper Z")]
         print()
-        if confirm(f"SELECTED VALUES:\nX from {x_low} to {x_high}\nY from {y_low} to {y_high}\nZ from {z_low} to {z_high}", "yes"):
+        if confirm(f"SELECTED VALUES:\nX from {x_low} to {x_high}\nY from {y_low} to {y_high}\nZ from {z_low} to {z_high}", "Is this correct", "yes"):
             state.set_x_low(x_low)
             state.set_x_high(x_high)
             state.set_y_low(y_low)
@@ -467,7 +547,7 @@ def set_seed_size(state: OdbVisualizer) -> None:
         try:
             seed: float = float(input("Enter the Default Seed Size of the Mesh: "))
 
-            if confirm(f"Mesh Seed Size: {seed}", "yes"):
+            if confirm(f"Mesh Seed Size: {seed}", "Is this correct", "yes"):
                 state.set_mesh_seed_size(seed)
                 print(f"Mesh Seed Size set to: {state.mesh_seed_size}")
                 break
@@ -481,7 +561,7 @@ def set_meltpoint(state: OdbVisualizer) -> None:
         try:
             meltpoint = float(input("Enter the meltpoint of the Mesh: "))
 
-            if confirm(f"Meltng Point: {meltpoint}", "yes"):
+            if confirm(f"Meltng Point: {meltpoint}", "Is this correct", "yes"):
                 state.set_meltpoint(meltpoint)
                 print(f"Melting Point set to: {state.meltpoint}")
                 break
@@ -496,7 +576,7 @@ def set_time_sample(state: OdbVisualizer) -> None:
         try:
             time_sample: int = int(input("Enter the Time Sample: "))
 
-            if confirm(f"Time Sample: {time_sample}", "yes"):
+            if confirm(f"Time Sample: {time_sample}", "Is this correct", "yes"):
                 state.set_time_sample(time_sample)
                 break
 
@@ -534,7 +614,7 @@ def set_time(state: OdbVisualizer) -> None:
                 except ValueError:
                     print("Error, all selected time values must be positive numbers")
 
-        if confirm(f"You entered {lower_time} as the starting time and {upper_time} as the ending time.", "yes"):
+        if confirm(f"You entered {lower_time} as the starting time and {upper_time} as the ending time.", "Is this correct", "yes"):
             state.time_low = lower_time
             state.time_high = upper_time
             print(f"Time Range: from {state.time_low} to {state.time_high if state.time_high != float('inf') else 'infinity'}")
@@ -686,20 +766,21 @@ def process_input(state: OdbVisualizer) -> UserOptions:
         if args.time_sample:
             state.time_sample = args.time_sample
 
-        print("Converting this .odb file to a .hdf file")
-        default: str = state.odb_file.split(".")[0] + ".hdf5"
-        hdf_file_path: str
-        while True:
-            user_input = input(f"Please enter the name for this generated hdf file, or leave blank for the default: {default}")
-            if user_input == "":
-                user_input = default
-            
-            if(confirm(f"You entered {user_input}", "yes")):
-                hdf_file_path = os.path.join(hdf_source_dir, user_input)
-                break
+        # TODO???
+        #print("Converting this .odb file to a .hdf file")
+        #default: str = os.path.join(hdf_source_dir, state.odb_file.split(os.sep)[-1].split(".")[0] + ".hdf5")
+        #hdf_file_path: str
+        #while True:
+        #    user_input = input(f"Please enter the name for this generated hdf file, or leave blank for the default: {default}")
+        #    if user_input == "":
+        #        user_input = default
+        #    
+        #    if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
+        #        hdf_file_path = os.path.join(hdf_source_dir, user_input)
+        #        break
 
-        state.odb_to_hdf(hdf_file_path)
-        json_file = os.path.join(hdf_source_dir, state.hdf_file.split(".")[0] + ".json")
+        #state.odb_to_hdf(hdf_file_path)
+        #json_file = os.path.join(hdf_source_dir, state.hdf_file.split(".")[0] + ".json")
 
     elif args.hdf:
         # ensure the file exists
@@ -800,7 +881,11 @@ def load_hdf(state: OdbVisualizer):
 
 def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
     print(
-        f"""X Range:                 {state.x.low if hasattr(state.x, "low") else "not set"} to {state.x.high - state.mesh_seed_size if hasattr(state.x, "high") and hasattr(state, "mesh_seed_size") else "not set"}
+        f"""Current State:
+.hdf5 file:              {state.hdf_file if hasattr(state, "hdf_file") else "not set"}
+.odb file:               {state.odb_file if hasattr(state, "odb_file") else "not set"}
+
+X Range:                 {state.x.low if hasattr(state.x, "low") else "not set"} to {state.x.high - state.mesh_seed_size if hasattr(state.x, "high") and hasattr(state, "mesh_seed_size") else "not set"}
 Y Range:                 {state.y.low if hasattr(state.y, "low") else "not set"} to {state.y.high - state.mesh_seed_size if hasattr(state.y, "high") and hasattr(state, "mesh_seed_size") else "not set"}
 Z Range:                 {state.z.low if hasattr(state.z, "low") else "not set"} to {state.z.high - state.mesh_seed_size if hasattr(state.z, "high") and hasattr(state, "mesh_seed_size") else "not set"}
 Time Range:              {state.time_low if hasattr(state, "time_low") else "not set"} to {state.time_high if hasattr(state, "time_high") else "not set"}
@@ -810,11 +895,15 @@ View Elevation:          {state.elev if hasattr(state, "elev") else "not set"}
 View Azimuth:            {state.azim if hasattr(state, "azim") else "not set"}
 View Roll:               {state.roll if hasattr(state, "roll") else "not set"}
 
-Data loaded into memory: {'Yes' if state.loaded else 'No'}
-
-Is each time-step being shown in the matplotlib interactive viewer? {'Yes' if state.interactive else 'No'}
+Is each time-step being shown in the PyVista interactive viewer? {"Yes" if state.interactive else "No"}
 Image Title:             {user_options.image_title}
-Image Label:             {user_options.image_label}"""
+Image Label:             {user_options.image_label}
+
+Data loaded into memory: {"Yes" if state.loaded else "No"}
+Source directory of .hdf5 files: {user_options.hdf_source_directory}
+Source directory of .odb files: {user_options.odb_source_directory}
+Directory to store results: {user_options.results_directory}"""
+
     )
 
 
@@ -877,7 +966,7 @@ def get_custom_view():
             except ValueError:
                 print("Error, Roll Value must be a number or left blank")
 
-        if confirm(f"Elevation: {elev}\nAzimuth:   {azim}\nRoll:      {roll}", "yes"):
+        if confirm(f"Elevation: {elev}\nAzimuth:   {azim}\nRoll:      {roll}", "Is this correct?", "yes"):
             break
 
     if elev == "default":
@@ -904,7 +993,7 @@ def plot_time_range(state: OdbVisualizer, user_options: UserOptions):
         return
 
     if user_options.image_label == "" or user_options.image_title == "":
-        if not confirm(f"Warning: Either the image label or image title is unset. Consider setting them with the \"title\" or \"label\" commands. do you want to continue?", "no"):
+        if not confirm(f"Warning: Either the image label or image title is unset. Consider setting them with the \"title\" or \"label\" commands.", "Do you want to continue", "no"):
             return
 
     # out_nodes["Time"] has the time values for each node, we only need one

@@ -89,11 +89,13 @@ class Odb:
         abaqus_program (str): name of the version of abaqus (or path to that executable if it is not on your path) (Default "abaqus")
         """
 
-        # Relative to package's data, not user's cwd, in order to access things like the abaqus python script or views.py
-        self.cwd: str = os.getcwd()
+        self.odb_file: str
+        if "odb_file" in kwargs:
+            self.odb_file = kwargs["odb_file"]
 
-        self.odb_file: str = kwargs.get("odb_file", "")
-        self.hdf_file: str = kwargs.get("hdf_file", "")
+        self.hdf_file: str
+        if "hdf_file" in kwargs:
+            self.hdf_file = kwargs["hdf_file"]
 
         self.x: Axis = Axis("x")
         if "x_low" in kwargs:
@@ -121,7 +123,7 @@ class Odb:
 
         self.mesh_seed_size: float
         if "mesh_seed_size" in kwargs:
-            self.time_low = kwargs["mesh_seed_size"]
+            self.mesh_seed_size = kwargs["mesh_seed_size"]
 
         self.show_plots: bool = kwargs.get("show_plots", True)
 
@@ -129,7 +131,9 @@ class Odb:
         if "meltpoint" in kwargs:
             self.meltpoint = kwargs["meltpoint"]
 
-        self.time_sample: int = kwargs.get("time_sample", 1)
+        self.time_sample: int
+        if "time_sample" in kwargs:
+            self.time_sample: int = kwargs["time_sample"]
 
         self.abaqus_program = kwargs.get("abaqus_program", "abaqus")
 
@@ -253,18 +257,11 @@ class Odb:
         assert self.odb_file != ""
         # Must run this script via abaqus python
         odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odb_to_npz.py")
-        # Move to tempdir for this operation
-        os.chdir(tempfile.gettempdir())
 
-        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, self.odb_file, str(self.time_sample)]
-        subprocess.run(odb_to_npz_args)
+        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file), str(self.time_sample)]
+        subprocess.run(odb_to_npz_args, shell=True)
 
-        # Back to pwd
-        os.chdir(self.cwd)
-
-        npz_dir: str = os.path.join(tempfile.gettempdir(), "tmp_npz")
-
-        # Convert npz to hdf5
+        npz_dir: str = os.path.join(os.getcwd(), "tmp_npz")
         npz_to_hdf(hdf_file_path, npz_dir)
         
         if os.path.exists(npz_dir):
