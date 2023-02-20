@@ -6,12 +6,9 @@ Built-in CLI for ODB Plotter, allowing for interactive system access without wri
 
 import os
 import sys
-import json
+import toml
 import argparse
-import PIL
 import numpy as np
-import matplotlib.pyplot as plt
-#from mpt_toolkits.mplot3d import Axes3D
 from typing import Any, Union, TypeAlias
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
@@ -25,7 +22,7 @@ class UserOptions():
     """
     Struct to store user's input
     """
-    def __init__(self, hdf_source_directory: str, odb_source_directory: str, results_directory: str, image_title: str, image_label: str, json_config_file: ConfigFiletype, run_immediate: bool = False) -> None:
+    def __init__(self, hdf_source_directory: str, odb_source_directory: str, results_directory: str, image_title: str, image_label: str, toml_config_file: ConfigFiletype, run_immediate: bool) -> None:
         """
         Default values for user Options:
         hdf_source_directory: user's present working directory
@@ -40,7 +37,7 @@ class UserOptions():
         self.results_directory: str = results_directory
         self.image_title: str = image_title
         self.image_label: str = image_label
-        self.json_config_file: ConfigFiletype = json_config_file
+        self.toml_config_file: ConfigFiletype = toml_config_file
         self.run_immediate: bool = run_immediate
 
 
@@ -73,8 +70,8 @@ class CLIOptions():
         self.time_sample_help: str = "Set the Time Sample for the hdf5 file"
         self.time_sample_options_formatted: str = ", ".join(self.time_sample_options)
 
-        self.meltpoint_options: list[str] = ["meltpoint", "melt", "point"]
-        self.meltpoint_help: str = "Set the Melting Point for the hdf5 file"
+        self.meltpoint_options: list[str] = ["meltpoint", "melt", "point", "temp", "temperature"]
+        self.meltpoint_help: str = "Set the Melting Point and lower Temperature Bound for the hdf5 file"
         self.meltpoint_options_formatted: str = ", ".join(self.meltpoint_options)
 
         self.title_label_options: list[str] = ["title", "label"]
@@ -151,7 +148,7 @@ def cli():
     state: OdbVisualizer = OdbVisualizer()
     main_loop: bool = True
 
-    # TODO Process input json file and/or cli switches here
+    # TODO Process input toml file and/or cli switches here
     user_options: UserOptions = process_input(state)
     cli_options: CLIOptions = CLIOptions()
 
@@ -296,20 +293,20 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
             user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
             if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
                 # If the config file exists, it will be under this name
-                json_config_file: str = user_input.split(".")[0] + ".json"
+                toml_config_file: str = user_input.split(".")[0] + ".toml"
                 if not os.path.exists(os.path.join(options.hdf_source_directory, user_input)):
                     if not os.path.exists(os.path.join(os.getcwd(), user_input)):
                         if not os.path.exists(user_input):
                             print(f"Error: {user_input} file could not be found")
                         else:
                             state.hdf_file = user_input
-                            options.json_config_file = json_config_file
+                            options.toml_config_file = toml_config_file
                     else:
                         state.hdf_file = os.path.join(os.getcwd(), user_input)
-                        options.json_config_file = os.path.join(os.getcwd(), json_config_file)
+                        options.toml_config_file = os.path.join(os.getcwd(), toml_config_file)
                 else:
                     state.hdf_file = os.path.join(options.hdf_source_directory, user_input)
-                    options.json_config_file = os.path.join(options.hdf_source_directory, json_config_file)
+                    options.toml_config_file = os.path.join(options.hdf_source_directory, toml_config_file)
 
             if hasattr(state, "hdf_file") and state.hdf_file is not None and state.hdf_file != "":
                 break
@@ -321,71 +318,78 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
 def pre_process_data(state: OdbVisualizer, options: UserOptions):
     mesh_seed_size: Union[float, None] = None
     meltpoint: Union[float, None] = None
+    low_temp: Union[float, None] = None
     time_sample: Union[int, None] = None
 
-    if options.json_config_file is not None and os.path.exists(options.json_config_file):
-        with open(options.json_config_file, "r") as j:
-            json_config: dict[str, Any] = json.load(j)
+    if options.toml_config_file is not None and os.path.exists(options.toml_config_file):
+        with open(options.toml_config_file, "r") as j:
+            toml_config: dict[str, Any] = toml.load(j)
 
-        if "hdf_file" in json_config:
-            if json_config["hdf_file"] != state.hdf_file:
+        if "hdf_file" in toml_config:
+            if toml_config["hdf_file"] != state.hdf_file:
                 print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
 
-        if "mesh_seed_size" in json_config:
-            mesh_seed_size = json_config["mesh_seed_size"]
+        if "mesh_seed_size" in toml_config:
+            mesh_seed_size = toml_config["mesh_seed_size"]
 
-        if "meltpoint" in json_config:
-            meltpoint = json_config["meltpoint"]
+        if "meltpoint" in toml_config:
+            meltpoint = toml_config["meltpoint"]
 
-        if "time_sample" in json_config:
-            time_sample = json_config["time_sample"]
+        if "low_temp" in toml_config:
+            low_temp = toml_config["low_temp"]
+
+        if "time_sample" in toml_config:
+            time_sample = toml_config["time_sample"]
 
         # Manage mesh_seed_size
-        if hasattr(state, "mesh_seed_size") and mesh_seed_size is not None and state.mesh_seed_size != mesh_seed_size:
-            print(f"INFO: Overwriting stored config file value for Mesh Seed Size of {mesh_seed_size} with value given by command line: {state.mesh_seed_size}")
+        if mesh_seed_size is not None:
+            print(f"Setting Mesh Seed Size to stored value of {mesh_seed_size}")
+            state.mesh_seed_size = mesh_seed_size
 
         elif hasattr(state, "mesh_seed_size"):
             print(f"Setting Default Seed Size of the Mesh to given value of {state.mesh_seed_size}")
-
-        elif mesh_seed_size is not None:
-            print(f"Setting Mesh Seed Size to stored value of {mesh_seed_size}")
-            state.mesh_seed_size = mesh_seed_size
 
         else: # Neither the stored value or the given value exist
             print("No Mesh Seed Size found. You must set it:")
             set_seed_size(state)
 
         # Manage meltpoint
-        if hasattr(state, "meltpoint") and meltpoint is not None and state.meltpoint != meltpoint:
-            print(f"INFO: Overwriting stored config file value for Melting Point of {meltpoint} with value given by command line: {state.meltpoint}")
+        if meltpoint is not None:
+            print(f"Setting Melting Point to stored value of {meltpoint}")
+            state.meltpoint = meltpoint
 
         elif hasattr(state, "meltpoint"):
             print(f"Setting Default Melting Point to given value of {state.meltpoint}")
         
-        elif meltpoint is not None:
-            print(f"Setting Melting Point to stored value of {meltpoint}")
-            state.meltpoint = meltpoint
-
         else: # Neither the stored value nor the given value exist
             print("No Melting Point found. You must set it:")
             set_meltpoint(state)
 
+        # Manage lower temperature bound
+        if low_temp is not None:
+            print(f"Setting Melting Point to stored value of {low_temp}")
+            state.low_temp = low_temp
+
+        elif hasattr(state, "low_temp"):
+            print(f"Setting Default Melting Point to given value of {state.low_temp}")
+        
+        else: # Neither the stored value nor the given value exist
+            print("No Lower Temperature Bound found. You must set it:")
+            set_low_temp(state)
+
         # Manage time sample
-        if hasattr(state, "time_sample") and time_sample is not None and state.time_sample != time_sample:
-            print(f"INFO: Overwriting stored config file value for Time Sample of {time_sample} with value given by command line: {state.time_sample}")
+        if time_sample is not None:
+            print(f"Setting Time Sample to stored value of {time_sample}")
+            state.time_sample = time_sample
 
         elif hasattr(state, "time_sample"):
             print(f"Setting Default Time Sample to given value of {state.time_sample}")
-
-        elif time_sample is not None:
-            print(f"Setting Time Sample to stored value of {time_sample}")
-            state.time_sample = time_sample
 
         else: # Neither the stored value nor the given value exist
             print("No Time Sample found. You must set it:")
             set_time_sample(state)
 
-    if not all((hasattr(state, "mesh_seed_size"), hasattr(state, "meltpoint"), hasattr(state, "time_sample"))):
+    if not all((hasattr(state, "mesh_seed_size"), hasattr(state, "meltpoint"), hasattr(state, "low_temp"), hasattr(state, "time_sample"))):
 
         # here, we need to set at least one of the things
         if mesh_seed_size is None:
@@ -394,11 +398,14 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
         if meltpoint is None:
             set_meltpoint(state)
 
+        if low_temp is None:
+            set_low_temp(state)
+
         if time_sample is None:
             set_time_sample(state)
 
-        if isinstance(options.json_config_file, str):
-            state.dump_config_to_json(options.json_config_file)
+        if isinstance(options.toml_config_file, str):
+            state.dump_config_to_toml(options.toml_config_file)
 
     state.select_colormap()
 
@@ -567,7 +574,21 @@ def set_meltpoint(state: OdbVisualizer) -> None:
                 break
 
         except ValueError:
-            print("Error, melpoint must be a number")
+            print("Error, Melting Point must be a number")
+
+
+def set_low_temp(state: OdbVisualizer) -> None:
+    while True:
+        try:
+            low_temp = float(input("Enter the lower temperature bound of the Mesh: "))
+
+            if confirm(f"Lower Temperature Bound: {low_temp}", "Is this correct", "yes"):
+                state.set_low_temp(low_temp)
+                print(f"Lower Temperature Bound set to: {state.low_temp}")
+                break
+
+        except ValueError:
+            print("Error, Lower Temperature Bound must be a number")
 
 
 def set_time_sample(state: OdbVisualizer) -> None:
@@ -652,7 +673,7 @@ def process_extrema(keys: tuple[str, str]) -> tuple[float, float]:
 def process_input(state: OdbVisualizer) -> UserOptions:
     """
     The goal is to have a hierarchy of options. If a user passes in an option via a command-line switch, that option is set.
-    If an option is not set by a switch, then the json input file is used.
+    If an option is not set by a switch, then the toml input file is used.
     If an option is not set by the input file (if any), then prompt for it
     Possibly also include a default config file, like in $HOME/.config? Not sure
     """
@@ -666,13 +687,14 @@ def process_input(state: OdbVisualizer) -> UserOptions:
 
     parser.add_argument("-o", "--odb")
     parser.add_argument("-m", "--meltpoint")
+    parser.add_argument("-l", "--low-temp", default=300)
     parser.add_argument("-S", "--seed-size")
     parser.add_argument("-t", "--time-sample", default=1)
 
     parser.add_argument("-H", "--hdf")
 
     parser.add_argument("-T", "--title")
-    parser.add_argument("-l", "--label")
+    parser.add_argument("-L", "--label")
 
     parser.add_argument("--low-x")
     parser.add_argument("--high-x")
@@ -701,7 +723,7 @@ def process_input(state: OdbVisualizer) -> UserOptions:
     """
     if args.config_file:
         # This needs to handle everything in the config file, and should be overwritten by any cli switches, so it's fine for this to just go first
-        # Also parse this file. If there is an error in the json, fail
+        # Also parse this file. If there is an error in the toml, fail
         pass
 
     hdf_source_dir: str
@@ -734,7 +756,7 @@ def process_input(state: OdbVisualizer) -> UserOptions:
         print(f"Directory {results_dir} does not exist. Creating it now.")
         os.makedirs(results_dir)
 
-    json_file: ConfigFiletype = None
+    toml_file: ConfigFiletype = None
 
     if args.odb:
         if args.hdf:
@@ -760,6 +782,9 @@ def process_input(state: OdbVisualizer) -> UserOptions:
         if args.meltpoint:
             state.meltpoint = args.meltpoint
 
+        if args.low_temp:
+            state.low_temp = args.low_temp
+
         if args.seed_size:
             state.mesh_seed_size = args.seed_size
 
@@ -780,7 +805,7 @@ def process_input(state: OdbVisualizer) -> UserOptions:
         #        break
 
         #state.odb_to_hdf(hdf_file_path)
-        #json_file = os.path.join(hdf_source_dir, state.hdf_file.split(".")[0] + ".json")
+        #toml_file = os.path.join(hdf_source_dir, state.hdf_file.split(".")[0] + ".toml")
 
     elif args.hdf:
         # ensure the file exists
@@ -797,13 +822,16 @@ def process_input(state: OdbVisualizer) -> UserOptions:
         else:
             state.hdf_file = os.path.join(hdf_source_dir, args.hdf)
 
-        # Search for the stored json values for this hdf
-        json_file = os.path.join(hdf_source_dir, state.hdf_file.split(".")[0] + ".json")
-        if not os.path.exists(json_file):
-            print(f".json config file for {state.hdf_file} could not be found")
+        # Search for the stored toml values for this hdf
+        toml_file = os.path.join(hdf_source_dir, state.hdf_file.split(".")[0] + ".toml")
+        if not os.path.exists(toml_file):
+            print(f".toml config file for {state.hdf_file} could not be found")
 
         if args.meltpoint:
             state.meltpoint = args.meltpoint
+
+        if args.low_temp:
+            state.low_temp = args.low_temp
 
         if args.seed_size:
             state.mesh_seed_size = args.seed_size
@@ -813,10 +841,14 @@ def process_input(state: OdbVisualizer) -> UserOptions:
  
     else:
         # Only if these other switches are used
-        if args.meltpoint or args.seed_size or args.time_sample:
+        if args.meltpoint or args.low_temp or args.seed_size or args.time_sample:
             print("INFO: neither a .odb file or a .hdf5 file were provided. You must provide one manually")
+
             if args.meltpoint:
                 state.meltpoint = args.meltpoint
+
+            if args.low_temp:
+                state.low_temp = args.low_temp
 
             if args.seed_size:
                 state.mesh_seed_size = args.seed_size
@@ -864,14 +896,8 @@ def process_input(state: OdbVisualizer) -> UserOptions:
     else:
         image_label = image_title
 
-
     # Manage the final user state and return it
-    user_options: UserOptions
-    if args.run:
-        user_options = UserOptions(hdf_source_dir, odb_source_dir, results_dir, image_title, image_label, json_file, args.run)
-
-    else:
-        user_options = UserOptions(hdf_source_dir, odb_source_dir, results_dir, image_title, image_label, json_file)
+    user_options: UserOptions = UserOptions(hdf_source_dir, odb_source_dir, results_dir, image_title, image_label, toml_file, args.run)
 
     return user_options
 

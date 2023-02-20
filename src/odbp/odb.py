@@ -6,8 +6,7 @@ interactive mode
 """
 
 import os
-import json
-import tempfile
+import toml
 import subprocess
 import shutil
 
@@ -85,6 +84,7 @@ class Odb:
         time_low (float): lower time value to process (Default 0)
         time_high (float): upper time value to process
         meltpoint (float): melting point of the sample
+        low_temp (float): lower temperature bound of the sample
         time_sample (int): N for "extract from every Nth frame" (Default 1)
         abaqus_program (str): name of the version of abaqus (or path to that executable if it is not on your path) (Default "abaqus")
         """
@@ -131,6 +131,10 @@ class Odb:
         if "meltpoint" in kwargs:
             self.meltpoint = kwargs["meltpoint"]
 
+        self.low_temp: float
+        if "low_temp" in kwargs:
+            self.low_temp = kwargs["low_temp"]
+
         self.time_sample: int
         if "time_sample" in kwargs:
             self.time_sample: int = kwargs["time_sample"]
@@ -155,6 +159,12 @@ class Odb:
         if not isinstance(meltpoint, float):
             meltpoint = float(meltpoint)
         self.meltpoint = meltpoint
+
+
+    def set_low_temp(self, low_temp: float) -> None:
+        if not isinstance(low_temp, float):
+            low_temp = float(low_temp)
+        self.low_temp = low_temp
 
 
     def set_x_high(self, high: float) -> None:
@@ -270,7 +280,7 @@ class Odb:
         self.hdf_file = hdf_file_path
 
 
-    def dump_config_to_json(self, json_path: str) -> None:
+    def dump_config_to_toml(self, toml_path: str) -> None:
         config = dict()
         if hasattr(self, "hdf_file"):
             config["hdf_file"] = self.hdf_file
@@ -278,12 +288,14 @@ class Odb:
             config["mesh_seed_size"] = self.mesh_seed_size
         if hasattr(self, "meltpoint"):
             config["meltpoint"] = self.meltpoint
+        if hasattr(self, "low_temp"):
+            config["low_temp"] = self.low_temp
         if hasattr(self, "time_sample"):
             config["time_sample"] = self.time_sample
 
-        json_file: TextIO
-        with open(json_path, "w") as json_file:
-            json.dump(config, json_file)
+        toml_file: TextIO
+        with open(toml_path, "w") as toml_file:
+            toml.dump(config, toml_file)
 
     
     def process_hdf(self) -> None:

@@ -9,6 +9,7 @@ maintainers = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
 dependencies = [
 "h5py",
 "numpy",
+"toml",
 "pandas",
 "matplotlib",
 "vtk==9.2.2", # pyvista is unstable on some platforms with vtk 9.2.5 or greater
@@ -22,7 +23,7 @@ dynamic = ["version"]
 "Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [tool.setuptools]
-package-data = {"odbp" = ["views.json", "odb_to_npz.py"]}
+package-data = {odbp = ["views.toml", "odb_to_npz.py"]}
 
 [tool.setuptools.dynamic]
 version = {attr = "odbp.__version__"}
