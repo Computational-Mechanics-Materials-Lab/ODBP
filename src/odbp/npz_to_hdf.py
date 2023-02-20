@@ -25,8 +25,9 @@ def npz_to_hdf(output_file: str, npz_dir: str = "tmp_npz") -> None:
                 read_npz_to_hdf(item, npz_dir, hdf5_file)
 
 
-def read_npz_to_hdf(item: str, npz_dir: str, hdf5_file) -> None:
+def read_npz_to_hdf(item: str, parent_dir: str, hdf5_file) -> None:
+    parent_dir += os.sep # Treat as the directory
     npz: Any = np.load(item)
     arr: Any = npz[npz.files[0]]
-    item_name: str = os.path.splitext(item)[0].replace(npz_dir, "")
+    item_name: str = os.path.splitext(item)[0].replace(parent_dir, "").replace("\\", "/") # In the case of windows, we cannot handle "\\", so we replace it with "/"
     hdf5_file.create_dataset(item_name, data=arr, compression="gzip")

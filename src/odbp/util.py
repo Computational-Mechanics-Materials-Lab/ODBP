@@ -9,21 +9,23 @@ from typing import Union
 DefaultType = Union[None, str]
 AnswerType = Union[tuple[str, str], tuple[str, str, str]]
 
-def confirm(message: str, default: DefaultType = None) -> bool:
-    check_str: str = "Is this correct (y/n)? "
+def confirm(message: str, confirmation: str, default: DefaultType = None) -> bool:
     yes_vals: AnswerType = ("yes", "y")
     no_vals: AnswerType = ("no", "n")
     if isinstance(default, str):
         if default.lower() in yes_vals:
             yes_vals = ("yes", "y", "")
-            check_str = "Is this correct (Y/n)? "
+            confirmation += " (Y/n)? "
         elif default.lower() in no_vals:
             no_vals = ("no", "n", "")
-            check_str = "Is this correct (y/N)? "
+            confirmation += " (y/N)? "
+
+    else:
+        confirmation += " (y/n)? "
 
     while True:
         print(message)
-        user_input: str = input(check_str).lower()
+        user_input: str = input(confirmation).lower()
         if user_input in yes_vals:
             return True
         elif user_input in no_vals:
