@@ -2,7 +2,7 @@
 
 
 import os
-import json
+import toml
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -29,15 +29,15 @@ class OdbVisualizer(Odb):
         self.results_dir: str = kwargs.get("results_dir", os.getcwd())
         self.interactive: bool = kwargs.get("interactive", True)
 
-        self.views: ViewsDict = self.load_views_dict(os.path.join(os.path.dirname(os.path.abspath(__file__)), "views.json"))
+        self.views: ViewsDict = self.load_views_dict(os.path.join(os.path.dirname(os.path.abspath(__file__)), "views.toml"))
 
         self.views_list: list[str] = list(self.views.keys())
 
         #self.angle: str = self.views_list[49]
         self.angle: str = self.views_list[0]
-        self.elev: int = self.views[self.angle][0]
-        self.azim: int = self.views[self.angle][1]
-        self.roll: int = self.views[self.angle][2]
+        self.elev: int = self.views[self.angle]["elev"]
+        self.azim: int = self.views[self.angle]["azim"]
+        self.roll: int = self.views[self.angle]["roll"]
 
         self.colormap_name: str = kwargs.get("colormap_name", "turbo")
         self.colormap: pv.LookupTable
@@ -48,7 +48,7 @@ class OdbVisualizer(Odb):
             raise MeltpointNotSetError
 
         # TODO different melt color? Don't plot from as low as 0?
-        self.colormap = pv.LookupTable(cmap=self.colormap_name, scalar_range=(0, self.meltpoint), above_range_color=(0.25, 0.25, 0.25, 1.0))
+        self.colormap = pv.LookupTable(cmap=self.colormap_name, scalar_range=(self.low_temp, self.meltpoint), above_range_color=(0.25, 0.25, 0.25, 1.0))
 
 
     # Overload parent's set_meltpoint method to always select colormap
@@ -56,21 +56,33 @@ class OdbVisualizer(Odb):
         if not isinstance(meltpoint, float):
             meltpoint = float(meltpoint)
         self.meltpoint = meltpoint
-        self.select_colormap()
+
+        if hasattr(self, "low_temp"):
+            self.select_colormap()
+
+
+    # Overload parent's set_low_temp method to always select colormap
+    def set_low_temp(self, low_temp: float) -> None:
+        if not isinstance(low_temp, float):
+            low_temp = float(low_temp)
+        self.low_temp = low_temp
+
+        if hasattr(self, "meltpoint"):
+            self.select_colormap()
 
 
     def load_views_dict(self, file) -> ViewsDict:
         o_file: TextIO
         with open(file, "r") as o_file:
-            return json.load(o_file)
+            return toml.load(o_file)
 
 
     def select_views(self, view: Union[int, tuple[int, int, int]]) -> None:
         if isinstance(view, int):
             self.angle = self.views_list[view]
-            self.elev = self.views[self.angle][0]
-            self.azim = self.views[self.angle][1]
-            self.roll = self.views[self.angle][2]
+            self.elev = self.views[self.angle]["elev"]
+            self.azim = self.views[self.angle]["azim"]
+            self.roll = self.views[self.angle]["roll"]
 
         else:
             self.angle = "custom"
