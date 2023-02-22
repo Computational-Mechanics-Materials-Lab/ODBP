@@ -75,6 +75,7 @@ for x in range(numberofsteps):
 	## Building in time output 
 	t1 = step_name.totalTime # time till the 'Step-1'
 	#Creating a for loop to iterate through all frames in the .odb
+	print(odb.rootAssembly.instances["PART-1-1"].nodeSets.__dict__.keys())
 	part_nodes = odb.rootAssembly.instances['PART-1-1'].nodeSets['PART_NODES']
 	cut1_nodes = odb.rootAssembly.instances['PART-1-1'].nodeSets['CUT_1_NODES']
 	cut2_nodes = odb.rootAssembly.instances['PART-1-1'].nodeSets['CUT_2_NODES']

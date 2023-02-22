@@ -11,9 +11,6 @@ from typing import TypeAlias, TextIO, Union, Any
 from .odb import Odb
 
 
-ViewsDict: TypeAlias = dict[str, tuple[int, int, int]]
-
-
 class MeltpointNotSetError(Exception):
     def __init__(self) -> None:
         self.message = "You must enter the meltpoint and, optionally, the string name of a plt colormap (default \"turbo\") in order to set the colormap"
@@ -23,23 +20,16 @@ class OdbVisualizer(Odb):
     """
 
     """
-    def __init__(self, **kwargs) -> None:
-        Odb.__init__(self, **kwargs)
+    def __init__(self) -> None:
+        Odb.__init__(self)
 
-        self.results_dir: str = kwargs.get("results_dir", os.getcwd())
-        self.interactive: bool = kwargs.get("interactive", True)
+        self.interactive: bool
 
-        self.views: ViewsDict = self.load_views_dict(os.path.join(os.path.dirname(os.path.abspath(__file__)), "views.toml"))
+        self.x_rot: int
+        self.y_rot: int
+        self.z_rot: int
 
-        self.views_list: list[str] = list(self.views.keys())
-
-        #self.angle: str = self.views_list[49]
-        self.angle: str = self.views_list[0]
-        self.elev: int = self.views[self.angle]["elev"]
-        self.azim: int = self.views[self.angle]["azim"]
-        self.roll: int = self.views[self.angle]["roll"]
-
-        self.colormap_name: str = kwargs.get("colormap_name", "turbo")
+        self.colormap_name: str
         self.colormap: pv.LookupTable
 
 
@@ -69,26 +59,6 @@ class OdbVisualizer(Odb):
 
         if hasattr(self, "meltpoint"):
             self.select_colormap()
-
-
-    def load_views_dict(self, file) -> ViewsDict:
-        o_file: TextIO
-        with open(file, "r") as o_file:
-            return toml.load(o_file)
-
-
-    def select_views(self, view: Union[int, tuple[int, int, int]]) -> None:
-        if isinstance(view, int):
-            self.angle = self.views_list[view]
-            self.elev = self.views[self.angle]["elev"]
-            self.azim = self.views[self.angle]["azim"]
-            self.roll = self.views[self.angle]["roll"]
-
-        else:
-            self.angle = "custom"
-            self.elev = view[0]
-            self.azim = view[1]
-            self.roll = view[2]
 
 
     def plot_time_3d(self, time: float, label: str, interactive: bool)-> Any:
@@ -132,6 +102,3 @@ class OdbVisualizer(Odb):
             plotter.view_vector((self.elev, self.azim, self.roll))
 
         return plotter
-
-
-        

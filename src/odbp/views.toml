@@ -1,359 +1,49 @@
-["Top Face: back"]
-elev = 90
-azim = 0
-roll = 0
-
-["Top Face: right"]
-elev = 90
-azim = 0
-roll = -90
-
-["Top Face: left"]
-elev = 90
-azim = 0
-roll = 90
-
-["Top Face: front"]
-elev = 90
-azim = 0
-roll = 180
-
-["Bottom Face: back"]
-elev = -90
-azim = 0
-roll = 180
-
-["Bottom Face: right"]
-elev = -90
-azim = 0
-roll = 90
-
-["Bottom Face: left"]
-elev = -90
-azim = 0
-roll = -90
-
-["Bottom Face: front"]
-elev = -90
-azim = 0
-roll = 0
-
-["Left Face: front"]
-elev = 0
-azim = 90
-roll = -90
-
-["Left Face: top"]
-elev = 0
-azim = 90
-roll = 0
-
-["Left Face: back"]
-elev = 0
-azim = 90
-roll = 90
-
-["Left Face: bottom"]
-elev = 0
-azim = 90
-roll = 180
-
-["Right Face: front"]
-elev = 0
-azim = -90
-roll = 90
-
-["Right Face: top"]
-elev = 0
-azim = -90
-roll = 180
-
-["Right Face: back"]
-elev = 0
-azim = -90
-roll = -90
-
-["Right Face: bottom"]
-elev = 0
-azim = -90
-roll = 0
-
-["Front Face: right"]
-elev = 0
-azim = 0
-roll = -90
-
-["Front Face: top"]
-elev = 0
-azim = 0
-roll = 0
-
-["Front Face: left"]
-elev = 0
-azim = 0
-roll = 90
-
-["Front Face: bottom"]
-elev = 0
-azim = 0
-roll = 180
-
-["Back Face: left"]
-elev = 0
-azim = 180
-roll = -90
-
-["Back Face: top"]
-elev = 0
-azim = 180
-roll = 0
-
-["Back Face: right"]
-elev = 0
-azim = 180
-roll = 90
-
-["Back Face: bottom"]
-elev = 0
-azim = 180
-roll = 180
-
-["Top-Left Edge: top"]
-elev = 45
-azim = 90
-roll = 0
-
-["Top-Left Edge: left"]
-elev = 45
-azim = 90
-roll = 180
-
-["Top-Right Edge: top"]
-elev = 45
-azim = -90
-roll = 0
-
-["Top-Right Edge: right"]
-elev = 45
-azim = -90
-roll = 180
-
-["Top-Front Edge: top"]
-elev = 45
-azim = 0
-roll = 0
-
-["Top-Front Edge: front"]
-elev = 45
-azim = 0
-roll = 180
-
-["Top-Back Edge: top"]
-elev = 45
-azim = 180
-roll = 0
-
-["Top-Back Edge: back"]
-elev = 45
-azim = 180
-roll = 180
-
-["Bottom-Left Edge: left"]
-elev = -45
-azim = 90
-roll = 0
-
-["Bottom-Left Edge: bottom"]
-elev = -45
-azim = 90
-roll = 180
-
-["Bottom-Right Edge: right"]
-elev = -45
-azim = -90
-roll = 0
-
-["Bottom-Right Edge: bottom"]
-elev = -45
-azim = -90
-roll = 180
-
-["Bottom-Front Edge: front"]
-elev = -45
-azim = 0
-roll = 0
-
-["Bottom-Front Edge: bottom"]
-elev = -45
-azim = 0
-roll = 180
-
-["Bottom-Back Edge: back"]
-elev = -45
-azim = 180
-roll = 0
-
-["Bottom-Back Edge: bottom"]
-elev = -45
-azim = 180
-roll = 180
-
-["Front-Left Edge: left"]
-elev = 0
-azim = 45
-roll = 90
-
-["Front-Left Edge: front"]
-elev = 0
-azim = 45
-roll = -90
-
-["Front-Right Edge: front"]
-elev = 0
-azim = -45
-roll = 90
-
-["Front-Right Edge: right"]
-elev = 0
-azim = -45
-roll = -90
-
-["Back-Left Edge: back"]
-elev = 0
-azim = 135
-roll = 90
-
-["Back-Left Edge: left"]
-elev = 0
-azim = 135
-roll = -90
-
-["Back-Right Edge: right"]
-elev = 0
-azim = -135
-roll = 90
-
-["Back-Right Edge: back"]
-elev = 0
-azim = -135
-roll = -90
-
-["Top-Right-Front Vertex: right"]
-elev = 45
-azim = -45
-roll = -120
-
-["Top-Right-Front Vertex: top"]
-elev = 45
-azim = -45
-roll = 0
-
-["Top-Right-Front Vertex: front"]
-elev = 45
-azim = -45
-roll = 120
-
-["Top-Left-Front Vertex: front"]
-elev = 45
-azim = 45
-roll = -120
-
-["Top-Left-Front Vertex: top"]
-elev = 45
-azim = 45
-roll = 0
-
-["Top-Left-Front Vertex: left"]
-elev = 45
-azim = 45
-roll = 120
-
-["Top-Right-Back Vertex: right"]
-elev = 45
-azim = -135
-roll = 120
-
-["Top-Right-Back Vertex: top"]
-elev = 45
-azim = -135
-roll = 0
-
-["Top-Right-Back Vertex: back"]
-elev = 45
-azim = -135
-roll = -120
-
-["Top-Left-Back Vertex: back"]
-elev = 45
-azim = 135
-roll = 120
-
-["Top-Left-Back Vertex: top"]
-elev = 45
-azim = 135
-roll = 0
-
-["Top-Left-Back Vertex: left"]
-elev = 45
-azim = 135
-roll = -120
-
-["Bottom-Right-Front Vertex: right"]
-elev = -45
-azim = -45
-roll = -60
-
-["Bottom-Right-Front Vertex: bottom"]
-elev = -45
-azim = -45
-roll = -180
-
-["Bottom-Right-Front Vertex: front"]
-elev = -45
-azim = -45
-roll = 60
-
-["Bottom-Left-Front Vertex: bottom"]
-elev = -45
-azim = 45
-roll = -180
-
-["Bottom-Left-Front Vertex: front"]
-elev = -45
-azim = 45
-roll = -60
-
-["Bottom-Left-Front Vertex: left"]
-elev = -45
-azim = 45
-roll = 60
-
-["Bottom-Right-Back Vertex: right"]
-elev = -45
-azim = -135
-roll = 60
-
-["Bottom-Right-Back Vertex: back"]
-elev = -45
-azim = -135
-roll = -60
-
-["Bottom-Right-Back Vertex: bottom"]
-elev = -45
-azim = -135
-roll = -180
-
-["Bottom-Left-Back Vertex: bottom"]
-elev = -45
-azim = 135
-roll = -180
-
-["Bottom-Left-Back Vertex: left"]
-elev = -45
-azim = 135
-roll = -60
-
-["Bottom-Left-Back Vertex: back"]
-elev = -45
-azim = 135
-roll = 60
+[Top]
+x_rot = 0
+y_rot = 90
+z_rot = 90
+
+[Bottom]
+x_rot = 0
+y_rot = -90
+z_rot = 90
+
+[Front]
+x_rot = 0
+y_rot = 0
+z_rot = 0
+
+[Back]
+x_rot = 0
+y_rot = 0 
+z_rot = 180
+
+[Left]
+x_rot = 0
+y_rot = 90
+z_rot = 0
+
+[Right]
+x_rot = 0
+y_rot = -90
+z_rot = 0
+
+["Isometric Front-Right"]
+x_rot = 0
+y_rot = 45
+z_rot = 45
+
+["Isometric Front-Left"]
+x_rot = 0
+y_rot = 45
+z_rot = -45
+
+["Isometric Back-Right"]
+x_rot = 0
+y_rot = 45
+z_rot = 135
+
+["Isometric Back-Left"]
+x_rot = 0
+y_rot = 45
+z_rot = -135

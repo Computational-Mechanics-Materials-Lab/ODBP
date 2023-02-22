@@ -5,55 +5,30 @@ Built-in CLI for ODB Plotter, allowing for interactive system access without wri
 """
 
 import os
-import sys
 import toml
-import argparse
 import numpy as np
-from typing import Any, Union, TypeAlias
+from typing import Any, Union
 from .odb_visualizer import OdbVisualizer
-from .util import CLIOptions, confirm, process_input, print_state
+from .util import confirm
+from .state import CLIOptions, UserOptions, process_input, print_state, load_views_dict
 from odbp import __version__
 
 
-ConfigFiletype: TypeAlias = Union[str, None]
+def cli() -> None:
 
-
-class UserOptions():
-    """
-    Struct to store user's input
-    """
-    def __init__(self, hdf_source_directory: str, odb_source_directory: str, results_directory: str, image_title: str, image_label: str, toml_config_file: ConfigFiletype, run_immediate: bool) -> None:
-        """
-        Default values for user Options:
-        hdf_source_directory: user's present working directory
-        odb_source_directory: user's present working direcotry
-        results_directory: user's present working directory
-        image_title: name of the .hdf5 file + ".png"
-        image_label: image_title
-        run_immediate: False
-        """
-        self.hdf_source_directory: str = hdf_source_directory
-        self.odb_source_directory: str = odb_source_directory
-        self.results_directory: str = results_directory
-        self.image_title: str = image_title
-        self.image_label: str = image_label
-        self.toml_config_file: ConfigFiletype = toml_config_file
-        self.run_immediate: bool = run_immediate
-
-
-def cli():
-
-    state: OdbVisualizer = OdbVisualizer()
     main_loop: bool = True
 
     # TODO Process input toml file and/or cli switches here
-    user_options: UserOptions = process_input(state)
+    state: OdbVisualizer
+    user_options: UserOptions
+    state, user_options = process_input()
     cli_options: CLIOptions = CLIOptions()
 
     if user_options.run_immediate:
         # TODO
         load_hdf(state)
         plot_time_range(state, user_options)
+        return
 
     print(f"ODBPlotter {__version__}")
     while main_loop:
@@ -122,7 +97,8 @@ def cli():
             main_loop = False
 
 
-def select_files(state: OdbVisualizer, options: UserOptions) -> None:
+# TODO Rewrite
+def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
     odb_options: tuple[str, str] = ("odb", ".odb")
     hdf_options: tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
     user_input: str
@@ -148,13 +124,13 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
                         if not os.path.exists(user_input):
                             print(f"Error: {user_input} file could not be found")
                         else:
-                            state.odb_file = user_input
+                            state.odb_file_path = user_input
                     else:
-                        state.odb_file = os.path.join(os.getcwd(), user_input)
+                        state.odb_file_path = os.path.join(os.getcwd(), user_input)
                 else:
-                    state.odb_file = os.path.join(options.odb_source_directory, user_input)
+                    state.odb_file_path = os.path.join(options.odb_source_directory, user_input)
 
-            if hasattr(state, "odb_file") and state.odb_file is not None and state.odb_file != "":
+            if hasattr(state, "odb_file_path") and state.odb_file_path is not None and state.odb_file_path != "":
                 break
 
         gen_time_sample: bool = False
@@ -175,7 +151,7 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
                         print("Error: time sample must be an integer")
 
         print("Converting this .odb file to a .hdf file")
-        default: str = os.path.join(options.hdf_source_directory, state.odb_file.split(os.sep)[-1].split(".")[0] + ".hdf5")
+        default: str = os.path.join(options.hdf_source_directory, state.odb_file_path.split(os.sep)[-1].split(".")[0] + ".hdf5")
         hdf_file_path: str
         while True:
             user_input = input(f"Please enter the name for this generated hdf file (leave blank for the default {default}): ")
@@ -200,22 +176,23 @@ def select_files(state: OdbVisualizer, options: UserOptions) -> None:
                         if not os.path.exists(user_input):
                             print(f"Error: {user_input} file could not be found")
                         else:
-                            state.hdf_file = user_input
+                            state.hdf_file_path = user_input
                             options.toml_config_file = toml_config_file
                     else:
-                        state.hdf_file = os.path.join(os.getcwd(), user_input)
+                        state.hdf_file_path = os.path.join(os.getcwd(), user_input)
                         options.toml_config_file = os.path.join(os.getcwd(), toml_config_file)
                 else:
-                    state.hdf_file = os.path.join(options.hdf_source_directory, user_input)
+                    state.hdf_file_path = os.path.join(options.hdf_source_directory, user_input)
                     options.toml_config_file = os.path.join(options.hdf_source_directory, toml_config_file)
 
-            if hasattr(state, "hdf_file") and state.hdf_file is not None and state.hdf_file != "":
+            if hasattr(state, "hdf_file_path") and state.hdf_file_path is not None and state.hdf_file_path != "":
                 break
 
     pre_process_data(state, options)
-    print(f"Target .hdf5 file: {state.hdf_file}")
+    print(f"Target .hdf5 file: {state.hdf_file_path}")
 
 
+# TODO on toml_config_file
 def pre_process_data(state: OdbVisualizer, options: UserOptions):
     mesh_seed_size: Union[float, None] = None
     meltpoint: Union[float, None] = None
@@ -226,8 +203,8 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
         with open(options.toml_config_file, "r") as j:
             toml_config: dict[str, Any] = toml.load(j)
 
-        if "hdf_file" in toml_config:
-            if toml_config["hdf_file"] != state.hdf_file:
+        if "hdf_file_path" in toml_config:
+            if toml_config["hdf_file_path"] != state.hdf_file_path:
                 print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
 
         if "mesh_seed_size" in toml_config:
@@ -314,10 +291,10 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
 def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
     default_title: str = ""
 
-    if hasattr(state, "hdf_file"):
-        default_title = state.hdf_file.split(os.sep)[-1].split(".")[0]
-    elif hasattr(state, "odb_file"):
-        default_title = state.odb_file.split(os.sep)[-1].split(".")[0]
+    if hasattr(state, "hdf_file_path"):
+        default_title = state.hdf_file_path.split(os.sep)[-1].split(".")[0]
+    elif hasattr(state, "odb_file_path"):
+        default_title = state.odb_file_path.split(os.sep)[-1].split(".")[0]
 
     while True:
         user_input: str
@@ -575,82 +552,79 @@ def load_hdf(state: OdbVisualizer):
     state.process_hdf()
 
 
-def set_views(state):
+# TODO Fix
+def set_views(state: OdbVisualizer):
+    views_dict: dict[str, dict[str, int]] = load_views_dict()
     while True:
-        print("Please Select a Preset View for your plots: ")
+        print("Please Select a Preset View for your plots")
         print('To view all default presets, please enter "list"')
-        print ('Or, to specify your own view angle, please enter "custom"')
-        print("Important Defaults: Top Face: 4, Right Face: 14, Front Face: 18, Top/Right/Front Isometric: 50")
-        user_input = input("> ")
-        if user_input.lower() == "list":
-            print_views(state.views_list)
-        elif user_input.lower() == "custom":
-            state.select_views(get_custom_view())
+        print('Or, to specify your own view angle, please enter "custom"')
+        user_input: str = input("> ").strip().lower()
+        if user_input == "list":
+            print_views(views_dict)
+        elif user_input == "custom":
+            x_rot: int
+            y_rot: int
+            z_rot: int
+            x_rot, y_rot, z_rot = get_custom_view()
+
+            state.x_rot = x_rot
+            state.y_rot = y_rot
+            state.z_rot = z_rot
             return
 
         else:
             try:
-                user_input = int(user_input)
-                if 0 > user_input > (len(state.views_list) + 1):
-                    raise ValueError
-
-                state.select_views(user_input)
+                state.x_rot = views_dict[user_input]["x_rot"]
+                state.y_rot = views_dict[user_input]["y_rot"]
+                state.z_rot = views_dict[user_input]["z_rot"]
                 return
 
-            except ValueError:
-                print(f'Error: input must be "list," "custom," or an integer between 1 and {len(state.views_list) + 1}')
+            except KeyError:
+                print('Error: input must be "list," "custom," or a named view as seen from the "list" command.')
 
 
-def get_custom_view():
+def get_custom_view() -> tuple[int, int, int]:
+    x_rot: int
+    y_rot: int
+    z_rot: int
     while True:
         while True:
             try:
-                user_input = input("Elevation Value to view the plot (Leave Blank for the default): ")
-                if user_input == "":
-                    elev = "default"
-                else:
-                    elev = float(user_input)
+                x_rot = int(input("Rotation around the X-Axis in Degrees: "))
                 break
             except ValueError:
-                print("Error, Elevation Value must be a number or left blank")
+                print("Error: Rotation around the X-Axis must be an integer")
         while True:
             try:
-                user_input = input("Azimuth Value to view the plot (Leave Blank for the default): ")
-                if user_input == "":
-                    azim = "default"
-                else:
-                    azim = float(user_input)
+                y_rot = int(input("Rotation around the Y-Axis in Degrees: "))
                 break
             except ValueError:
-                print("Error, Azimuth Value must be a number or left blank")
+                print("Error: Rotation around the Y-Axis must be an integer")
         while True:
             try:
-                user_input = input("Roll Value to view the plot (Leave Blank for the default): ")
-                if user_input == "":
-                    roll = "default"
-                else:
-                    roll = float(user_input)
+                z_rot = int(input("Rotation around the Z-Axis in Degrees: "))
                 break
             except ValueError:
-                print("Error, Roll Value must be a number or left blank")
+                print("Error: Rotation around the Z-Axis must be an integer")
 
-        if confirm(f"Elevation: {elev}\nAzimuth:   {azim}\nRoll:      {roll}", "Is this correct?", "yes"):
+        if confirm(f"X Rotation: {x_rot}\nY Rotation: {y_rot}\nZ Rotation: {z_rot}", "Is this correct?", "yes"):
             break
 
-    if elev == "default":
-        elev = 30
-    if azim == "default":
-        azim = -60
-    if roll == "default":
-        roll = 0
-    
-    return elev, azim, roll
+    return (x_rot, y_rot, z_rot)
 
 
-def print_views(views):
-    print("View Index | View Angle: Face on Top")
-    for idx, view in enumerate(views):
-        print(f"{idx + 1}: {view}")
+def print_views(views: dict[str, dict[str, int]]) -> None:
+    print("Name | Rotation Values")
+    view: str
+    vals: dict[str, int]
+    key: str
+    val: int
+    for view, vals in views.items():
+        print(view)
+        for key, val in vals.items():
+            print(f"\t{key}: {val}")
+        print()
     print()
 
 
@@ -669,7 +643,7 @@ def plot_time_range(state: OdbVisualizer, user_options: UserOptions):
     times: Any = state.out_nodes["Time"]
     final_time_idx: int = int(len(times) / len(state.bounded_nodes))
 
-    if state.show_plots:
+    if not state.interactive:
         print("Please wait while the plotter prepares your images...")
     for time in times[:final_time_idx]:
         plot_time_slice(time, state, user_options)

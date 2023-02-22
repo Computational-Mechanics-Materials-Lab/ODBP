@@ -69,77 +69,27 @@ class Odb:
     Stores Data from a .hdf5, implements extractor methods to transfer from .odb to .hdf5
     Implements abilities to resize the dimenisons or timeframe of the data
     """
-    def __init__(self, **kwargs) -> None:
+    def __init__(self) -> None:
         """
-        __init__(self) -> None
-        key-word arguments:
-        odb_file (str): .odb file to extract from
-        hdf_file (str): .hdf5 file from which to read or to which to write extracted data from a .odb file
-        x_low (float): lower x_axis value to process
-        x_high (float): upper x_axis value to process
-        y_low (float): lower y_axis value to process
-        y_high (float): upper y_axis value to process
-        z_low (float): lower z_axis value to process
-        z_high (float): upper z_axis value to process
-        time_low (float): lower time value to process (Default 0)
-        time_high (float): upper time value to process
-        meltpoint (float): melting point of the sample
-        low_temp (float): lower temperature bound of the sample
-        time_sample (int): N for "extract from every Nth frame" (Default 1)
-        abaqus_program (str): name of the version of abaqus (or path to that executable if it is not on your path) (Default "abaqus")
         """
 
-        self.odb_file: str
-        if "odb_file" in kwargs:
-            self.odb_file = kwargs["odb_file"]
-
-        self.hdf_file: str
-        if "hdf_file" in kwargs:
-            self.hdf_file = kwargs["hdf_file"]
+        self.odb_file_path: str
+        self.hdf_file_path: str
 
         self.x: Axis = Axis("x")
-        if "x_low" in kwargs:
-            self.x.low = kwargs["x_low"]
-        if "x_high" in kwargs:
-            self.x.high = kwargs["x_high"]
-
         self.y: Axis = Axis("y")
-        if "y_low" in kwargs:
-            self.x.low = kwargs["y_low"]
-        if "y_high" in kwargs:
-            self.x.high = kwargs["y_high"]
-
         self.z: Axis = Axis("z")
-        if "z_low" in kwargs:
-            self.x.low = kwargs["z_low"]
-        if "z_high" in kwargs:
-            self.x.high = kwargs["z_high"]
 
-        self.time_low: float = kwargs.get("time_low", 0)
-
+        self.time_low: float = 0.0
         self.time_high: float
-        if "time_high" in kwargs:
-            self.time_low = kwargs["time_high"]
-
-        self.mesh_seed_size: float
-        if "mesh_seed_size" in kwargs:
-            self.mesh_seed_size = kwargs["mesh_seed_size"]
-
-        self.show_plots: bool = kwargs.get("show_plots", True)
 
         self.meltpoint: float
-        if "meltpoint" in kwargs:
-            self.meltpoint = kwargs["meltpoint"]
-
         self.low_temp: float
-        if "low_temp" in kwargs:
-            self.low_temp = kwargs["low_temp"]
 
         self.time_sample: int
-        if "time_sample" in kwargs:
-            self.time_sample: int = kwargs["time_sample"]
+        self.mesh_seed_size: float
 
-        self.abaqus_program = kwargs.get("abaqus_program", "abaqus")
+        self.abaqus_program = "abaqus"
 
         self.loaded: bool = False
 
@@ -264,11 +214,11 @@ class Odb:
 
     def odb_to_hdf(self, hdf_file_path: str) -> None:
         
-        assert self.odb_file != ""
+        assert self.odb_file_path != ""
         # Must run this script via abaqus python
         odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odb_to_npz.py")
 
-        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file), str(self.time_sample)]
+        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
         subprocess.run(odb_to_npz_args, shell=True)
 
         npz_dir: str = os.path.join(os.getcwd(), "tmp_npz")
@@ -277,13 +227,13 @@ class Odb:
         if os.path.exists(npz_dir):
             shutil.rmtree(npz_dir)
 
-        self.hdf_file = hdf_file_path
+        self.hdf_file_path = hdf_file_path
 
 
     def dump_config_to_toml(self, toml_path: str) -> None:
         config = dict()
-        if hasattr(self, "hdf_file"):
-            config["hdf_file"] = self.hdf_file
+        if hasattr(self, "hdf_file_path"):
+            config["hdf_file_path"] = self.hdf_file_path
         if hasattr(self, "mesh_seed_size"):
             config["mesh_seed_size"] = self.mesh_seed_size
         if hasattr(self, "meltpoint"):
@@ -313,11 +263,11 @@ class Odb:
             raise SeedNotSetError
         
         # Ensure the hdf file is set
-        if not hasattr(self, "hdf_file"):
+        if not hasattr(self, "hdf_file_path"):
             raise HDFNotSetError
 
         # Adapted from CJ's read_hdf5.py
-        coords_df: Any = get_coords(self.hdf_file)
+        coords_df: Any = get_coords(self.hdf_file_path)
         self.bounded_nodes = list(
                 coords_df[
                     (((coords_df["X"] == self.x.high) | (coords_df["X"] == self.x.low)) & ((coords_df["Y"] >= self.y.low) & (coords_df["Y"] <= self.y.high) & (coords_df["Z"] >= self.z.low) & (coords_df["Z"] <= self.z.high))) |
@@ -333,7 +283,7 @@ class Odb:
             data: list[tuple[str, int, int]] = list()
             node: int
             for node in self.bounded_nodes:
-                data.append((self.hdf_file, node, self.time_sample))
+                data.append((self.hdf_file_path, node, self.time_sample))
             results: Any = pool.starmap(read_node_data, data)
 
         self.out_nodes = pd.concat(results)
