@@ -213,13 +213,22 @@ def process_input(state: OdbVisualizer) -> Union[UserOptions, Any]: # Returns Us
     """
 
     parser: argparse.ArgumentParser = argparse.ArgumentParser(prog="python -m odbp", description="ODB Plotter")
+
     parser.add_argument("-v", "--version", help="Show the version of ODB Plotter and exit")
+
     subparsers: argparse.ArgumentParser = parser.add_subparsers(help='use either the "extract" command to pull data directly from a .odb file or the "plot" command to create visual plots from data stored in .odbs or .hdf5s')
+
+    # Extract mode needs the extract keyword, and then the file to extract from (odb or hdf), 
     extract_parser: argparse.ArgumentParser = subparsers.add_parser("extract")
+    extract_parser.add_argument("extract", action="store_true", help="Flag to denote extract action in lieu of parse action")
+    extract_parser.add_argument("-o", "--odb", help="Path to the desired .odb file")
+    extract_parser.add_argument("-H", "--hdf", help="Path to the desired .hdf5 file")
+    extract_parser.add_argument()
+
     plot_parser: argparse.ArgumentParser = subparsers.add_parser("plot")
     plot_parser.add_argument("input_file", nargs="?", help=".toml file used to give input values to ODBPlotter")
 
-    plot_parser.add_argument("-s", "--hdf-source-directory", help="Dirctory from which to source .hdf5 files")
+    plot_parser.add_argument("-s", "--hdf-source-directory", help="Directory from which to source .hdf5 files")
     plot_parser.add_argument("-b", "--odb-source-directory", help="Directory from which to source .odb files")
     plot_parser.add_argument("-r", "--results-directory", help="Directory in which to store results")
 
