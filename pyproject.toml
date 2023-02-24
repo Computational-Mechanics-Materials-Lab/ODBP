@@ -24,7 +24,7 @@ dynamic = ["version"]
 "Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [tool.setuptools]
-package-data = {odbp = ["views.toml", "odb_to_npz.py"]}
+package-data = {odbp = ["views.toml", "odb_to_npz.py", "extract.py"]}
 
 [tool.setuptools.dynamic]
 version = {attr = "odbp.__version__"}

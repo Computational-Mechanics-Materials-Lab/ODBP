@@ -5,9 +5,11 @@ Built-in CLI for ODB Plotter, allowing for interactive system access without wri
 """
 
 import os
+import sys
 import toml
 import numpy as np
-from typing import Any, Union
+import pandas as pd
+from typing import Any, Union, TextIO
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from .state import CLIOptions, UserOptions, process_input, print_state, load_views_dict
@@ -21,7 +23,14 @@ def cli() -> None:
     # TODO Process input toml file and/or cli switches here
     state: OdbVisualizer
     user_options: UserOptions
-    state, user_options = process_input()
+    result: Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]
+    result = process_input()
+    if isinstance(result, pd.DataFrame):
+        sys.exit(print(result))
+
+    else:
+        state, user_options = result
+
     cli_options: CLIOptions = CLIOptions()
 
     if user_options.run_immediate:
@@ -144,7 +153,6 @@ def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
 
     elif user_input in hdf_options:
         # process hdf
-        config_file_path: ConfigFileType
         hdf_path_valid: bool = False
         while not hdf_path_valid:
             user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
@@ -157,7 +165,7 @@ def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
                 else:
                     print(f"Error: the file {user_input} could not be found")
 
-        pre_process_data(state, options)
+        pre_process_data(state, user_options)
         print(f"Target .hdf5 file: {state.hdf_file_path}")
 
 
@@ -181,7 +189,7 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
             config: dict[str, Any] = toml.load(config_file)
 
         if "hdf_file_path" in config:
-            if toml_config["hdf_file_path"] != state.hdf_file_path:
+            if config["hdf_file_path"] != state.hdf_file_path:
                 print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
 
         if "mesh_seed_size" in config:
@@ -259,8 +267,8 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
         if time_sample is None:
             set_time_sample(state)
 
-        if isinstance(options.toml_config_file, str):
-            state.dump_config_to_toml(options.toml_config_file)
+        if isinstance(user_options.config_file_path, str):
+            state.dump_config_to_toml(user_options.config_file_path)
 
     state.select_colormap()
 

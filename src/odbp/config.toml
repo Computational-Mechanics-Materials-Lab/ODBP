@@ -51,7 +51,7 @@ parts = [ "PART-1-1", ]
 # "My Custom Nodeset" = [568,12004,12000,11996,11992,11988, 11984, 11980, 11976, 11972, 11968]
 
 # Not set by default, which will extract all nodes present
-# nodes =
+# [nodes]
 
 #####
 

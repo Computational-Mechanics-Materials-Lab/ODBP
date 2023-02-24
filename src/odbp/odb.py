@@ -13,36 +13,13 @@ import shutil
 import numpy as np
 import pandas as pd
 
-from typing import TextIO, Any
+from typing import TextIO, Any, Union
 from multiprocessing import Pool
 
+# Needed only for typing, circular import
+#from .state import UserOptions
 from .npz_to_hdf import npz_to_hdf
 from .read_hdf5 import get_coords, read_node_data
-
-
-# HDF Manger Exceptions
-class RangeNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must set the upper-and-lower bounds in the x, y, and z directions"
-        super().__init__(self.message)
-
-
-class TimeNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must set the upper-and-lower bounds of time to extract. Lower time bound must not be less than zero. Pass float(\"inf\") or equivalent for upper time bound to get all times"
-        super().__init__(self.message)
-
-
-class SeedNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must set the mesh-seed-size"
-        super().__init__(self.message)
-
-
-class HDFNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must either provide the .hdf5 file you wish to extract from, or provide a corresponding .odb file and use the odb_to_hdf method"
-        super().__init__(self.message)
 
 
 class Axis:
@@ -77,6 +54,8 @@ class Odb:
         self.hdf_file_path: str
 
         self.parts: list[str]
+        self.nodes: dict[str, list[int]]
+        self.nodesets: list[str]
 
         self.x: Axis = Axis("x")
         self.y: Axis = Axis("y")
@@ -177,17 +156,32 @@ class Odb:
         self.time_sample = value
 
 
-    def set_parts(self, parts: "list[str]") -> None:
+    def set_parts(self, parts: list[str]) -> None:
         if not isinstance(parts, list):
-            new_list: list[str] = list()
-            new_list.append(parts)
+            new_list: list[str] = [parts]
             self.parts = new_list
 
         else:
             self.parts = parts
 
+    
+    def set_nodes(self, nodes: dict[str, list[int]]) -> None:
+        if not isinstance(nodes, dict):
+            nodes = dict(nodes)
 
-    def select_odb(self, user_options: UserOptions, given_odb_file_path: str) -> "Union[None, bool]":
+        self.nodes = nodes
+
+    
+    def set_nodesets(self, nodesets: list[str]) -> None:
+        if not isinstance(nodesets, list):
+            new_list: list[str] = [nodesets]
+            self.nodesets = new_list
+
+        else:
+            self.nodesets = nodesets
+
+
+    def select_odb(self, user_options: Any, given_odb_file_path: str) -> "Union[None, bool]":
         odb_file_path: str
         if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
             if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
@@ -201,10 +195,10 @@ class Odb:
         else:
             odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
 
-        state.odb_file_path = odb_file_path
+        self.odb_file_path = odb_file_path
 
 
-    def select_hdf(self, user_options: UserOptions, given_hdf_file_path: str) -> "Union[UserOptions, bool]":
+    def select_hdf(self, user_options: Any, given_hdf_file_path: str) -> "Union[Any, bool]":
         hdf_file_path: str
         if not os.path.exists(os.path.join(user_options.hdf_source_directory, given_hdf_file_path)):
             if not os.path.exists(os.path.join(os.getcwd(), given_hdf_file_path)):
@@ -218,9 +212,9 @@ class Odb:
         else:
             hdf_file_path = os.path.join(user_options.hdf_source_directory, given_hdf_file_path)
 
-        state.hdf_file_path = hdf_file_path
+        self.hdf_file_path = hdf_file_path
 
-        config_file_path: str = state.hdf_file_path.split(".")[0] + ".toml"
+        config_file_path: str = self.hdf_file_path.split(".")[0] + ".toml"
         if os.path.exists(config_file_path):
             user_options.config_file_path = config_file_path
 
@@ -306,20 +300,20 @@ class Odb:
     def process_hdf(self) -> None:
 
         # Ensure that all 6 dimension extrema are set
-        if not (hasattr(self.x, "low") and hasattr(self.x, "high") and hasattr(self.y, "low") and hasattr(self.y, "high") and hasattr(self.z, "low") and hasattr(self.z, "high")):
-            raise RangeNotSetError
+        #if not (hasattr(self.x, "low") and hasattr(self.x, "high") and hasattr(self.y, "low") and hasattr(self.y, "high") and hasattr(self.z, "low") and hasattr(self.z, "high")):
+        #    raise RangeNotSetError
 
-        # Ensure that both time boundaries are set
-        if not (hasattr(self, "time_low") and hasattr(self, "time_high")):
-            raise TimeNotSetError
+        ## Ensure that both time boundaries are set
+        #if not (hasattr(self, "time_low") and hasattr(self, "time_high")):
+        #    raise TimeNotSetError
 
-        # Ensure the mesh seed size is set
-        if not hasattr(self, "mesh_seed_size"):
-            raise SeedNotSetError
+        ## Ensure the mesh seed size is set
+        #if not hasattr(self, "mesh_seed_size"):
+        #    raise SeedNotSetError
         
-        # Ensure the hdf file is set
-        if not hasattr(self, "hdf_file_path"):
-            raise HDFNotSetError
+        ## Ensure the hdf file is set
+        #if not hasattr(self, "hdf_file_path"):
+        #    raise HDFNotSetError
 
         # Adapted from CJ's read_hdf5.py
         coords_df: Any = get_coords(self.hdf_file_path)

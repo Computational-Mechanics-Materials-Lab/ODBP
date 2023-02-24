@@ -3,6 +3,8 @@ import toml
 import sys
 import os
 import platformdirs
+import subprocess
+import pickle
 import pandas as pd
 from typing import Union, Any, TypeAlias, TextIO
 from .odb_visualizer import OdbVisualizer
@@ -207,7 +209,7 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
     print(final_state_output, end="") # No ending newline because we added it above
 
 
-def process_input() -> Union[SettingType, Any]: # Returns UserOptions or Pandas Dataframe
+def process_input() -> Union[SettingType, pd.DataFrame]: # Returns UserOptions or Pandas Dataframe
     """
     The goal is to have a hierarchy of options. If a user passes in an option via a command-line switch, that option is set.
     If an option is not set by a switch, then the toml input file is used.
@@ -223,7 +225,6 @@ def process_input() -> Union[SettingType, Any]: # Returns UserOptions or Pandas 
 
     # Extract mode needs the extract keyword, and then the file to extract from (odb or hdf), 
     extract_parser: argparse.ArgumentParser = subparsers.add_parser("extract")
-    extract_parser.add_argument("extract", action="store_true", help="Flag to denote extract action in lieu of parse action")
     extract_parser.add_argument("input-file", nargs="?", help=".toml file for which nodesets to extract from")
     extract_parser.add_argument("-o", "--odb", help="Path to the desired .odb file")
     #extract_parser.add_argument("-H", "--hdf", help="Path to the desired .hdf5 file")
@@ -281,10 +282,10 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
     user_options: UserOptions = UserOptions()
 
     # Stage 1: User platformdirs to read base-line settings
-    odbp_config_dir: str = platformsdirs.user_config_dir("odbp")
+    odbp_config_dir: str = platformdirs.user_config_dir("odbp")
     if not os.path.exists(odbp_config_dir):
         os.makedirs(odbp_config_dir)
-    config_file_path: str = os.path.join(odb_config_dir, "config.toml")
+    config_file_path: str = os.path.join(odbp_config_dir, "config.toml")
     if not os.path.exists(config_file_path):
         print(f"Generating default config file at {config_file_path}")
         base_config_file: TextIO
@@ -330,41 +331,36 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
         print("Error: You must supply the path to a .odb file from which to extract")
         sys.exit(1)
 
-    # At current moment, there are only 5 settings in the extract input file
-    # so we'll handle them in this method
-    # TODO probably move this to a separate function
-    odb_file_path: str = ""
-    num_steps: int = 0 # ?????
-    parts: list[str] = list()
-    nodes_to_extract: Union[list[int], None] = None
-    nodesets_to_extract: Union[list[str], None] = None
-    if args.input_file:
-        input_file_path: str = args.input_file
-        if not os.path.exists(input_file_path):
-            if not os.path.exists(os.path.join(os.getcwd(), input_file_path)):
-                print(F"Error: Input File {input_file_path} could not be found")
-                sys.exit(1)
-            else:
-                input_file_path = os.path.join(os.getcwd(), input_file_path)
+    state: OdbVisualizer
+    state, _ = generate_cli_settings(args)
 
-        input_file: TextIO
-        input_settings: dict[str, Any]
-        with open(input_file_path, "r") as input_file:
-            input_settings = toml.read(input_file)
+    odb_extract_script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extract.py")
+    temp_save_path = os.path.join(os.getcwd(), "temp.pickle")
 
-        # Read the 5 settings or get defaults
-        if "odb" in input_settings:
-            odb_file_path = input_settings["odb"]
+    parts: Union[list[str], None] = None
+    nodesets: Union[list[str], None] = None
+    nodes: Union[dict[str, list[int]], None] = None
+    if hasattr(state, "parts"):
+        parts = state.parts
 
-        if "parts" in input_settings:
-            parts = input_settings["parts"]
+    if hasattr(state, "nodesets"):
+        nodesets = state.nodesets
 
-        if "nodes" in input_settings:
+    if hasattr(state, "nodes"):
+        nodes = state.nodes
 
-    if args.odb:
-        odb_file_path = args.odb
+    odb_extract_args: list[str] = [state.abaqus_program, "python", odb_extract_script_path, state.odb_file_path, temp_save_path, parts, nodesets, nodes]
+    subprocess.run(odb_extract_args, shell=True)
 
-    #
+    return_data: pd.DataFrame
+    temp_file: TextIO
+    with open(temp_save_path, "rb") as temp_file:
+        return_data = pickle.load(temp_file)
+
+    if os.path.exists(temp_file):
+        os.remove(temp_file)
+
+    return return_data
 
 
 def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: dict[str, Any]) -> SettingType:
@@ -426,20 +422,20 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             state.set_time_sample(settings_dict["time_sample"])
 
         if "hdf" in settings_dict:
-        if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
-            if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
-                if not os.path.exists(given_odb_file_path):
-                    print(f"Error: The file {given_odb_file_path} could not be found")
-                    sys.exit(1)
+            if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
+                if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
+                    if not os.path.exists(given_odb_file_path):
+                        print(f"Error: The file {given_odb_file_path} could not be found")
+                        sys.exit(1)
 
+                    else:
+                        odb_file_path = given_odb_file_path
                 else:
-                    odb_file_path = given_odb_file_path
+                    odb_file_path = os.path.join(os.getcwd(), given_odb_file_path)
             else:
-                odb_file_path = os.path.join(os.getcwd(), given_odb_file_path)
-        else:
-            odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
+                odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
 
-        state.odb_file_path = odb_file_path
+            state.odb_file_path = odb_file_path
             new_hdf_file_name: str = os.path.join(user_options.hdf_source_directory, settings_dict["hdf"])
             print(f"Converting .odb file to .hdf5 file with name: {new_hdf_file_name}")
             state.odb_to_hdf(new_hdf_file_name)
@@ -565,6 +561,12 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
     if "parts" in settings_dict:
         state.set_parts(settings_dict["parts"])
+
+    if "nodes" in settings_dict:
+        state.set_nodes(settings_dict["nodes"])
+
+    if "nodesets" in settings_dict:
+        state.set_nodesets(settings_dict["nodesets"])
 
     return (state, user_options)
 
