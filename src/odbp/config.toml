@@ -31,6 +31,30 @@ results_directory = "results"
 # Not set by default. Enter a value and uncomment to pass a default value
 # odb =
 
+#####
+# parts, nodesets, and nodes cannot be easily set via the cli, and must be set
+# interactively or using this config file or another .toml input file
+
+# Parts from which to extract
+# By default, we can use the Abaqus default of "PART-1-1", but you can add whatever you'd like here
+parts = [ "PART-1-1", ]
+
+# Nodesets from which to extract
+# Not set by default, which will use all present nodesets
+# nodesets =
+
+# Custom nodesets to create and extract
+# Must be 0 or more arrays in a .toml table
+# For example:
+# [nodes]
+# custom_nodeset_name = [1, 2, 3, 4, 5, ...]
+# "My Custom Nodeset" = [568,12004,12000,11996,11992,11988, 11984, 11980, 11976, 11972, 11968]
+
+# Not set by default, which will extract all nodes present
+# nodes =
+
+#####
+
 # lower x-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
 # x_low =
@@ -83,9 +107,9 @@ time_high = +inf
 #####
 
 # In general, don't set mesh_seed_size or time_sample with these files
-# If you are creating a .hdf5 file from a .odb, you can pass in the mesh_seed_size
-# in an input file. A default time sample of 1 works, but should almost always
-# be overwritten
+# If you are creating a .hdf5 file from a .odb,
+# you can pass in the mesh_seed_size in an input file.
+# A default time sample of 1 works, but should almost always be overwritten
 # Otherwise, you should rely on the corresponding config file with the .hdf5
 
 #####

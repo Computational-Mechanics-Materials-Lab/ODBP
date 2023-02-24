@@ -2,6 +2,7 @@ import argparse
 import toml
 import sys
 import os
+import platformdirs
 import pandas as pd
 from typing import Union, Any, TypeAlias, TextIO
 from .odb_visualizer import OdbVisualizer
@@ -48,8 +49,12 @@ class CLIOptions():
         self.quit_options_formatted: str = ", ".join(self.quit_options)
 
         self.select_options: list[str] = ["select"]
-        self.select_help: str = "Select an hdf5 file (or generate an hdf5 file from a .odb file)"
+        self.select_help: str = "Select a .hdf5 file or a .odb file"
         self.select_options_formatted: str = ", ".join(self.select_options)
+
+        self.convert_options: list[str] = ["convert"]
+        self.convert_help: str = "Convert a selected .odb file to a .hdf5 file"
+        self.convert_options_formatted: str = ", ".join(self.convert_options)
 
         self.seed_options: list[str] = ["seed", "mesh"]
         self.seed_help: str = "Set the Mesh Seed Size"
@@ -110,6 +115,7 @@ class CLIOptions():
         self.longest_len: int = max(
                 len(self.quit_options_formatted),
                 len(self.select_options_formatted),
+                len(self.convert_options_formatted),
                 len(self.seed_options_formatted),
                 len(self.extrema_options_formatted),
                 len(self.time_options_formatted),
@@ -129,6 +135,7 @@ class CLIOptions():
 {self.help_options_formatted.ljust(self.longest_len)} -- {self.help_help}
 {self.quit_options_formatted.ljust(self.longest_len) } -- {self.quit_help}
 {self.select_options_formatted.ljust(self.longest_len)} -- {self.select_help}
+{self.convert_options_formatted.ljust(self.longest_len)} -- {self.convert_help}
 {self.seed_options_formatted.ljust(self.longest_len)} -- {self.seed_help}
 {self.extrema_options_formatted.ljust(self.longest_len)} -- {self.extrema_help}
 {self.time_options_formatted.ljust(self.longest_len)} -- {self.time_help}
@@ -274,15 +281,26 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
     user_options: UserOptions = UserOptions()
 
     # Stage 1: User platformdirs to read base-line settings
-    # config_file_path: str = <config_file_path>
-    # if not os.path.exists(<config_file_path>):
-    #    print("Generating default config file at <config_file_path>")
-    #    generate_config_file()
-    # config_file: TextIO
-    # config_settings: dict[str, Any]
-    # with open(config_file_path, "r") as config_File:
-    #    config_settings = toml.read(config_file)
-    # state, user_options = read_setting_dict(state, user_options, config_settings)
+    odbp_config_dir: str = platformsdirs.user_config_dir("odbp")
+    if not os.path.exists(odbp_config_dir):
+        os.makedirs(odbp_config_dir)
+    config_file_path: str = os.path.join(odb_config_dir, "config.toml")
+    if not os.path.exists(config_file_path):
+        print(f"Generating default config file at {config_file_path}")
+        base_config_file: TextIO
+        config_data: str
+        new_config_file: TextIO
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.toml"), "r") as base_config_file:
+            config_data = base_config_file.read()
+
+        with open(config_file_path, "w") as new_config_file:
+            new_config_file.write(config_data)
+
+    config_file: TextIO
+    config_settings: dict[str, Any]
+    with open(config_file_path, "r") as config_file:
+        config_settings = toml.read(config_file)
+    state, user_options = read_setting_dict(state, user_options, config_settings)
 
     # Stage 2: Use the input_file if it exists
     if args.input_file:
@@ -308,7 +326,45 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
 
 
 def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
-    pass
+    if not args.odb:
+        print("Error: You must supply the path to a .odb file from which to extract")
+        sys.exit(1)
+
+    # At current moment, there are only 5 settings in the extract input file
+    # so we'll handle them in this method
+    # TODO probably move this to a separate function
+    odb_file_path: str = ""
+    num_steps: int = 0 # ?????
+    parts: list[str] = list()
+    nodes_to_extract: Union[list[int], None] = None
+    nodesets_to_extract: Union[list[str], None] = None
+    if args.input_file:
+        input_file_path: str = args.input_file
+        if not os.path.exists(input_file_path):
+            if not os.path.exists(os.path.join(os.getcwd(), input_file_path)):
+                print(F"Error: Input File {input_file_path} could not be found")
+                sys.exit(1)
+            else:
+                input_file_path = os.path.join(os.getcwd(), input_file_path)
+
+        input_file: TextIO
+        input_settings: dict[str, Any]
+        with open(input_file_path, "r") as input_file:
+            input_settings = toml.read(input_file)
+
+        # Read the 5 settings or get defaults
+        if "odb" in input_settings:
+            odb_file_path = input_settings["odb"]
+
+        if "parts" in input_settings:
+            parts = input_settings["parts"]
+
+        if "nodes" in input_settings:
+
+    if args.odb:
+        odb_file_path = args.odb
+
+    #
 
 
 def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: dict[str, Any]) -> SettingType:
@@ -352,7 +408,24 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     if "odb" in settings_dict:
         # Ensure the file exists
         given_odb_file_path: str = settings_dict["odb"]
-        odb_file_path: str
+        if isinstance(state.select_odb(user_options, given_odb_file_path), bool):
+            print(f"Error: The file {given_odb_file_path} could not be found")
+            sys.exit(1)
+
+
+        if "meltpoint" in settings_dict:
+            state.set_meltpoint(settings_dict["meltpoint"])
+
+        if "low_temp" in settings_dict:
+            state.set_low_temp(settings_dict["low_temp"])
+
+        if "mesh_seed_size" in settings_dict:
+            state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
+
+        if "time_sample" in settings_dict:
+            state.set_time_sample(settings_dict["time_sample"])
+
+        if "hdf" in settings_dict:
         if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
             if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
                 if not os.path.exists(given_odb_file_path):
@@ -367,20 +440,6 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
 
         state.odb_file_path = odb_file_path
-
-        if "meltpoint" in settings_dict:
-            state.meltpoint = settings_dict["meltpoint"]
-
-        if "low_temp" in settings_dict:
-            state.low_temp = settings_dict["low_temp"]
-
-        if "mesh_seed_size" in settings_dict:
-            state.mesh_seed_size = settings_dict["mesh_seed_size"]
-
-        if "time_sample" in settings_dict:
-            state.time_sample = settings_dict["time_sample"]
-
-        if "hdf" in settings_dict:
             new_hdf_file_name: str = os.path.join(user_options.hdf_source_directory, settings_dict["hdf"])
             print(f"Converting .odb file to .hdf5 file with name: {new_hdf_file_name}")
             state.odb_to_hdf(new_hdf_file_name)
@@ -391,74 +450,67 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     elif "hdf" in settings_dict:
         # ensure the file exists
         given_hdf_file_path: str = settings_dict["hdf"]
-        hdf_file_path: str
-        if not os.path.exists(os.path.join(user_options.hdf_source_directory, given_hdf_file_path)):
-            if not os.path.exists(os.path.join(os.getcwd(), given_hdf_file_path)):
-                if not os.path.exists(given_hdf_file_path):
-                    print(f"Error: the file {given_hdf_file_path} could not be found")
-                    sys.exit(1)
+        # "True" to crash on failure form this path
+        output: Union[UserOptions, bool] = state.select_hdf(user_options, given_hdf_file_path, True)
+        if isinstance(output, bool):
+            print(f"Error: the file {given_hdf_file_path} could not be found")
+            sys.exit(1)
 
-                else:
-                    hdf_file_path = given_hdf_file_path
-            else:
-                hdf_file_path = os.path.join(os.getcwd(), given_hdf_file_path)
         else:
-            hdf_file_path = os.path.join(user_options.hdf_source_directory, given_hdf_file_path)
-
-        state.hdf_file_path = hdf_file_path
+            user_options = output
 
         # If none of these values are set, read as many as are available out of the .toml config file
         # Otherwise, the file must have already been read
         if not hasattr(state, "meltpoint") and not hasattr(state, "low_temp") and not hasattr(state, "mesh_seed_size") and not hasattr(state, "time_sample"):
 
             # Search for the stored toml values for this hdf
-            config_file_path: ConfigFileType = os.path.join(user_options.hdf_source_directory, state.hdf_file_path.split(".")[0] + ".toml")
             config: Union[dict[str, Any], None] = None
-            if not os.path.exists(config_file_path):
+            if user_options.config_file_path is None:
                 print(f".toml config file for {state.hdf_file_path} could not be found")
             else:
-                user_options.config_file_path = config_file_path
                 config_file: TextIO
-                with open(config_file_path, "r") as config_file:
+                with open(user_options.config_file_path, "r") as config_file:
                     config = toml.load(config_file)
 
-            if "meltpoint" in config:
-                state.meltpoint = config["meltpoint"]
+            if config is not None and "meltpoint" in config:
+                state.set_meltpoint(config["meltpoint"])
             elif "meltpoint" in settings_dict:
-                state.meltpoint = settings_dict["meltpoint"]
+                state.set_meltpoint(settings_dict["meltpoint"])
 
-            if "low_temp" in config:
-                state.low_temp = config["low_temp"]
+            if config is not None and "low_temp" in config:
+                state.set_low_temp(config["low_temp"])
             elif "low_temp" in settings_dict:
-                state.low_temp = settings_dict["low_temp"]
+                state.set_low_temp(settings_dict["low_temp"])
 
-            if "mesh_seed_size" in config:
-                state.mesh_seed_size = config["mesh_seed_size"]
+            if config is not None and "mesh_seed_size" in config:
+                state.set_mesh_seed_size(config["mesh_seed_size"])
             elif "mesh_seed_size" in settings_dict:
-                state.mesh_seed_size = settings_dict["mesh_seed_size"]
+                state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
 
-            if "time_sample" in config:
-                state.time_sample = config["time_sample"]
+            if config is not None and "time_sample" in config:
+                state.set_time_sample(config["time_sample"])
             elif "time_sample" in settings_dict:
-                state.time_sample = settings_dict["time_sample"]
+                state.set_time_sample(settings_dict["time_sample"])
 
     else: # The case where a .odb file and a .hdf5 file were not provided
 
         if "meltpoint" in settings_dict:
-            state.meltpoint = settings_dict["meltpoint"]
+            state.set_meltpoint(settings_dict["meltpoint"])
 
         if "low_temp" in settings_dict:
-            state.low_temp = settings_dict["low_temp"]
+            state.set_low_temp(settings_dict["low_temp"])
 
         if "mesh_seed_size" in settings_dict:
-            state.mesh_seed_size = settings_dict["mesh_seed_size"]
+            state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
 
         if "time_sample" in settings_dict:
-            state.time_sample = settings_dict["time_sample"]
+            state.set_time_sample(settings_dict["time_sample"])
 
     # The 4 dimensions and the two booleans are always set here if they exist
-    # The 5th dimension, temperature, is not set here because it shouldn't change based on
-    # the file, even if the spatial or temporal dimensions change
+    # The 5th dimension, temperature, is not set here because it shouldn't
+    # change based on the file, even if the spatial
+    # or temporal dimensions change
+
     if "low_x" in settings_dict:
         state.set_x_low(settings_dict["low_x"])
     if "high_x" in settings_dict:
@@ -510,6 +562,9 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         state.x_rot = settings_dict["view"]["x_rot"]
         state.y_rot = settings_dict["view"]["y_rot"]
         state.z_rot = settings_dict["view"]["z_rot"]
+
+    if "parts" in settings_dict:
+        state.set_parts(settings_dict["parts"])
 
     return (state, user_options)
 

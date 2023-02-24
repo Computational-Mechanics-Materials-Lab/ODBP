@@ -42,6 +42,9 @@ def cli() -> None:
             elif user_input in cli_options.select_options:
                 select_files(state, user_options)
 
+            elif user_input in cli_options.convert_options:
+                convert(state)
+
             elif user_input in cli_options.seed_options:
                 set_seed_size(state)
 
@@ -97,7 +100,6 @@ def cli() -> None:
             main_loop = False
 
 
-# TODO Rewrite
 def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
     odb_options: tuple[str, str] = ("odb", ".odb")
     hdf_options: tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
@@ -116,22 +118,16 @@ def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
 
     if user_input in odb_options:
         # process odb
-        while True:
+        odb_path_valid: bool = False
+        while not odb_path_valid:
             user_input = input("Please enter the path of the odb file: ")
             if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                if not os.path.exists(os.path.join(options.odb_source_directory, user_input)):
-                    if not os.path.exists(os.path.join(os.getcwd(), user_input)):
-                        if not os.path.exists(user_input):
-                            print(f"Error: {user_input} file could not be found")
-                        else:
-                            state.odb_file_path = user_input
-                    else:
-                        state.odb_file_path = os.path.join(os.getcwd(), user_input)
-                else:
-                    state.odb_file_path = os.path.join(options.odb_source_directory, user_input)
+                output: Union[bool, None] = state.select_odb(user_options, user_input)
+                if isinstance(output, bool):
+                    print(f"Error: the file {user_input} could not be found")
 
-            if hasattr(state, "odb_file_path") and state.odb_file_path is not None and state.odb_file_path != "":
-                break
+                else:
+                    odb_path_valid = True
 
         gen_time_sample: bool = False
         if hasattr(state, "time_sample"):
@@ -141,88 +137,69 @@ def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
             gen_time_sample = True
 
         if gen_time_sample:
-            while True:
-                user_input = input("The Program will extract every Nth frame where N = ")
-                if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                    try:
-                        state.time_sample = int(user_input)
-                        break
-                    except ValueError:
-                        print("Error: time sample must be an integer")
+            set_time_sample(state)
 
-        print("Converting this .odb file to a .hdf file")
-        default: str = os.path.join(options.hdf_source_directory, state.odb_file_path.split(os.sep)[-1].split(".")[0] + ".hdf5")
-        hdf_file_path: str
-        while True:
-            user_input = input(f"Please enter the name for this generated hdf file (leave blank for the default {default}): ")
-            if user_input == "":
-                user_input = default
-            
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                hdf_file_path = os.path.join(options.hdf_source_directory, user_input)
-                break
-
-        state.odb_to_hdf(hdf_file_path)
+        if confirm('You may now convert this .odb file to a .hdf5 file or you may do this later with the "convert" command.', "Would you like to convert now?", "yes"):
+            convert(state)
 
     elif user_input in hdf_options:
         # process hdf
-        while True:
+        config_file_path: ConfigFileType
+        hdf_path_valid: bool = False
+        while not hdf_path_valid:
             user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
             if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                # If the config file exists, it will be under this name
-                toml_config_file: str = user_input.split(".")[0] + ".toml"
-                if not os.path.exists(os.path.join(options.hdf_source_directory, user_input)):
-                    if not os.path.exists(os.path.join(os.getcwd(), user_input)):
-                        if not os.path.exists(user_input):
-                            print(f"Error: {user_input} file could not be found")
-                        else:
-                            state.hdf_file_path = user_input
-                            options.toml_config_file = toml_config_file
-                    else:
-                        state.hdf_file_path = os.path.join(os.getcwd(), user_input)
-                        options.toml_config_file = os.path.join(os.getcwd(), toml_config_file)
+                output: Union[UserOptions, bool] = state.select_hdf(user_options, user_input)
+                if isinstance(output, UserOptions):
+                    user_options = output
+                    hdf_path_valid = True
+
                 else:
-                    state.hdf_file_path = os.path.join(options.hdf_source_directory, user_input)
-                    options.toml_config_file = os.path.join(options.hdf_source_directory, toml_config_file)
+                    print(f"Error: the file {user_input} could not be found")
 
-            if hasattr(state, "hdf_file_path") and state.hdf_file_path is not None and state.hdf_file_path != "":
-                break
-
-    pre_process_data(state, options)
-    print(f"Target .hdf5 file: {state.hdf_file_path}")
+        pre_process_data(state, options)
+        print(f"Target .hdf5 file: {state.hdf_file_path}")
 
 
-# TODO on toml_config_file
-def pre_process_data(state: OdbVisualizer, options: UserOptions):
+def convert(state: OdbVisualizer) -> None:
+    while True:
+        user_input: str = input("Please enter the desired name of the generated .hdf5 file: ")
+        if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+            state.odb_to_hdf(user_input)
+            break
+
+
+def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
     mesh_seed_size: Union[float, None] = None
     meltpoint: Union[float, None] = None
     low_temp: Union[float, None] = None
     time_sample: Union[int, None] = None
 
-    if options.toml_config_file is not None and os.path.exists(options.toml_config_file):
-        with open(options.toml_config_file, "r") as j:
-            toml_config: dict[str, Any] = toml.load(j)
+    if user_options.config_file_path is not None:
+        config_file: TextIO
+        with open(user_options.config_file_path, "r") as config_file:
+            config: dict[str, Any] = toml.load(config_file)
 
-        if "hdf_file_path" in toml_config:
+        if "hdf_file_path" in config:
             if toml_config["hdf_file_path"] != state.hdf_file_path:
                 print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
 
-        if "mesh_seed_size" in toml_config:
-            mesh_seed_size = toml_config["mesh_seed_size"]
+        if "mesh_seed_size" in config:
+            mesh_seed_size = config["mesh_seed_size"]
 
-        if "meltpoint" in toml_config:
-            meltpoint = toml_config["meltpoint"]
+        if "meltpoint" in config:
+            meltpoint = config["meltpoint"]
 
-        if "low_temp" in toml_config:
-            low_temp = toml_config["low_temp"]
+        if "low_temp" in config:
+            low_temp = config["low_temp"]
 
-        if "time_sample" in toml_config:
-            time_sample = toml_config["time_sample"]
+        if "time_sample" in config:
+            time_sample = config["time_sample"]
 
         # Manage mesh_seed_size
         if mesh_seed_size is not None:
             print(f"Setting Mesh Seed Size to stored value of {mesh_seed_size}")
-            state.mesh_seed_size = mesh_seed_size
+            state.set_mesh_seed_size(mesh_seed_size)
 
         elif hasattr(state, "mesh_seed_size"):
             print(f"Setting Default Seed Size of the Mesh to given value of {state.mesh_seed_size}")
@@ -234,7 +211,7 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
         # Manage meltpoint
         if meltpoint is not None:
             print(f"Setting Melting Point to stored value of {meltpoint}")
-            state.meltpoint = meltpoint
+            state.set_meltpoint(meltpoint)
 
         elif hasattr(state, "meltpoint"):
             print(f"Setting Default Melting Point to given value of {state.meltpoint}")
@@ -246,7 +223,7 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
         # Manage lower temperature bound
         if low_temp is not None:
             print(f"Setting Melting Point to stored value of {low_temp}")
-            state.low_temp = low_temp
+            state.set_low_temp(low_temp)
 
         elif hasattr(state, "low_temp"):
             print(f"Setting Default Melting Point to given value of {state.low_temp}")
@@ -258,7 +235,7 @@ def pre_process_data(state: OdbVisualizer, options: UserOptions):
         # Manage time sample
         if time_sample is not None:
             print(f"Setting Time Sample to stored value of {time_sample}")
-            state.time_sample = time_sample
+            state.set_time_sample(time_sample)
 
         elif hasattr(state, "time_sample"):
             print(f"Setting Default Time Sample to given value of {state.time_sample}")
@@ -470,7 +447,6 @@ def set_low_temp(state: OdbVisualizer) -> None:
 
 
 def set_time_sample(state: OdbVisualizer) -> None:
-    print("INFO: You must enter the Time Sample with which the .hdf5 was generated")
     while True:
         try:
             time_sample: int = int(input("Enter the Time Sample: "))

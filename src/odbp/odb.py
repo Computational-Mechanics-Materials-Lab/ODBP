@@ -76,6 +76,8 @@ class Odb:
         self.odb_file_path: str
         self.hdf_file_path: str
 
+        self.parts: list[str]
+
         self.x: Axis = Axis("x")
         self.y: Axis = Axis("y")
         self.z: Axis = Axis("z")
@@ -175,6 +177,59 @@ class Odb:
         self.time_sample = value
 
 
+    def set_parts(self, parts: "list[str]") -> None:
+        if not isinstance(parts, list):
+            new_list: list[str] = list()
+            new_list.append(parts)
+            self.parts = new_list
+
+        else:
+            self.parts = parts
+
+
+    def select_odb(self, user_options: UserOptions, given_odb_file_path: str) -> "Union[None, bool]":
+        odb_file_path: str
+        if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
+            if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
+                if not os.path.exists(given_odb_file_path):
+                    return False
+
+                else:
+                    odb_file_path = given_odb_file_path
+            else:
+                odb_file_path = os.path.join(os.getcwd(), given_odb_file_path)
+        else:
+            odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
+
+        state.odb_file_path = odb_file_path
+
+
+    def select_hdf(self, user_options: UserOptions, given_hdf_file_path: str) -> "Union[UserOptions, bool]":
+        hdf_file_path: str
+        if not os.path.exists(os.path.join(user_options.hdf_source_directory, given_hdf_file_path)):
+            if not os.path.exists(os.path.join(os.getcwd(), given_hdf_file_path)):
+                if not os.path.exists(given_hdf_file_path):
+                        return False
+
+                else:
+                    hdf_file_path = given_hdf_file_path
+            else:
+                hdf_file_path = os.path.join(os.getcwd(), given_hdf_file_path)
+        else:
+            hdf_file_path = os.path.join(user_options.hdf_source_directory, given_hdf_file_path)
+
+        state.hdf_file_path = hdf_file_path
+
+        config_file_path: str = state.hdf_file_path.split(".")[0] + ".toml"
+        if os.path.exists(config_file_path):
+            user_options.config_file_path = config_file_path
+
+        else:
+            user_options.config_file_path = None
+
+        return user_options
+
+
     def _post_process_data(self) -> None:
         """
         "Private" method. Not to be used on its own, but called with process_hdf
@@ -231,7 +286,7 @@ class Odb:
 
 
     def dump_config_to_toml(self, toml_path: str) -> None:
-        config = dict()
+        config: dict[str, Union[float, str]] = dict()
         if hasattr(self, "hdf_file_path"):
             config["hdf_file_path"] = self.hdf_file_path
         if hasattr(self, "mesh_seed_size"):
@@ -247,7 +302,7 @@ class Odb:
         with open(toml_path, "w") as toml_file:
             toml.dump(config, toml_file)
 
-    
+
     def process_hdf(self) -> None:
 
         # Ensure that all 6 dimension extrema are set
