@@ -99,7 +99,7 @@ class CLIOptions():
         self.angle_options_formatted: str = ", ".join(self.angle_options)
 
         self.show_all_options: list[str] = ["show-all", "plot-all"]
-        self.show_all_help: str = "Toggle if each time step will be shown in te matplotlib interactive viewer"
+        self.show_all_help: str = "Toggle if each time step will be shown in the PyVista interactive viewer"
         self.show_all_options_formatted: str = ", ".join(self.show_all_options)
 
         self.plot_options: list[str] = ["plot", "show"]
@@ -178,10 +178,11 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
         },
         {
             "Is each time-step being shown in the PyVista interactive Viewer": f"{'Yes' if state.interactive else 'No'}",
-            "View Angle": f"{state.angle if hasattr(state, 'angle') else 'not set'}",
-            "View Elevation": f"{state.elev if hasattr(state, 'elev') else 'not set'}",
-            "View Azimuth": f"{state.azim if hasattr(state, 'azim') else 'not set'}",
-            "View Roll": f"{state.roll if hasattr(state, 'roll') else 'not set'}",
+            # TODO Named angles
+            #"View Angle": f"{state.angle if hasattr(state, 'angle') else 'not set'}",
+            "View Elevation": f"{state.x_rot if hasattr(state, 'x_rot') else 'not set'}",
+            "View Azimuth": f"{state.y_rot if hasattr(state, 'y_rot') else 'not set'}",
+            "View Roll": f"{state.z_rot if hasattr(state, 'z_rot') else 'not set'}",
         },
         {
             "Image Title": f"{user_options.image_title if hasattr(state, 'image_title') else 'not set'}",
@@ -197,12 +198,12 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
     sub_dict: dict[str, str]
     max_len = 0
     for sub_dict in lines:
-        for key, _ in sub_dict:
+        for key in sub_dict.keys():
             max_len = max(max_len, len(key))
 
     final_state_output: str = ""
     for sub_dict in lines:
-        for key, val in sub_dict:
+        for key, val in sub_dict.items():
             final_state_output += key.ljust(max_len) + ": " + val + "\n"
         final_state_output += "\n" 
 
@@ -219,47 +220,40 @@ def process_input() -> Union[SettingType, pd.DataFrame]: # Returns UserOptions o
 
     parser: argparse.ArgumentParser = argparse.ArgumentParser(prog="python -m odbp", description="ODB Plotter")
 
-    parser.add_argument("-v", "--version", help="Show the version of ODB Plotter and exit")
-
-    subparsers: argparse.ArgumentParser = parser.add_subparsers(help='use either the "extract" command to pull data directly from a .odb file or the "plot" command to create visual plots from data stored in .odbs or .hdf5s')
+    parser.add_argument("-v", "--version", action="store_true", help="Show the version of ODB Plotter and exit")
 
     # Extract mode needs the extract keyword, and then the file to extract from (odb or hdf), 
-    extract_parser: argparse.ArgumentParser = subparsers.add_parser("extract")
-    extract_parser.add_argument("input-file", nargs="?", help=".toml file for which nodesets to extract from")
-    extract_parser.add_argument("-o", "--odb", help="Path to the desired .odb file")
-    #extract_parser.add_argument("-H", "--hdf", help="Path to the desired .hdf5 file")
+    parser.add_argument("-e", "--extract", action="store_true", help="Pass this flag to extract directly from the .odb file, rather than reading into a .hdf5 file")
+    parser.add_argument("input_file", nargs="?", help=".toml file used to give input values to ODBPlotter")
 
-    plot_parser: argparse.ArgumentParser = subparsers.add_parser("plot")
-    plot_parser.add_argument("input-file", nargs="?", help=".toml file used to give input values to ODBPlotter")
+    parser.add_argument("-s", "--hdf-source-directory", help="Directory from which to source .hdf5 files")
+    parser.add_argument("-b", "--odb-source-directory", help="Directory from which to source .odb files")
+    parser.add_argument("-r", "--results-directory", help="Directory in which to store results")
 
-    plot_parser.add_argument("-s", "--hdf-source-directory", help="Directory from which to source .hdf5 files")
-    plot_parser.add_argument("-b", "--odb-source-directory", help="Directory from which to source .odb files")
-    plot_parser.add_argument("-r", "--results-directory", help="Directory in which to store results")
+    parser.add_argument("-o", "--odb", help="Path to the desired .odb file")
+    parser.add_argument("-m", "--meltpoint", help="Melting Point of the Mesh")
+    parser.add_argument("-l", "--low-temp", help="Temperature lower bound, defaults to 300 K")
+    parser.add_argument("-S", "--mesh-seed-size", help="Mesh seed size of the .odb file")
+    parser.add_argument("-t", "--time-sample", help="Time-sample value (N for every Nth frame you extracted). Defaults to 1")
 
-    plot_parser.add_argument("-o", "--odb", help="Path to the desired .odb file")
-    plot_parser.add_argument("-m", "--meltpoint", help="Melting Point of the Mesh")
-    plot_parser.add_argument("-l", "--low-temp", help="Temperature lower bound, defaults to 300 K")
-    plot_parser.add_argument("-S", "--mesh-seed-size", help="Mesh seed size of the .odb file")
-    plot_parser.add_argument("-t", "--time-sample", help="Time-sample value (N for every Nth frame you extracted). Defaults to 1")
+    parser.add_argument("-H", "--hdf", help="Path to desired .hdf5 file")
 
-    plot_parser.add_argument("-H", "--hdf", help="Path to desired .hdf5 file")
+    parser.add_argument("-T", "--title", help="Title to save each generated file under")
+    parser.add_argument("-L", "--label", help="Label to put on each generated image")
 
-    plot_parser.add_argument("-T", "--title", help="Title to save each generated file under")
-    plot_parser.add_argument("-L", "--label", help="Label to put on each generated image")
+    parser.add_argument("--low-x", help="Lower X-Axis Bound")
+    parser.add_argument("--high-x", help="Upper X-Axis Bound")
+    parser.add_argument("--low-y", help="Lower Y-Axis Bound")
+    parser.add_argument("--high-y", help="Upper Y-Axis Bound")
+    parser.add_argument("--low-z", help="Lower Z-Axis Bound")
+    parser.add_argument("--high-z", help="Upper Z-Axis Bound")
 
-    plot_parser.add_argument("--low-x", help="Lower X-Axis Bound")
-    plot_parser.add_argument("--high-x", help="Upper X-Axis Bound")
-    plot_parser.add_argument("--low-y", help="Lower Y-Axis Bound")
-    plot_parser.add_argument("--high-y", help="Upper Y-Axis Bound")
-    plot_parser.add_argument("--low-z", help="Lower Z-Axis Bound")
-    plot_parser.add_argument("--high-z", help="Upper Z-Axis Bound")
+    parser.add_argument("--low-time", help="Lower time limit, defaults to 0 (minimum possible)")
+    parser.add_argument("--high-time", help="Upper time limit, defaults to infinity (max possible)")
 
-    plot_parser.add_argument("--low-time", help="Lower time limit, defaults to 0 (minimum possible)")
-    plot_parser.add_argument("--high-time", help="Upper time limit, defaults to infinity (max possible)")
-
-    plot_parser.add_argument("-V", "--view", type=view, help="Viewing Angle to show the plot in. Must either be a 3-tuple of ")
+    parser.add_argument("-V", "--view", type=view, help="Viewing Angle to show the plot in. Must either be a 3-tuple of integers or the name of a pre-defined view")
     
-    plot_parser.add_argument("-R", "--run", action="store_true", help="Run the plotter immediately, fail if all required parameters are not specified")
+    parser.add_argument("-R", "--run", action="store_true", help="Run the plotter immediately, fail if all required parameters are not specified")
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -270,6 +264,7 @@ def process_input() -> Union[SettingType, pd.DataFrame]: # Returns UserOptions o
         sys.exit(0)
     
     elif args.extract:
+        #return extract_from_file(args)
         return extract_from_file(args)
 
     else:
@@ -300,7 +295,7 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
     config_file: TextIO
     config_settings: dict[str, Any]
     with open(config_file_path, "r") as config_file:
-        config_settings = toml.read(config_file)
+        config_settings = toml.load(config_file)
     state, user_options = read_setting_dict(state, user_options, config_settings)
 
     # Stage 2: Use the input_file if it exists
@@ -316,12 +311,14 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
         input_file: TextIO
         input_settings: dict[str, Any]
         with open(input_file_path, "r") as input_file:
-            input_settings = toml.read(input_file)
+            input_settings = toml.load(input_file)
 
         state, user_options = read_setting_dict(state, user_options, input_settings)
 
     # Stage 3: pass in the (other) dict values from args
-    state, user_options = read_setting_dict(state, user_options, vars(args))
+    cli_flags: dict[str, any] = vars(args)
+    cli_flags = {k: v for k, v in cli_flags.items() if v is not None}
+    state, user_options = read_setting_dict(state, user_options, cli_flags)
 
     return (state, user_options)
 
@@ -337,6 +334,7 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     odb_extract_script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extract.py")
     temp_save_path = os.path.join(os.getcwd(), "temp.pickle")
 
+    # Because of the python3-2 cross-talk, we use strings of "None", unfortunately
     parts: Union[list[str], None] = None
     nodesets: Union[list[str], None] = None
     nodes: Union[dict[str, list[int]], None] = None
@@ -349,22 +347,35 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     if hasattr(state, "nodes"):
         nodes = state.nodes
 
-    odb_extract_args: list[str] = [state.abaqus_program, "python", odb_extract_script_path, state.odb_file_path, temp_save_path, parts, nodesets, nodes]
+    # subprocess won't handle the Nones or dicts or lists well, so instead we pickle in the output path, and read in the python2 version
+    # They're all built-ins, so pickle should work
+    temp_file: TextIO
+    input_dict: dict[str, Any] = {
+        "parts": parts,
+        "nodesets": nodesets,
+        "nodes": nodes,
+    }
+    # TODO Time Sample
+    with open(temp_save_path, "wb") as temp_file:
+        pickle.dump(input_dict, temp_file, protocol=2)
+    odb_extract_args: list[str] = [state.abaqus_program, "python", odb_extract_script_path, state.odb_file_path, temp_save_path]
     subprocess.run(odb_extract_args, shell=True)
 
-    return_data: pd.DataFrame
-    temp_file: TextIO
-    with open(temp_save_path, "rb") as temp_file:
-        return_data = pickle.load(temp_file)
+    #odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
+    #subprocess.run(odb_to_npz_args, shell=True)
 
-    if os.path.exists(temp_file):
-        os.remove(temp_file)
+    return_data: pd.DataFrame
+    with open(temp_save_path, "rb") as temp_file:
+        # From the Pickle Spec, decoding numpy arrays from python 2 must use encoding="latin-1"
+        return_data = pd.DataFrame(pickle.load(temp_file, encoding="latin-1"))
+
+    if os.path.exists(temp_save_path):
+        os.remove(temp_save_path)
 
     return return_data
 
 
 def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: dict[str, Any]) -> SettingType:
-
     hdf_source_dir: str
     if "hdf_source_directory" in settings_dict:
         hdf_source_dir = os.path.abspath(settings_dict["hdf_source_directory"])
@@ -394,6 +405,9 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     results_dir: str
     if "results_directory" in settings_dict:
         results_dir = os.path.abspath(settings_dict["results_directory"])
+
+    else:
+        results_dir = os.path.join(os.getcwd(), "results")
 
     if not os.path.exists(results_dir):
         print(f"Directory {results_dir} does not exist. Creating it now.")
@@ -440,14 +454,10 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             print(f"Converting .odb file to .hdf5 file with name: {new_hdf_file_name}")
             state.odb_to_hdf(new_hdf_file_name)
 
-        else:
-            print('You passed in a .odb file. You must manually convert it to a .hdf5 file using the "convert" command, or by passing in the name of the target .hdf5 file to convert automatically.')
-
     elif "hdf" in settings_dict:
         # ensure the file exists
         given_hdf_file_path: str = settings_dict["hdf"]
-        # "True" to crash on failure form this path
-        output: Union[UserOptions, bool] = state.select_hdf(user_options, given_hdf_file_path, True)
+        output: Union[UserOptions, bool] = state.select_hdf(user_options, given_hdf_file_path)
         if isinstance(output, bool):
             print(f"Error: the file {given_hdf_file_path} could not be found")
             sys.exit(1)
@@ -524,7 +534,7 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
     if "low_time" in settings_dict:
         state.set_time_low(settings_dict["low_time"])
-    if "high_time":
+    if "high_time" in settings_dict:
         state.set_time_high(settings_dict["high_time"])
 
     image_title: str
@@ -549,15 +559,35 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     user_options.image_title = image_title
     user_options.image_label = image_label
 
+    if "colormap_name" in settings_dict:
+        state.colormap_name = settings_dict["colormap_name"]
+
     # Run Immediate
     if "run" in settings_dict:
         user_options.run_immediate = settings_dict["run"]
 
+    if "interactive" in settings_dict:
+        state.interactive = settings_dict["interactive"]
+    else:
+        if not hasattr(state, "interactive"):
+            state.interactive = True
+
     # Views
     if "view" in settings_dict:
-        state.x_rot = settings_dict["view"]["x_rot"]
-        state.y_rot = settings_dict["view"]["y_rot"]
-        state.z_rot = settings_dict["view"]["z_rot"]
+        # Views can either be a string or a dict
+        if isinstance(settings_dict["view"], dict):
+            state.x_rot = settings_dict["view"]["x_rot"]
+            state.y_rot = settings_dict["view"]["y_rot"]
+            state.z_rot = settings_dict["view"]["z_rot"]
+        
+        else:
+            x_rot: int
+            y_rot: int
+            z_rot: int
+            x_rot, y_rot, z_rot = view(settings_dict["view"])
+            state.x_rot = x_rot
+            state.y_rot = y_rot
+            state.z_rot = z_rot
 
     if "parts" in settings_dict:
         state.set_parts(settings_dict["parts"])

@@ -55,7 +55,7 @@ def read_node_data(hdf5_filename: str, node_label: int, time_sample: int) -> Any
                 "Time": times
                 }
 
-    return pd.DataFrame.from_dict(data_dict, index=None).sort_values("Time")
+    return pd.DataFrame(data_dict, index=None).sort_values("Time")
 
 
 # if __name__ == "__main__":
