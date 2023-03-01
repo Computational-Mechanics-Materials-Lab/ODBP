@@ -1,0 +1,49 @@
+[Top]
+elev = 0
+azim = 90
+roll = 90
+
+[Bottom]
+elev = 0
+azim = -90
+roll = 90
+
+[Front]
+elev = -45
+azim = 0
+roll = -45
+
+[Back]
+elev = -45
+azim = 0 
+roll = 135
+
+[Left]
+elev = -45
+azim = 0
+roll = 45
+
+[Right]
+elev = -45
+azim = 0
+roll = -135
+
+["Isometric Front-Right"]
+elev = 0
+azim = 270
+roll = 300
+
+["Isometric Front-Left"]
+elev = 0
+azim = 0
+roll = -60
+
+["Isometric Back-Right"]
+elev = 0
+azim = 0
+roll = -180
+
+["Isometric Back-Left"]
+elev = 0
+azim = 0
+roll = 90

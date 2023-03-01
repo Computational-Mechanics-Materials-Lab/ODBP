@@ -1,0 +1,180 @@
+
+# config.toml for ODB Plotter
+
+# Change or comment defaults.
+
+# An input file for ODB Plotter can be generated using this as a template
+# Just copy it and edit the copy to have your preferred input values
+
+# Many values here are not set by default, and do not make much sense as
+# values in a global config file, but are useful as a template for input
+# files and also are here for completeness
+
+# Path (relative or absolute) to .hdf5 files
+# Default "." (present working directory)
+hdf_source_directory = "."
+
+# Path (relative or absolute) to .odb files
+# Default "." (present working directory)
+odb_source_directory = "."
+
+# Path (relative or absolute) to the results directory
+# Default "results"
+# If this directory does not exist, it will be created
+results_directory = "results"
+
+# path to the .hdf5 file
+# Not set by default. Enter a value and uncomment to pass a default value
+# hdf =
+
+# path to the .odb file
+# Not set by default. Enter a value and uncomment to pass a default value
+# odb =
+
+#####
+# parts, nodesets, and nodes cannot be easily set via the cli, and must be set
+# interactively or using this config file or another .toml input file
+
+# Parts from which to extract
+# By default, we can use the Abaqus default of "PART-1-1", but you can add whatever you'd like here
+parts = [ "PART-1-1", ]
+
+# Nodesets from which to extract
+# Not set by default, which will use all present nodesets
+# nodesets =
+
+# Custom nodesets to create and extract
+# Must be 0 or more arrays in a .toml table
+# For example:
+# [nodes]
+# custom_nodeset_name = [1, 2, 3, 4, 5, ...]
+# "My Custom Nodeset" = [568,12004,12000,11996,11992,11988, 11984, 11980, 11976, 11972, 11968]
+
+# Not set by default, which will extract all nodes present
+# [nodes]
+
+#####
+
+# lower x-axis extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# low_x =
+
+# upper x-axis extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# high_x =
+
+# lower y-axis extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# low_y =
+
+# upper y-axis extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# high_y =
+
+# lower z-axis extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# low_z =
+
+# upper z-axis extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# high_z =
+
+# lower time extreme
+# Defaulted to 0, as it can't be lower than this
+low_time = 0
+
+# upper time extreme
+# Defaulted to inf, as this will extract all times starting from time_low
+high_time = +inf
+
+#####
+
+# In general, don't set temperatures with these files unless you are
+# using an input file to generate a .hdf5 file from a .odb file.
+# Otherwise, these values should be stored in your directory of .hdf5
+# files in their corresponding config files.
+
+# lower temperature extreme
+# Not set by default. Enter a value and uncomment to pass a default value
+# low_temp =
+
+# upper temperature extreme/melting point
+# Not set by default. Enter a value and uncomment to pass a default value
+# meltpoint =
+
+#####
+
+#####
+
+# In general, don't set mesh_seed_size or time_sample with these files
+# If you are creating a .hdf5 file from a .odb,
+# you can pass in the mesh_seed_size in an input file.
+# A default time sample of 1 works, but should almost always be overwritten
+# Otherwise, you should rely on the corresponding config file with the .hdf5
+
+#####
+
+# time sampling interval (N for "extract every Nth frame")
+# Default value of 1, but expect this to almost always be overwritten
+time_sample = 1
+
+# mesh seed size with which the .odb was generated
+# Not set by default. Enter a value and uncomment to pass a default value
+# mesh_seed_size =
+
+#####
+
+# which program to run the abaqus python commands with
+# Defaults to "abaqus" but, for example, if you have both abaqus 2019 and 2022
+# installed, and use abaqus 2019, you would set this to "abq2019"
+abaqus_program = "abaqus"
+
+# Do you want to open the interative 3D viewer?
+# If not, PNG Images will be generated and saved automatically
+# Default true
+interactive = true
+
+# Which colormap to use for the plots
+# Default "turbo"
+colormap_name = "turbo"
+
+# The title to save the images under
+# Whatever you put will automatically have .png appended
+# By leaving this unset, you will automatically get 
+# <name of the .hdf5 file>.png
+# title =
+
+# The label to display on the generated iamges
+# By leaving blank, this will be the title, without
+# the ".png"
+# label =
+
+# Whether or not to run automatically when started
+# This will crash if not all necessary parameters are given
+# Default false
+run = false
+
+# These are the viewing angles at which you can show the plot
+# These named values are set internally
+# Or, you can specify a 3-tuple value for a custom view
+# Possible values can be seen in the interactive plotter
+# They're also listed here for your convenience
+# Top
+# Bottom
+# Front
+# Back
+# Left
+# Right
+# Isometric Front-Right
+# Isometric Front-Left
+# Isometric Back-Right
+# Isometric Back-Left
+
+# Default is Isometric Front-Right
+view = "Isometric Front-Right"
+
+# A custom example
+#[view]
+#    elev = 90
+#    azim = 45
+#    roll = -45

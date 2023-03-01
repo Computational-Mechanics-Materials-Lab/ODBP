@@ -6,43 +6,20 @@ interactive mode
 """
 
 import os
-import toml
+import tomli_w
 import subprocess
 import shutil
 
 import numpy as np
 import pandas as pd
 
-from typing import TextIO, Any
+from typing import TextIO, Any, Union
 from multiprocessing import Pool
 
+# Needed only for typing, circular import
+#from .state import UserOptions
 from .npz_to_hdf import npz_to_hdf
 from .read_hdf5 import get_coords, read_node_data
-
-
-# HDF Manger Exceptions
-class RangeNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must set the upper-and-lower bounds in the x, y, and z directions"
-        super().__init__(self.message)
-
-
-class TimeNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must set the upper-and-lower bounds of time to extract. Lower time bound must not be less than zero. Pass float(\"inf\") or equivalent for upper time bound to get all times"
-        super().__init__(self.message)
-
-
-class SeedNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must set the mesh-seed-size"
-        super().__init__(self.message)
-
-
-class HDFNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must either provide the .hdf5 file you wish to extract from, or provide a corresponding .odb file and use the odb_to_hdf method"
-        super().__init__(self.message)
 
 
 class Axis:
@@ -60,86 +37,37 @@ class Axis:
         # Setting default values
         self.low: float
         self.high: float
-        self.vals: Any
-        self.size: int
-
 
 class Odb:
     """
     Stores Data from a .hdf5, implements extractor methods to transfer from .odb to .hdf5
     Implements abilities to resize the dimenisons or timeframe of the data
     """
-    def __init__(self, **kwargs) -> None:
+    def __init__(self) -> None:
         """
-        __init__(self) -> None
-        key-word arguments:
-        odb_file (str): .odb file to extract from
-        hdf_file (str): .hdf5 file from which to read or to which to write extracted data from a .odb file
-        x_low (float): lower x_axis value to process
-        x_high (float): upper x_axis value to process
-        y_low (float): lower y_axis value to process
-        y_high (float): upper y_axis value to process
-        z_low (float): lower z_axis value to process
-        z_high (float): upper z_axis value to process
-        time_low (float): lower time value to process (Default 0)
-        time_high (float): upper time value to process
-        meltpoint (float): melting point of the sample
-        low_temp (float): lower temperature bound of the sample
-        time_sample (int): N for "extract from every Nth frame" (Default 1)
-        abaqus_program (str): name of the version of abaqus (or path to that executable if it is not on your path) (Default "abaqus")
         """
 
-        self.odb_file: str
-        if "odb_file" in kwargs:
-            self.odb_file = kwargs["odb_file"]
+        self.odb_file_path: str
+        self.hdf_file_path: str
 
-        self.hdf_file: str
-        if "hdf_file" in kwargs:
-            self.hdf_file = kwargs["hdf_file"]
+        self.parts: list[str]
+        self.nodes: dict[str, list[int]]
+        self.nodesets: list[str]
 
         self.x: Axis = Axis("x")
-        if "x_low" in kwargs:
-            self.x.low = kwargs["x_low"]
-        if "x_high" in kwargs:
-            self.x.high = kwargs["x_high"]
-
         self.y: Axis = Axis("y")
-        if "y_low" in kwargs:
-            self.x.low = kwargs["y_low"]
-        if "y_high" in kwargs:
-            self.x.high = kwargs["y_high"]
-
         self.z: Axis = Axis("z")
-        if "z_low" in kwargs:
-            self.x.low = kwargs["z_low"]
-        if "z_high" in kwargs:
-            self.x.high = kwargs["z_high"]
 
-        self.time_low: float = kwargs.get("time_low", 0)
-
+        self.time_low: float = 0.0
         self.time_high: float
-        if "time_high" in kwargs:
-            self.time_low = kwargs["time_high"]
-
-        self.mesh_seed_size: float
-        if "mesh_seed_size" in kwargs:
-            self.mesh_seed_size = kwargs["mesh_seed_size"]
-
-        self.show_plots: bool = kwargs.get("show_plots", True)
 
         self.meltpoint: float
-        if "meltpoint" in kwargs:
-            self.meltpoint = kwargs["meltpoint"]
-
         self.low_temp: float
-        if "low_temp" in kwargs:
-            self.low_temp = kwargs["low_temp"]
 
         self.time_sample: int
-        if "time_sample" in kwargs:
-            self.time_sample: int = kwargs["time_sample"]
+        self.mesh_seed_size: float
 
-        self.abaqus_program = kwargs.get("abaqus_program", "abaqus")
+        self.abaqus_program = "abaqus"
 
         self.loaded: bool = False
 
@@ -225,50 +153,90 @@ class Odb:
         self.time_sample = value
 
 
+    def set_parts(self, parts: list[str]) -> None:
+        if not isinstance(parts, list):
+            new_list: list[str] = [parts]
+            self.parts = new_list
+
+        else:
+            self.parts = parts
+
+    
+    def set_nodes(self, nodes: dict[str, list[int]]) -> None:
+        if not isinstance(nodes, dict):
+            nodes = dict(nodes)
+
+        self.nodes = nodes
+
+    
+    def set_nodesets(self, nodesets: list[str]) -> None:
+        if not isinstance(nodesets, list):
+            new_list: list[str] = [nodesets]
+            self.nodesets = new_list
+
+        else:
+            self.nodesets = nodesets
+
+
+    def select_odb(self, user_options: Any, given_odb_file_path: str) -> "Union[None, bool]":
+        odb_file_path: str
+        if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
+            if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
+                if not os.path.exists(given_odb_file_path):
+                    return False
+
+                else:
+                    odb_file_path = given_odb_file_path
+            else:
+                odb_file_path = os.path.join(os.getcwd(), given_odb_file_path)
+        else:
+            odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
+
+        self.odb_file_path = odb_file_path
+
+
+    def select_hdf(self, user_options: Any, given_hdf_file_path: str) -> "Union[Any, bool]":
+        hdf_file_path: str
+        if not os.path.exists(os.path.join(user_options.hdf_source_directory, given_hdf_file_path)):
+            if not os.path.exists(os.path.join(os.getcwd(), given_hdf_file_path)):
+                if not os.path.exists(given_hdf_file_path):
+                        return False
+
+                else:
+                    hdf_file_path = given_hdf_file_path
+            else:
+                hdf_file_path = os.path.join(os.getcwd(), given_hdf_file_path)
+        else:
+            hdf_file_path = os.path.join(user_options.hdf_source_directory, given_hdf_file_path)
+
+        self.hdf_file_path = hdf_file_path
+
+        config_file_path: str = self.hdf_file_path.split(".")[0] + ".toml"
+        if os.path.exists(config_file_path):
+            user_options.config_file_path = config_file_path
+
+        else:
+            user_options.config_file_path = None
+
+        return user_options
+
+
     def _post_process_data(self) -> None:
         """
         "Private" method. Not to be used on its own, but called with process_hdf
         """
         self.out_nodes_low_time = self.out_nodes[self.out_nodes["Time"] == self.time_low]
-        temp_x_list: list[float] = list()
-        temp_y_list: list[float] = list()
-        temp_z_list: list[float] = list()
-        for _, node in self.out_nodes_low_time.iterrows():
-            x: float = round(node["X"], 5)
-            y: float = round(node["Y"], 5)
-            z: float = round(node["Z"], 5)
-            if (x % self.mesh_seed_size == 0) and (y % self.mesh_seed_size == 0) and (z % self.mesh_seed_size == 0):
-                temp_x_list.append(x)
-                temp_y_list.append(y)
-                temp_z_list.append(z)
-
-        # Makes these in-order lists of unique values
-        temp_x_list = list(dict.fromkeys(temp_x_list))
-        temp_y_list = list(dict.fromkeys(temp_y_list))
-        temp_z_list = list(dict.fromkeys(temp_z_list))
-
-        temp_x_list.sort()
-        temp_y_list.sort()
-        temp_z_list.sort()
-
-        self.x.vals = np.asarray(temp_x_list)
-        self.y.vals = np.asarray(temp_y_list)
-        self.z.vals = np.asarray(temp_z_list)
-
-        self.x.size = len(self.x.vals)
-        self.y.size = len(self.y.vals)
-        self.z.size = len(self.z.vals)
 
         self.loaded = True
 
 
     def odb_to_hdf(self, hdf_file_path: str) -> None:
         
-        assert self.odb_file != ""
+        assert self.odb_file_path != ""
         # Must run this script via abaqus python
-        odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odb_to_npz.py")
+        odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "py2_scripts", "odb_to_npz.py")
 
-        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file), str(self.time_sample)]
+        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
         subprocess.run(odb_to_npz_args, shell=True)
 
         npz_dir: str = os.path.join(os.getcwd(), "tmp_npz")
@@ -277,13 +245,13 @@ class Odb:
         if os.path.exists(npz_dir):
             shutil.rmtree(npz_dir)
 
-        self.hdf_file = hdf_file_path
+        self.hdf_file_path = hdf_file_path
 
 
     def dump_config_to_toml(self, toml_path: str) -> None:
-        config = dict()
-        if hasattr(self, "hdf_file"):
-            config["hdf_file"] = self.hdf_file
+        config: dict[str, Union[float, str]] = dict()
+        if hasattr(self, "hdf_file_path"):
+            config["hdf_file_path"] = self.hdf_file_path
         if hasattr(self, "mesh_seed_size"):
             config["mesh_seed_size"] = self.mesh_seed_size
         if hasattr(self, "meltpoint"):
@@ -294,30 +262,30 @@ class Odb:
             config["time_sample"] = self.time_sample
 
         toml_file: TextIO
-        with open(toml_path, "w") as toml_file:
-            toml.dump(config, toml_file)
+        with open(toml_path, "wb") as toml_file:
+            tomli_w.dump(config, toml_file)
 
-    
+
     def process_hdf(self) -> None:
 
         # Ensure that all 6 dimension extrema are set
-        if not (hasattr(self.x, "low") and hasattr(self.x, "high") and hasattr(self.y, "low") and hasattr(self.y, "high") and hasattr(self.z, "low") and hasattr(self.z, "high")):
-            raise RangeNotSetError
+        #if not (hasattr(self.x, "low") and hasattr(self.x, "high") and hasattr(self.y, "low") and hasattr(self.y, "high") and hasattr(self.z, "low") and hasattr(self.z, "high")):
+        #    raise RangeNotSetError
 
-        # Ensure that both time boundaries are set
-        if not (hasattr(self, "time_low") and hasattr(self, "time_high")):
-            raise TimeNotSetError
+        ## Ensure that both time boundaries are set
+        #if not (hasattr(self, "time_low") and hasattr(self, "time_high")):
+        #    raise TimeNotSetError
 
-        # Ensure the mesh seed size is set
-        if not hasattr(self, "mesh_seed_size"):
-            raise SeedNotSetError
+        ## Ensure the mesh seed size is set
+        #if not hasattr(self, "mesh_seed_size"):
+        #    raise SeedNotSetError
         
-        # Ensure the hdf file is set
-        if not hasattr(self, "hdf_file"):
-            raise HDFNotSetError
+        ## Ensure the hdf file is set
+        #if not hasattr(self, "hdf_file_path"):
+        #    raise HDFNotSetError
 
         # Adapted from CJ's read_hdf5.py
-        coords_df: Any = get_coords(self.hdf_file)
+        coords_df: Any = get_coords(self.hdf_file_path)
         self.bounded_nodes = list(
                 coords_df[
                     (((coords_df["X"] == self.x.high) | (coords_df["X"] == self.x.low)) & ((coords_df["Y"] >= self.y.low) & (coords_df["Y"] <= self.y.high) & (coords_df["Z"] >= self.z.low) & (coords_df["Z"] <= self.z.high))) |
@@ -333,7 +301,7 @@ class Odb:
             data: list[tuple[str, int, int]] = list()
             node: int
             for node in self.bounded_nodes:
-                data.append((self.hdf_file, node, self.time_sample))
+                data.append((self.hdf_file_path, node, self.time_sample))
             results: Any = pool.starmap(read_node_data, data)
 
         self.out_nodes = pd.concat(results)

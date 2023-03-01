@@ -4,11 +4,11 @@
 Utility methods for odb_plotter
 """
 
-from typing import Union
+from typing import Union, TypeAlias
 
-DefaultType = Union[None, str]
-AnswerType = Union[tuple[str, str], tuple[str, str, str]]
 
+AnswerType: TypeAlias = Union[tuple[str, str], tuple[str, str, str]]
+DefaultType: TypeAlias = Union[None, str]
 def confirm(message: str, confirmation: str, default: DefaultType = None) -> bool:
     yes_vals: AnswerType = ("yes", "y")
     no_vals: AnswerType = ("no", "n")
@@ -32,5 +32,3 @@ def confirm(message: str, confirmation: str, default: DefaultType = None) -> boo
             return False
         else:
             print("Error: invalid input")
-
-

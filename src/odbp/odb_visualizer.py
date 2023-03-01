@@ -2,16 +2,12 @@
 
 
 import os
-import toml
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import pyvista as pv
 from typing import TypeAlias, TextIO, Union, Any
 from .odb import Odb
-
-
-ViewsDict: TypeAlias = dict[str, tuple[int, int, int]]
 
 
 class MeltpointNotSetError(Exception):
@@ -23,23 +19,17 @@ class OdbVisualizer(Odb):
     """
 
     """
-    def __init__(self, **kwargs) -> None:
-        Odb.__init__(self, **kwargs)
+    def __init__(self) -> None:
+        Odb.__init__(self)
 
-        self.results_dir: str = kwargs.get("results_dir", os.getcwd())
-        self.interactive: bool = kwargs.get("interactive", True)
+        self.interactive: bool
 
-        self.views: ViewsDict = self.load_views_dict(os.path.join(os.path.dirname(os.path.abspath(__file__)), "views.toml"))
+        self.angle: str
+        self.x_rot: int
+        self.y_rot: int
+        self.z_rot: int
 
-        self.views_list: list[str] = list(self.views.keys())
-
-        #self.angle: str = self.views_list[49]
-        self.angle: str = self.views_list[0]
-        self.elev: int = self.views[self.angle]["elev"]
-        self.azim: int = self.views[self.angle]["azim"]
-        self.roll: int = self.views[self.angle]["roll"]
-
-        self.colormap_name: str = kwargs.get("colormap_name", "turbo")
+        self.colormap_name: str
         self.colormap: pv.LookupTable
 
 
@@ -71,26 +61,6 @@ class OdbVisualizer(Odb):
             self.select_colormap()
 
 
-    def load_views_dict(self, file) -> ViewsDict:
-        o_file: TextIO
-        with open(file, "r") as o_file:
-            return toml.load(o_file)
-
-
-    def select_views(self, view: Union[int, tuple[int, int, int]]) -> None:
-        if isinstance(view, int):
-            self.angle = self.views_list[view]
-            self.elev = self.views[self.angle]["elev"]
-            self.azim = self.views[self.angle]["azim"]
-            self.roll = self.views[self.angle]["roll"]
-
-        else:
-            self.angle = "custom"
-            self.elev = view[0]
-            self.azim = view[1]
-            self.roll = view[2]
-
-
     def plot_time_3d(self, time: float, label: str, interactive: bool)-> Any:
         curr_nodes: Any = self.out_nodes[self.out_nodes["Time"] == time]
 
@@ -98,7 +68,7 @@ class OdbVisualizer(Odb):
         combined_label = f"{label}-{formatted_time}"
 
         off_screen: bool = not interactive
-        plotter = pv.Plotter(off_screen=off_screen)
+        plotter = pv.Plotter(off_screen=off_screen, window_size=[1920, 1080])
         plotter.add_text(combined_label, position="upper_edge", color="white", font="courier", )
         faces: list[str] = ["x_low", "x_high", "y_low", "y_high", "z_low", "z_high"]
         face: str
@@ -108,30 +78,39 @@ class OdbVisualizer(Odb):
             # TODO This whole idea could be parameterized, but it might be less readable
             if "x" in face:
                 if "low" in face:
-                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.vals[0]]
+                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.low]
                 else: # if "high" in face:
-                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.vals[-1]]
+                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.high]
 
             elif "y" in face:
                 if "low" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.vals[0]]
+                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.low]
                 else: # if "high" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.vals[-1]]
+                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.high]
 
             else: # if "z" in face
                 if "low" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.vals[0]]
+                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.low]
                 else: # if "high" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.vals[-1]]
+                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.high]
 
-            dims_columns: list[str] = ["X", "Y", "Z"]
-            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - set(dims_columns))).to_numpy())
+            dims_columns: set[str] = set(["X", "Y", "Z"])
+            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - dims_columns)).to_numpy())
             points["Temp"] = selected_nodes["Temp"].to_numpy()
             surface: Any = points.delaunay_2d()
+
+            # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
+            surface = surface.rotate_z(180)
+
             plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (Kelvins)"})
-            plotter.view_vector((self.elev, self.azim, self.roll))
+
+        plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#FFFFFF", axes_ranges=[self.x.low, self.x.high, self.y.low, self.y.high, self.z.low, self.z.high])
+        plotter.set_background(color="#000000")
+
+        #plotter.camera.focal_point = ((self.x.high + self.x.low)/2, (self.y.high + self.y.low)/2, (self.z.high + self.z.low)/2)
+        plotter.camera.elevation = 0
+        plotter.camera.azimuth = 270
+        plotter.camera.roll = 300
+        plotter.camera_set = True
 
         return plotter
-
-
-        

@@ -5,22 +5,22 @@ import h5py
 import numpy as np
 import pandas as pd
 from typing import Any
-from multiprocessing import Pool
+#from multiprocessing import Pool
 
-def main():
-    hdf5_filename: str = ""
-    time_sample: int = 1
-    target_csv: str = ""
-    nodes: Any = get_coords(hdf5_filename)
-    args: list[tuple[str, int, int]] = [(hdf5_filename, node, time_sample) for node in nodes]
-    with Pool() as pool:
-        results: Any = pool.starmap(read_node_data, args)
+# def main():
+#     hdf5_filename: str = ""
+#     time_sample: int = 1
+#     target_csv: str = ""
+#     nodes: Any = get_coords(hdf5_filename)
+#     args: list[tuple[str, int, int]] = [(hdf5_filename, node, time_sample) for node in nodes]
+#     with Pool() as pool:
+#         results: Any = pool.starmap(read_node_data, args)
 
-    final: Any = pd.concat(results)
+#     final: Any = pd.concat(results)
 
-    print(final)
+#     print(final)
 
-    final.to_csv(target_csv)
+#     final.to_csv(target_csv)
 
 
 def get_coords(hdf5_filename: str) -> Any:
@@ -57,5 +57,6 @@ def read_node_data(hdf5_filename: str, node_label: int, time_sample: int) -> Any
 
     return pd.DataFrame(data_dict, index=None).sort_values("Time")
 
-if __name__ == "__main__":
-    main()
+
+# if __name__ == "__main__":
+#     main()
