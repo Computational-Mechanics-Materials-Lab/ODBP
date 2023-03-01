@@ -100,7 +100,7 @@ class OdbVisualizer(Odb):
             surface: Any = points.delaunay_2d()
 
             # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
-            surface = surface.rotate_z(180)
+            #surface = surface.rotate_z(180)
 
             plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (Kelvins)"})
 
