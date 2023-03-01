@@ -1,5 +1,9 @@
+""""""
 import argparse
-import toml
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 import sys
 import os
 import platformdirs
@@ -94,7 +98,7 @@ class CLIOptions():
         self.process_help: str = "Actually load the selected data from the file set in select"
         self.process_options_formatted: str = ", ".join(self.process_options)
 
-        self.angle_options: list[str] = ["angle", "elev", "elevation", "azim", "azimuth", "roll"]
+        self.angle_options: list[str] = ["angle",]
         self.angle_help: str = "Update the viewing angle"
         self.angle_options_formatted: str = ", ".join(self.angle_options)
 
@@ -166,9 +170,9 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
             "Directory to store results": f"{user_options.results_directory}",
         },
         {
-            "X Range": f"{state.x.low if hasattr(state.x, 'low') else 'not set'} to {state.x.high - state.mesh_seed_size if hasattr(state.x, 'high') and hasattr(state, 'mesh_seed_size') else 'not set'}",
-            "Y Range": f"{state.y.low if hasattr(state.y, 'low') else 'not set'} to {state.y.high - state.mesh_seed_size if hasattr(state.y, 'high') and hasattr(state, 'mesh_seed_size') else 'not set'}",
-            "Z Range": f"{state.z.low if hasattr(state.z, 'low') else 'not set'} to {state.z.high - state.mesh_seed_size if hasattr(state.z, 'high') and hasattr(state, 'mesh_seed_size') else 'not set'}",
+            "X Range": f"{state.x.low if hasattr(state.x, 'low') else 'not set'} to {state.x.high if hasattr(state.x, 'high') else 'not set'}",
+            "Y Range": f"{state.y.low if hasattr(state.y, 'low') else 'not set'} to {state.y.high if hasattr(state.y, 'high') else 'not set'}",
+            "Z Range": f"{state.z.low if hasattr(state.z, 'low') else 'not set'} to {state.z.high if hasattr(state.z, 'high') else 'not set'}",
             "Time Range": f"{state.time_low if hasattr(state, 'time_low') else 'not set'} to {state.time_high if hasattr(state, 'time_high') else 'not set'}",
             "Temperature Range": f"{state.low_temp if hasattr(state, 'low_temp') else 'not set'} to {state.meltpoint if hasattr(state, 'meltpoint') else 'not set'}",
         },
@@ -178,15 +182,14 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
         },
         {
             "Is each time-step being shown in the PyVista interactive Viewer": f"{'Yes' if state.interactive else 'No'}",
-            # TODO Named angles
-            #"View Angle": f"{state.angle if hasattr(state, 'angle') else 'not set'}",
-            "View Elevation": f"{state.x_rot if hasattr(state, 'x_rot') else 'not set'}",
-            "View Azimuth": f"{state.y_rot if hasattr(state, 'y_rot') else 'not set'}",
-            "View Roll": f"{state.z_rot if hasattr(state, 'z_rot') else 'not set'}",
+            "View Angle": f"{state.angle if hasattr(state, 'angle') else 'not set'}",
+            "Rotation around the X Axis": f"{state.x_rot if hasattr(state, 'x_rot') else 'not set'}",
+            "Rotation around the Y Axis": f"{state.y_rot if hasattr(state, 'y_rot') else 'not set'}",
+            "Rotation around the Z Axis": f"{state.z_rot if hasattr(state, 'z_rot') else 'not set'}",
         },
         {
-            "Image Title": f"{user_options.image_title if hasattr(state, 'image_title') else 'not set'}",
-            "Image Label": f"{user_options.image_label if hasattr(state, 'image_label') else 'not set'}",
+            "Image Title": f"{user_options.image_title if hasattr(user_options, 'image_title') else 'not set'}",
+            "Image Label": f"{user_options.image_label if hasattr(user_options, 'image_label') else 'not set'}",
         },
         {
             "Data loaded into memory": f"{'Yes' if state.loaded else 'No'}",
@@ -286,7 +289,7 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
         base_config_file: TextIO
         config_data: str
         new_config_file: TextIO
-        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.toml"), "r") as base_config_file:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "config.toml"), "r") as base_config_file:
             config_data = base_config_file.read()
 
         with open(config_file_path, "w") as new_config_file:
@@ -294,8 +297,8 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
 
     config_file: TextIO
     config_settings: dict[str, Any]
-    with open(config_file_path, "r") as config_file:
-        config_settings = toml.load(config_file)
+    with open(config_file_path, "rb") as config_file:
+        config_settings = tomllib.load(config_file)
     state, user_options = read_setting_dict(state, user_options, config_settings)
 
     # Stage 2: Use the input_file if it exists
@@ -310,8 +313,8 @@ def generate_cli_settings(args: argparse.Namespace) -> SettingType:
 
         input_file: TextIO
         input_settings: dict[str, Any]
-        with open(input_file_path, "r") as input_file:
-            input_settings = toml.load(input_file)
+        with open(input_file_path, "rb") as input_file:
+            input_settings = tomllib.load(input_file)
 
         state, user_options = read_setting_dict(state, user_options, input_settings)
 
@@ -331,7 +334,7 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     state: OdbVisualizer
     state, _ = generate_cli_settings(args)
 
-    odb_extract_script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extract.py")
+    odb_extract_script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "py2_scripts", "extract.py")
     temp_save_path = os.path.join(os.getcwd(), "temp.pickle")
 
     # Because of the python3-2 cross-talk, we use strings of "None", unfortunately
@@ -436,10 +439,10 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             state.set_time_sample(settings_dict["time_sample"])
 
         if "hdf" in settings_dict:
-            if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
-                if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
-                    if not os.path.exists(given_odb_file_path):
-                        print(f"Error: The file {given_odb_file_path} could not be found")
+            if os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
+                if os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
+                    if os.path.exists(given_odb_file_path):
+                        print(f"Error: The file {given_odb_file_path} already exists")
                         sys.exit(1)
 
                     else:
@@ -467,36 +470,36 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
         # If none of these values are set, read as many as are available out of the .toml config file
         # Otherwise, the file must have already been read
-        if not hasattr(state, "meltpoint") and not hasattr(state, "low_temp") and not hasattr(state, "mesh_seed_size") and not hasattr(state, "time_sample"):
+        # if not hasattr(state, "meltpoint") and not hasattr(state, "low_temp") and not hasattr(state, "mesh_seed_size") and not hasattr(state, "time_sample"):
 
-            # Search for the stored toml values for this hdf
-            config: Union[dict[str, Any], None] = None
-            if user_options.config_file_path is None:
-                print(f".toml config file for {state.hdf_file_path} could not be found")
-            else:
-                config_file: TextIO
-                with open(user_options.config_file_path, "r") as config_file:
-                    config = toml.load(config_file)
+        # Search for the stored toml values for this hdf
+        config: Union[dict[str, Any], None] = None
+        if user_options.config_file_path is None:
+            print(f".toml config file for {state.hdf_file_path} could not be found")
+        else:
+            config_file: TextIO
+            with open(user_options.config_file_path, "rb") as config_file:
+                config = tomllib.load(config_file)
 
-            if config is not None and "meltpoint" in config:
-                state.set_meltpoint(config["meltpoint"])
-            elif "meltpoint" in settings_dict:
-                state.set_meltpoint(settings_dict["meltpoint"])
+        if config is not None and "meltpoint" in config:
+            state.set_meltpoint(config["meltpoint"])
+        elif "meltpoint" in settings_dict:
+            state.set_meltpoint(settings_dict["meltpoint"])
 
-            if config is not None and "low_temp" in config:
-                state.set_low_temp(config["low_temp"])
-            elif "low_temp" in settings_dict:
-                state.set_low_temp(settings_dict["low_temp"])
+        if config is not None and "low_temp" in config:
+            state.set_low_temp(config["low_temp"])
+        elif "low_temp" in settings_dict:
+            state.set_low_temp(settings_dict["low_temp"])
 
-            if config is not None and "mesh_seed_size" in config:
-                state.set_mesh_seed_size(config["mesh_seed_size"])
-            elif "mesh_seed_size" in settings_dict:
-                state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
+        if config is not None and "mesh_seed_size" in config:
+            state.set_mesh_seed_size(config["mesh_seed_size"])
+        elif "mesh_seed_size" in settings_dict:
+            state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
 
-            if config is not None and "time_sample" in config:
-                state.set_time_sample(config["time_sample"])
-            elif "time_sample" in settings_dict:
-                state.set_time_sample(settings_dict["time_sample"])
+        if config is not None and "time_sample" in config:
+            state.set_time_sample(config["time_sample"])
+        elif "time_sample" in settings_dict:
+            state.set_time_sample(settings_dict["time_sample"])
 
     else: # The case where a .odb file and a .hdf5 file were not provided
 
@@ -542,19 +545,25 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     if "title" in settings_dict:
         image_title = settings_dict["title"]
     else:
-        if hasattr(state, "hdf_file_path"):
-            image_title = state.hdf_file_path.split(os.sep)[-1].split(".")[0]
+        if user_options.image_title == "":
+            if hasattr(state, "hdf_file_path"):
+                image_title = state.hdf_file_path.split(os.sep)[-1].split(".")[0]
 
-        elif hasattr(state, "odb_file_path"):
-            image_title = state.odb_file_path.split(os.sep)[-1].split(".")[0]
+            elif hasattr(state, "odb_file_path"):
+                image_title = state.odb_file_path.split(os.sep)[-1].split(".")[0]
 
+            else:
+                image_title = ""
         else:
-            image_title = ""
+            image_title = user_options.image_title
 
     if "label" in settings_dict:
         image_label = settings_dict["label"]
     else:
-        image_label = image_title
+        if user_options.image_label == "":
+            image_label = image_title
+        else:
+            image_label = user_options.image_label
 
     user_options.image_title = image_title
     user_options.image_label = image_label
@@ -576,15 +585,17 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     if "view" in settings_dict:
         # Views can either be a string or a dict
         if isinstance(settings_dict["view"], dict):
+            state.angle = "custom"
             state.x_rot = settings_dict["view"]["x_rot"]
             state.y_rot = settings_dict["view"]["y_rot"]
             state.z_rot = settings_dict["view"]["z_rot"]
         
         else:
-            x_rot: int
-            y_rot: int
-            z_rot: int
-            x_rot, y_rot, z_rot = view(settings_dict["view"])
+            given_view: dict[str, int] = view(settings_dict["view"])
+            x_rot: int = given_view["x_rot"]
+            y_rot: int = given_view["y_rot"]
+            z_rot: int = given_view["z_rot"]
+            state.angle=settings_dict["view"]
             state.x_rot = x_rot
             state.y_rot = y_rot
             state.z_rot = z_rot
@@ -603,8 +614,8 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
 def load_views_dict() -> ViewsDict:
     views_file: TextIO
-    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "views.toml"), "r") as views_file:
-        return toml.load(views_file)
+    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "views.toml"), "rb") as views_file:
+        return tomllib.load(views_file)
 
 
 # Used to define the "view" type for argparse

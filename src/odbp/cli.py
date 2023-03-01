@@ -6,7 +6,10 @@ Built-in CLI for ODB Plotter, allowing for interactive system access without wri
 
 import os
 import sys
-import toml
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 import numpy as np
 import pandas as pd
 from typing import Any, Union, TextIO
@@ -25,6 +28,7 @@ def cli() -> None:
     user_options: UserOptions
     result: Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]
     result = process_input()
+    print(f"ODBPlotter {__version__}")
     if isinstance(result, pd.DataFrame):
         sys.exit(print(result))
 
@@ -37,9 +41,7 @@ def cli() -> None:
         # TODO
         load_hdf(state)
         plot_time_range(state, user_options)
-        return
 
-    print(f"ODBPlotter {__version__}")
     while main_loop:
         try:
             user_input:str = input("\n> ").strip().lower()
@@ -185,8 +187,8 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
 
     if user_options.config_file_path is not None:
         config_file: TextIO
-        with open(user_options.config_file_path, "r") as config_file:
-            config: dict[str, Any] = toml.load(config_file)
+        with open(user_options.config_file_path, "rb") as config_file:
+            config: dict[str, Any] = tomllib.load(config_file)
 
         if "hdf_file_path" in config:
             if config["hdf_file_path"] != state.hdf_file_path:
@@ -498,8 +500,8 @@ def set_time(state: OdbVisualizer) -> None:
                     print("Error, all selected time values must be positive numbers")
 
         if confirm(f"You entered {lower_time} as the starting time and {upper_time} as the ending time.", "Is this correct", "yes"):
-            state.time_low = lower_time
-            state.time_high = upper_time
+            state.set_time_low(lower_time)
+            state.set_time_high(upper_time)
             print(f"Time Range: from {state.time_low} to {state.time_high if state.time_high != float('inf') else 'infinity'}")
             break
 
@@ -559,13 +561,21 @@ def set_views(state: OdbVisualizer):
 
         else:
             try:
-                state.x_rot = views_dict[user_input]["x_rot"]
-                state.y_rot = views_dict[user_input]["y_rot"]
-                state.z_rot = views_dict[user_input]["z_rot"]
-                return
+                if user_input.isnumeric():
+                    chosen_ind: int = int(user_input) - 1
+                    state.x_rot = views_dict[list(views_dict.keys())[chosen_ind]]["x_rot"]
+                    state.y_rot = views_dict[list(views_dict.keys())[chosen_ind]]["y_rot"]
+                    state.z_rot = views_dict[list(views_dict.keys())[chosen_ind]]["z_rot"]
+                    return
 
-            except KeyError:
-                print('Error: input must be "list," "custom," or a named view as seen from the "list" command.')
+                else:
+                    state.x_rot = views_dict[user_input]["x_rot"]
+                    state.y_rot = views_dict[user_input]["y_rot"]
+                    state.z_rot = views_dict[user_input]["z_rot"]
+                    return
+
+            except:
+                print('Error: input must be "list," "custom," or the index or name of a named view as seen from the "list" command.')
 
 
 def get_custom_view() -> tuple[int, int, int]:
@@ -599,13 +609,15 @@ def get_custom_view() -> tuple[int, int, int]:
 
 
 def print_views(views: dict[str, dict[str, int]]) -> None:
-    print("Name | Rotation Values")
+    print("Index | Name | Rotation Values")
+    v: tuple[str, dict[str, int]]
     view: str
     vals: dict[str, int]
     key: str
     val: int
-    for view, vals in views.items():
-        print(view)
+    for i, v in enumerate(views.items()):
+        view, vals = v
+        print(f"{i + 1}: `{view}")
         for key, val in vals.items():
             print(f"\t{key}: {val}")
         print()
@@ -643,7 +655,10 @@ def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions
     plot: Any = state.plot_time_3d(time, user_options.image_label, state.interactive)
 
     if state.interactive:
+        print(plot.camera_set)
         plot.show()
+        print(plot.camera_position)
+        print(plot.camera_set)
         plot.screenshot(save_str)
 
     else:

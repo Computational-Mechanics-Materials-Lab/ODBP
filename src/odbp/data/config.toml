@@ -57,35 +57,35 @@ parts = [ "PART-1-1", ]
 
 # lower x-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# x_low =
+# low_x =
 
 # upper x-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# x_high =
+# high_x =
 
 # lower y-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# y_low =
+# low_y =
 
 # upper y-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# y_high =
+# high_y =
 
 # lower z-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# z_low =
+# low_z =
 
 # upper z-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# z_high =
+# high_z =
 
 # lower time extreme
 # Defaulted to 0, as it can't be lower than this
-time_low = 0
+low_time = 0
 
 # upper time extreme
 # Defaulted to inf, as this will extract all times starting from time_low
-time_high = +inf
+high_time = +inf
 
 #####
 

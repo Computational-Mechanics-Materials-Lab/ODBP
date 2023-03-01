@@ -6,7 +6,7 @@ interactive mode
 """
 
 import os
-import toml
+import tomli_w
 import subprocess
 import shutil
 
@@ -37,9 +37,6 @@ class Axis:
         # Setting default values
         self.low: float
         self.high: float
-        self.vals: Any
-        self.size: int
-
 
 class Odb:
     """
@@ -229,34 +226,6 @@ class Odb:
         "Private" method. Not to be used on its own, but called with process_hdf
         """
         self.out_nodes_low_time = self.out_nodes[self.out_nodes["Time"] == self.time_low]
-        temp_x_list: list[float] = list()
-        temp_y_list: list[float] = list()
-        temp_z_list: list[float] = list()
-        for _, node in self.out_nodes_low_time.iterrows():
-            x: float = round(node["X"], 5)
-            y: float = round(node["Y"], 5)
-            z: float = round(node["Z"], 5)
-            if (x % self.mesh_seed_size == 0) and (y % self.mesh_seed_size == 0) and (z % self.mesh_seed_size == 0):
-                temp_x_list.append(x)
-                temp_y_list.append(y)
-                temp_z_list.append(z)
-
-        # Makes these in-order lists of unique values
-        temp_x_list = list(dict.fromkeys(temp_x_list))
-        temp_y_list = list(dict.fromkeys(temp_y_list))
-        temp_z_list = list(dict.fromkeys(temp_z_list))
-
-        temp_x_list.sort()
-        temp_y_list.sort()
-        temp_z_list.sort()
-
-        self.x.vals = np.asarray(temp_x_list)
-        self.y.vals = np.asarray(temp_y_list)
-        self.z.vals = np.asarray(temp_z_list)
-
-        self.x.size = len(self.x.vals)
-        self.y.size = len(self.y.vals)
-        self.z.size = len(self.z.vals)
 
         self.loaded = True
 
@@ -265,7 +234,7 @@ class Odb:
         
         assert self.odb_file_path != ""
         # Must run this script via abaqus python
-        odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odb_to_npz.py")
+        odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "py2_scripts", "odb_to_npz.py")
 
         odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
         subprocess.run(odb_to_npz_args, shell=True)
@@ -293,8 +262,8 @@ class Odb:
             config["time_sample"] = self.time_sample
 
         toml_file: TextIO
-        with open(toml_path, "w") as toml_file:
-            toml.dump(config, toml_file)
+        with open(toml_path, "wb") as toml_file:
+            tomli_w.dump(config, toml_file)
 
 
     def process_hdf(self) -> None:

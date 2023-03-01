@@ -10,7 +10,8 @@ dependencies = [
 "platformdirs",
 "h5py",
 "numpy",
-"toml",
+"tomli>=1.1.0; python_version < '3.11'",
+"tomli_w",
 "pandas",
 "matplotlib",
 "vtk==9.2.2", # pyvista is unstable on some platforms with vtk 9.2.5 or greater
@@ -24,7 +25,7 @@ dynamic = ["version"]
 "Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [tool.setuptools]
-package-data = {odbp = ["views.toml", "config.toml", "odb_to_npz.py", "extract.py"]}
+package-data = {odbp = ["data/views.toml", "data/config.toml", "py2_scripts/odb_to_npz.py", "py2_scripts/extract.py"]}
 
 [tool.setuptools.dynamic]
 version = {attr = "odbp.__version__"}
