@@ -1,49 +1,49 @@
 [Top]
-x_rot = 0
-y_rot = 90
-z_rot = 90
+elev = 0
+azim = 90
+roll = 90
 
 [Bottom]
-x_rot = 0
-y_rot = -90
-z_rot = 90
+elev = 0
+azim = -90
+roll = 90
 
 [Front]
-x_rot = -45
-y_rot = 0
-z_rot = -45
+elev = -45
+azim = 0
+roll = -45
 
 [Back]
-x_rot = -45
-y_rot = 0 
-z_rot = 135
+elev = -45
+azim = 0 
+roll = 135
 
 [Left]
-x_rot = -45
-y_rot = 0
-z_rot = 45
+elev = -45
+azim = 0
+roll = 45
 
 [Right]
-x_rot = -45
-y_rot = 0
-z_rot = -135
+elev = -45
+azim = 0
+roll = -135
 
 ["Isometric Front-Right"]
-x_rot = 0
-y_rot = 0
-z_rot = -90
+elev = 0
+azim = 270
+roll = 300
 
 ["Isometric Front-Left"]
-x_rot = 0
-y_rot = 0
-z_rot = 0
+elev = 0
+azim = 0
+roll = -60
 
 ["Isometric Back-Right"]
-x_rot = 0
-y_rot = 0
-z_rot = -180
+elev = 0
+azim = 0
+roll = -180
 
 ["Isometric Back-Left"]
-x_rot = 0
-y_rot = 0
-z_rot = 90
+elev = 0
+azim = 0
+roll = 90

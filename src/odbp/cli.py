@@ -549,29 +549,29 @@ def set_views(state: OdbVisualizer):
         if user_input == "list":
             print_views(views_dict)
         elif user_input == "custom":
-            x_rot: int
-            y_rot: int
-            z_rot: int
-            x_rot, y_rot, z_rot = get_custom_view()
+            elev: int
+            azim: int
+            roll: int
+            elev, azim, roll = get_custom_view()
 
-            state.x_rot = x_rot
-            state.y_rot = y_rot
-            state.z_rot = z_rot
+            state.elev = elev
+            state.azim = azim
+            state.roll = roll
             return
 
         else:
             try:
                 if user_input.isnumeric():
                     chosen_ind: int = int(user_input) - 1
-                    state.x_rot = views_dict[list(views_dict.keys())[chosen_ind]]["x_rot"]
-                    state.y_rot = views_dict[list(views_dict.keys())[chosen_ind]]["y_rot"]
-                    state.z_rot = views_dict[list(views_dict.keys())[chosen_ind]]["z_rot"]
+                    state.elev = views_dict[list(views_dict.keys())[chosen_ind]]["elev"]
+                    state.azim = views_dict[list(views_dict.keys())[chosen_ind]]["azim"]
+                    state.roll = views_dict[list(views_dict.keys())[chosen_ind]]["roll"]
                     return
 
                 else:
-                    state.x_rot = views_dict[user_input]["x_rot"]
-                    state.y_rot = views_dict[user_input]["y_rot"]
-                    state.z_rot = views_dict[user_input]["z_rot"]
+                    state.elev = views_dict[user_input]["elev"]
+                    state.azim = views_dict[user_input]["azim"]
+                    state.roll = views_dict[user_input]["roll"]
                     return
 
             except:
@@ -579,33 +579,33 @@ def set_views(state: OdbVisualizer):
 
 
 def get_custom_view() -> tuple[int, int, int]:
-    x_rot: int
-    y_rot: int
-    z_rot: int
+    elev: int
+    azim: int
+    roll: int
     while True:
         while True:
             try:
-                x_rot = int(input("Rotation around the X-Axis in Degrees: "))
+                elev = int(input("Elevation Angle in Degrees: "))
                 break
             except ValueError:
-                print("Error: Rotation around the X-Axis must be an integer")
+                print("Error: Elevation Angle must be an integer")
         while True:
             try:
-                y_rot = int(input("Rotation around the Y-Axis in Degrees: "))
+                azim = int(input("Azimuth Angle in Degrees: "))
                 break
             except ValueError:
-                print("Error: Rotation around the Y-Axis must be an integer")
+                print("Error: Azimuth Angle must be an integer")
         while True:
             try:
-                z_rot = int(input("Rotation around the Z-Axis in Degrees: "))
+                roll = int(input("Roll Angle in Degrees: "))
                 break
             except ValueError:
-                print("Error: Rotation around the Z-Axis must be an integer")
+                print("Error: Roll Angle must be an integer")
 
-        if confirm(f"X Rotation: {x_rot}\nY Rotation: {y_rot}\nZ Rotation: {z_rot}", "Is this correct?", "yes"):
+        if confirm(f"X Rotation: {elev}\nY Rotation: {azim}\nZ Rotation: {roll}", "Is this correct?", "yes"):
             break
 
-    return (x_rot, y_rot, z_rot)
+    return (elev, azim, roll)
 
 
 def print_views(views: dict[str, dict[str, int]]) -> None:
@@ -655,11 +655,11 @@ def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions
     plot: Any = state.plot_time_3d(time, user_options.image_label, state.interactive)
 
     if state.interactive:
-        print(plot.camera_set)
-        plot.show()
-        print(plot.camera_position)
-        print(plot.camera_set)
-        plot.screenshot(save_str)
+        try:
+            plot.show()
+            plot.screenshot(save_str)
+        except RuntimeError:
+            print('Error: The plotter could not save a screenshot. Please close the viewing window by hitting the "q" key instead.')
 
     else:
         plot.screenshot(save_str)

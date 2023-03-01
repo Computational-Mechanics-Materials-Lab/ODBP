@@ -183,9 +183,9 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
         {
             "Is each time-step being shown in the PyVista interactive Viewer": f"{'Yes' if state.interactive else 'No'}",
             "View Angle": f"{state.angle if hasattr(state, 'angle') else 'not set'}",
-            "Rotation around the X Axis": f"{state.x_rot if hasattr(state, 'x_rot') else 'not set'}",
-            "Rotation around the Y Axis": f"{state.y_rot if hasattr(state, 'y_rot') else 'not set'}",
-            "Rotation around the Z Axis": f"{state.z_rot if hasattr(state, 'z_rot') else 'not set'}",
+            "Rotation around the X Axis": f"{state.elev if hasattr(state, 'elev') else 'not set'}",
+            "Rotation around the Y Axis": f"{state.azim if hasattr(state, 'azim') else 'not set'}",
+            "Rotation around the Z Axis": f"{state.roll if hasattr(state, 'roll') else 'not set'}",
         },
         {
             "Image Title": f"{user_options.image_title if hasattr(user_options, 'image_title') else 'not set'}",
@@ -573,7 +573,8 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
     # Run Immediate
     if "run" in settings_dict:
-        user_options.run_immediate = settings_dict["run"]
+        if not user_options.run_immediate:
+            user_options.run_immediate = settings_dict["run"]
 
     if "interactive" in settings_dict:
         state.interactive = settings_dict["interactive"]
@@ -586,19 +587,19 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         # Views can either be a string or a dict
         if isinstance(settings_dict["view"], dict):
             state.angle = "custom"
-            state.x_rot = settings_dict["view"]["x_rot"]
-            state.y_rot = settings_dict["view"]["y_rot"]
-            state.z_rot = settings_dict["view"]["z_rot"]
+            state.elev = settings_dict["view"]["elev"]
+            state.azim = settings_dict["view"]["azim"]
+            state.roll = settings_dict["view"]["roll"]
         
         else:
             given_view: dict[str, int] = view(settings_dict["view"])
-            x_rot: int = given_view["x_rot"]
-            y_rot: int = given_view["y_rot"]
-            z_rot: int = given_view["z_rot"]
+            elev: int = given_view["elev"]
+            azim: int = given_view["azim"]
+            roll: int = given_view["roll"]
             state.angle=settings_dict["view"]
-            state.x_rot = x_rot
-            state.y_rot = y_rot
-            state.z_rot = z_rot
+            state.elev = elev
+            state.azim = azim
+            state.roll = roll
 
     if "parts" in settings_dict:
         state.set_parts(settings_dict["parts"])
@@ -630,11 +631,11 @@ def view(string: str) -> dict[str, int]:
     formatted_string = formatted_string.replace("[", "")
     formatted_string = formatted_string.repalce("]", "")
     try:
-        x_rot: int
-        y_rot: int
-        z_rot: int
-        x_rot, y_rot, z_rot = map(int, formatted_string.split(","))
-        return {"x_rot": x_rot, "y_rot": y_rot, "z_rot": z_rot}
+        elev: int
+        azim: int
+        roll: int
+        elev, azim, roll = map(int, formatted_string.split(","))
+        return {"elev": elev, "azim": azim, "roll": roll}
 
     except:
         raise argparse.ArgumentTypeError("View must be one of the default views or a 3-tuple of integer angles (a, b, c)")

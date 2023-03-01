@@ -175,6 +175,6 @@ view = "Isometric Front-Right"
 
 # A custom example
 #[view]
-#    x_rot = 90
-#    y_rot = 45
-#    z_rot = -45
+#    elev = 90
+#    azim = 45
+#    roll = -45

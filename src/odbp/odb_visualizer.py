@@ -107,10 +107,10 @@ class OdbVisualizer(Odb):
         plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#FFFFFF", axes_ranges=[self.x.low, self.x.high, self.y.low, self.y.high, self.z.low, self.z.high])
         plotter.set_background(color="#000000")
 
-        print(plotter.camera_position)
-        max_pos: float = max([(self.x.high - self.x.low), (self.y.high - self.y.low), (self.z.high - self.z.low)])
-        plotter.camera_position = [(max_pos, max_pos, max_pos), (0, 0, 0), (0, 0, 1)]
+        #plotter.camera.focal_point = ((self.x.high + self.x.low)/2, (self.y.high + self.y.low)/2, (self.z.high + self.z.low)/2)
+        plotter.camera.elevation = 0
+        plotter.camera.azimuth = 270
+        plotter.camera.roll = 300
         plotter.camera_set = True
-        print(plotter.camera_position)
 
         return plotter
