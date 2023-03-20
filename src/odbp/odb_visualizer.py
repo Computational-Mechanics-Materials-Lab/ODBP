@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import pyvista as pv
-from typing import TypeAlias, TextIO, Union, Any
+from typing import TextIO, Union, Any
 from .odb import Odb
 
 

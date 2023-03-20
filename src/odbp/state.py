@@ -10,13 +10,9 @@ import platformdirs
 import subprocess
 import pickle
 import pandas as pd
-from typing import Union, Any, TypeAlias, TextIO
+from typing import Union, Any, TextIO
 from .odb_visualizer import OdbVisualizer
 from odbp import __version__
-
-
-ConfigFileType: TypeAlias = Union[str, None]
-ViewsDict: TypeAlias = dict[str, dict[str, int]]
 
 
 class UserOptions():
@@ -38,11 +34,8 @@ class UserOptions():
         self.results_directory: str = ""
         self.image_title: str = ""
         self.image_label: str = ""
-        self.config_file_path: ConfigFileType = None
+        self.config_file_path: Union[str, None] = None
         self.run_immediate: bool = False
-
-
-SettingType: TypeAlias = tuple[OdbVisualizer, UserOptions]
 
 
 class CLIOptions():
@@ -213,7 +206,7 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
     print(final_state_output, end="") # No ending newline because we added it above
 
 
-def process_input() -> Union[SettingType, pd.DataFrame]: # Returns UserOptions or Pandas Dataframe
+def process_input() -> "Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]": # Returns UserOptions or Pandas Dataframe
     """
     The goal is to have a hierarchy of options. If a user passes in an option via a command-line switch, that option is set.
     If an option is not set by a switch, then the toml input file is used.
@@ -274,7 +267,7 @@ def process_input() -> Union[SettingType, pd.DataFrame]: # Returns UserOptions o
         return generate_cli_settings(args)
 
 
-def generate_cli_settings(args: argparse.Namespace) -> SettingType:
+def generate_cli_settings(args: argparse.Namespace) -> "tuple[OdbVisualizer, UserOptions]":
 
     state: OdbVisualizer = OdbVisualizer()
     user_options: UserOptions = UserOptions()
@@ -378,7 +371,7 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     return return_data
 
 
-def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: dict[str, Any]) -> SettingType:
+def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: "dict[str, Any]") -> "tuple[OdbVisualizer, UserOptions]":
     hdf_source_dir: str
     if "hdf_source_directory" in settings_dict:
         hdf_source_dir = os.path.abspath(settings_dict["hdf_source_directory"])
@@ -613,15 +606,15 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     return (state, user_options)
 
 
-def load_views_dict() -> ViewsDict:
+def load_views_dict() -> "dict[str, dict[str, int]]":
     views_file: TextIO
     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "views.toml"), "rb") as views_file:
         return tomllib.load(views_file)
 
 
 # Used to define the "view" type for argparse
-def view(string: str) -> dict[str, int]:
-    views_dict: ViewsDict = load_views_dict()
+def view(string: str) -> "dict[str, int]":
+    views_dict: dict[str, dict[str, int]] = load_views_dict()
     if string in views_dict:
         return views_dict[string]
 

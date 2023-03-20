@@ -153,7 +153,7 @@ class Odb:
         self.time_sample = value
 
 
-    def set_parts(self, parts: list[str]) -> None:
+    def set_parts(self, parts: "list[str]") -> None:
         if not isinstance(parts, list):
             new_list: list[str] = [parts]
             self.parts = new_list
@@ -162,14 +162,14 @@ class Odb:
             self.parts = parts
 
     
-    def set_nodes(self, nodes: dict[str, list[int]]) -> None:
+    def set_nodes(self, nodes: "dict[str, list[int]]") -> None:
         if not isinstance(nodes, dict):
             nodes = dict(nodes)
 
         self.nodes = nodes
 
     
-    def set_nodesets(self, nodesets: list[str]) -> None:
+    def set_nodesets(self, nodesets: "list[str]") -> None:
         if not isinstance(nodesets, list):
             new_list: list[str] = [nodesets]
             self.nodesets = new_list
@@ -288,9 +288,44 @@ class Odb:
         coords_df: Any = get_coords(self.hdf_file_path)
         self.bounded_nodes = list(
                 coords_df[
-                    (((coords_df["X"] == self.x.high) | (coords_df["X"] == self.x.low)) & ((coords_df["Y"] >= self.y.low) & (coords_df["Y"] <= self.y.high) & (coords_df["Z"] >= self.z.low) & (coords_df["Z"] <= self.z.high))) |
-                    (((coords_df["Y"] == self.y.high) | (coords_df["Y"] == self.y.low)) & ((coords_df["X"] >= self.x.low) & (coords_df["X"] <= self.x.high) & (coords_df["Z"] >= self.z.low) & (coords_df["Z"] <= self.z.high))) |
-                    (((coords_df["Z"] == self.z.high) | (coords_df["Z"] == self.z.low)) & ((coords_df["X"] >= self.x.low) & (coords_df["X"] <= self.x.high) & (coords_df["Y"] >= self.y.low) & (coords_df["Y"] <= self.y.high)))
+                        (
+                            (
+                                (coords_df["X"] == self.x.high) |
+                                (coords_df["X"] == self.x.low)
+                            ) &
+                            (
+                                (coords_df["Y"] >= self.y.low) &
+                                (coords_df["Y"] <= self.y.high) &
+                                (coords_df["Z"] >= self.z.low) &
+                                (coords_df["Z"] <= self.z.high)
+                            )
+                        )
+                        |
+                        (
+                            (
+                                (coords_df["Y"] == self.y.high) |
+                                (coords_df["Y"] == self.y.low)
+                            ) &
+                            (
+                                (coords_df["X"] >= self.x.low) &
+                                (coords_df["X"] <= self.x.high) &
+                                (coords_df["Z"] >= self.z.low) &
+                                (coords_df["Z"] <= self.z.high)
+                            )
+                        )
+                        |
+                        (
+                            (
+                                (coords_df["Z"] == self.z.high) |
+                                (coords_df["Z"] == self.z.low)
+                            ) &
+                            (
+                                (coords_df["X"] >= self.x.low) &
+                                (coords_df["X"] <= self.x.high) &
+                                (coords_df["Y"] >= self.y.low) &
+                                (coords_df["Y"] <= self.y.high)
+                            )
+                        )
                     ]
                     ["Node Labels"]
                 )
