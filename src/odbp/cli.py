@@ -506,7 +506,7 @@ def set_time(state: OdbVisualizer) -> None:
             break
 
 
-def process_extrema(keys: tuple[str, str]) -> tuple[float, float]:
+def process_extrema(keys: "tuple[str, str]") -> "tuple[float, float]":
     results: list[float] = list()
     i: int
     key: str
@@ -578,7 +578,7 @@ def set_views(state: OdbVisualizer):
                 print('Error: input must be "list," "custom," or the index or name of a named view as seen from the "list" command.')
 
 
-def get_custom_view() -> tuple[int, int, int]:
+def get_custom_view() -> "tuple[int, int, int]":
     elev: int
     azim: int
     roll: int
@@ -608,7 +608,7 @@ def get_custom_view() -> tuple[int, int, int]:
     return (elev, azim, roll)
 
 
-def print_views(views: dict[str, dict[str, int]]) -> None:
+def print_views(views: "dict[str, dict[str, int]]") -> None:
     print("Index | Name | Rotation Values")
     v: tuple[str, dict[str, int]]
     view: str
