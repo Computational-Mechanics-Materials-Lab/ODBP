@@ -69,6 +69,7 @@ class Odb:
 
         self.abaqus_program: str
 
+        self.hdf_processed: bool = False
         self.loaded: bool = False
 
         self.bounded_nodes: Any
@@ -196,6 +197,7 @@ class Odb:
         else:
             odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
 
+        print(odb_file_path)
         self.odb_file_path = odb_file_path
 
 
@@ -222,6 +224,7 @@ class Odb:
         else:
             user_options.config_file_path = None
 
+        self.hdf_processed = True
         return user_options
 
 
@@ -242,7 +245,7 @@ class Odb:
 
         if len(self.nodesets) != 1:
             raise ValueError("You must have exactly one Nodeset specified to convert a .odb to a .hdf5")
-        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample), str(self.nodesets[0])]
+        odb_to_npz_args: list[str]  = [self.abaqus_program, "python", odb_to_npz_script_path, self.odb_file_path, str(self.time_sample), str(self.nodesets[0])]
         subprocess.run(odb_to_npz_args, shell=True)
 
         npz_dir: str = os.path.join(os.getcwd(), "tmp_npz")
@@ -251,6 +254,7 @@ class Odb:
         if os.path.exists(npz_dir):
             shutil.rmtree(npz_dir)
 
+        self.hdf_processed = True
         self.hdf_file_path = hdf_file_path
 
 

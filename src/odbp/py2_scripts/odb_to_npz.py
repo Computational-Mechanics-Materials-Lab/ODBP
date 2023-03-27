@@ -52,7 +52,7 @@ def main(odb_path, frame_step, nodeset):
     assembly = odb.rootAssembly
     nodeset_keys = assembly.nodeSets.keys()
     if nodeset not in nodeset_keys:
-        raise ValueError("{0} is not a valid nodeset key. Possible values in this .odb are {1}".format(nodeset, nodeset_keys))
+        raise ValueError("'{0}' is not a valid nodeset key. Possible values in this .odb are {1}".format(nodeset, nodeset_keys))
 
     odb.close()
 
