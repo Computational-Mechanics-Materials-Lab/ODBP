@@ -67,7 +67,7 @@ class Odb:
         self.time_sample: int
         self.mesh_seed_size: float
 
-        self.abaqus_program = "abaqus"
+        self.abaqus_program: str
 
         self.loaded: bool = False
 
@@ -178,6 +178,10 @@ class Odb:
             self.nodesets = nodesets
 
 
+    def set_abaqus(self, abq: str) -> None:
+        self.abaqus_program = abq
+
+
     def select_odb(self, user_options: Any, given_odb_file_path: str) -> "Union[None, bool]":
         odb_file_path: str
         if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
@@ -236,7 +240,9 @@ class Odb:
         # Must run this script via abaqus python
         odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "py2_scripts", "odb_to_npz.py")
 
-        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
+        if len(self.nodesets) != 1:
+            raise ValueError("You must have exactly one Nodeset specified to convert a .odb to a .hdf5")
+        odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample), str(self.nodesets[0])]
         subprocess.run(odb_to_npz_args, shell=True)
 
         npz_dir: str = os.path.join(os.getcwd(), "tmp_npz")

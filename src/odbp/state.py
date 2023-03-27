@@ -107,6 +107,14 @@ class CLIOptions():
         self.state_help: str = "Show the current state of the settings of the plotter"
         self.state_options_formatted: str = ", ".join(self.state_options)
 
+        self.abaqus_options: list[str] = ["abaqus", "abq", "abqpy"]
+        self.abaqus_help: str = "Select the Abaqus executable program to use to process .odb file"
+        self.abaqus_options_formatted: str = ", ".join(self.abaqus_options)
+
+        self.nodeset_options: list[str] = ["node", "nodes", "nodeset", "nodesets"]
+        self.nodeset_help: str = "Select the target nodeset (i.e., the named nodeset that contains all the data)"
+        self.nodeset_options_formatted: str = ", ".join(self.nodeset_options)
+
         self.help_options: list[str] = ["help", "use", "usage"]
         self.help_help: str = "Show this menu"
         self.help_options_formatted: str = ", ".join(self.help_options)
@@ -124,7 +132,9 @@ class CLIOptions():
                 len(self.title_label_options_formatted),
                 len(self.directory_options_formatted),
                 len(self.process_options_formatted),
-                len(self.angle_options_formatted)
+                len(self.angle_options_formatted),
+                len(self.abaqus_options_formatted),
+                len(self.nodeset_options_formatted),
                 )
 
 
@@ -147,6 +157,8 @@ class CLIOptions():
 {self.angle_options_formatted.ljust(self.longest_len)} -- {self.angle_help}
 {self.show_all_options_formatted.ljust(self.longest_len)} -- {self.show_all_help}
 {self.plot_options_formatted.ljust(self.longest_len)} -- {self.plot_help}
+{self.abaqus_options_formatted.ljust(self.longest_len)} -- {self.abaqus_help}
+{self.nodeset_options_formatted.ljust(self.longest_len)} -- {self.nodeset_help}
 {self.state_options_formatted.ljust(self.longest_len)} -- {self.state_help}"""
     )
 
@@ -185,7 +197,12 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
             "Image Label": f"{user_options.image_label if hasattr(user_options, 'image_label') else 'not set'}",
         },
         {
+            "Target Parts": ",".join(state.parts) if hasattr(state, "parts") else "None Set",
+            "Target Nodeset": (state.nodesets[0] if len(state.nodesets) == 1 else "Error: Only specify multiple nodesets in extract mode") if hasattr(state, "nodesets") else "None Set"
+        },
+        {
             "Data loaded into memory": f"{'Yes' if state.loaded else 'No'}",
+            "Abaqus Program": f"{state.abaqus_program if hasattr(state, 'abaqus_program') else 'not set'}",
         },
     ]
 
@@ -246,6 +263,10 @@ def process_input() -> "Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]":
 
     parser.add_argument("--low-time", help="Lower time limit, defaults to 0 (minimum possible)")
     parser.add_argument("--high-time", help="Upper time limit, defaults to infinity (max possible)")
+
+    parser.add_argument("-n", "--nodesets", help="Nodesets from which to Extract. Enter only one via CLI, use the .toml input file for a list")
+
+    parser.add_argument("-a", "--abaqus", help="Abaqus executable program to extract from .odb files")
 
     parser.add_argument("-V", "--view", type=view, help="Viewing Angle to show the plot in. Must either be a 3-tuple of integers or the name of a pre-defined view")
     
@@ -600,8 +621,25 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     if "nodes" in settings_dict:
         state.set_nodes(settings_dict["nodes"])
 
-    if "nodesets" in settings_dict:
-        state.set_nodesets(settings_dict["nodesets"])
+    if hasattr(state, "nodesets"):
+        if "nodesets" in settings_dict:
+            nodesets = settings_dict["nodesets"]
+            if type(nodesets) is list:
+                state.set_nodesets(nodesets)
+            elif type(nodesets) is str:
+                state.set_nodesets([nodesets])
+    else:
+        nodesets = settings_dict.get("nodesets", ["ALL NODES"])
+        if type(nodesets) is list:
+            state.set_nodesets(nodesets)
+        elif type(nodesets) is str:
+            state.set_nodesets([nodesets])
+
+    if hasattr(state, "abaqus_program"):
+        if "abaqus" in settings_dict:
+            state.set_abaqus(settings_dict["abaqus"])
+    else:
+        state.set_abaqus(settings_dict.get("abaqus", "abaqus"))
 
     return (state, user_options)
 
@@ -627,7 +665,7 @@ def view(string: str) -> "dict[str, int]":
         elev: int
         azim: int
         roll: int
-        elev, azim, roll = map(int, formatted_string.split(","))
+        elev, azim, roll = [int(f) for f in formatted_string.split(",")]
         return {"elev": elev, "azim": azim, "roll": roll}
 
     except:
