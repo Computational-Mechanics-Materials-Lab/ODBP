@@ -689,4 +689,3 @@ def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions
         #     plot.screenshot(save_str)
 
     del plot
-

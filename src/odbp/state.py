@@ -12,6 +12,7 @@ import pickle
 import pandas as pd
 from typing import Union, Any, TextIO
 from .odb_visualizer import OdbVisualizer
+from .util import confirm
 from odbp import __version__
 
 
@@ -337,6 +338,17 @@ def generate_cli_settings(args: argparse.Namespace) -> "tuple[OdbVisualizer, Use
     cli_flags = {k: v for k, v in cli_flags.items() if v is not None}
     state, user_options = read_setting_dict(state, user_options, cli_flags)
 
+    if not os.path.exists(user_options.results_directory):
+        print(f"Directory {user_options.results_directory} does not exist. Creating it now.")
+        os.makedirs(user_options.results_directory)
+
+    if not state.hdf_processed:
+        if confirm(f"{state.odb_file_path} can be automatically converted to {state.hdf_file_path} with time sample {state.time_sample}", "Would you like to perfrom this conversion?", "yes"):
+            print(f"Converting {state.odb_file_path} file to .hdf5 file with name: {state.hdf_file_path}")
+            state.odb_to_hdf(state.hdf_file_path)
+        else:
+            print("You may perform this conversion later with the \"convert\" command")
+
     return (state, user_options)
 
 
@@ -402,7 +414,10 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             sys.exit(1)
 
     else:
-        hdf_source_dir = os.getcwd()
+        if not hasattr(user_options, "hdf_source_directory"):
+            hdf_source_dir = os.getcwd()
+        else:
+            hdf_source_dir = user_options.hdf_source_directory
 
     user_options.hdf_source_directory = hdf_source_dir
 
@@ -415,7 +430,10 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             sys.exit(1)
 
     else:
-        odb_source_dir = os.getcwd()
+        if not hasattr(user_options, "odb_source_directory"):
+            odb_source_dir = os.getcwd()
+        else:
+            odb_source_dir = user_options.odb_source_directory
 
     user_options.odb_source_directory = odb_source_dir
 
@@ -424,11 +442,10 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         results_dir = os.path.abspath(settings_dict["results_directory"])
 
     else:
-        results_dir = os.path.join(os.getcwd(), "results")
-
-    if not os.path.exists(results_dir):
-        print(f"Directory {results_dir} does not exist. Creating it now.")
-        os.makedirs(results_dir)
+        if not hasattr(user_options, "results_directory"):
+            results_dir = os.path.join(os.getcwd(), "results")
+        else:
+            results_dir = user_options.results_directory
 
     user_options.results_directory = results_dir
 
@@ -453,23 +470,7 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             state.set_time_sample(settings_dict["time_sample"])
 
         if "hdf" in settings_dict:
-            if os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
-                if os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
-                    if os.path.exists(given_odb_file_path):
-                        print(f"Error: The file {given_odb_file_path} already exists")
-                        sys.exit(1)
-
-                    else:
-                        odb_file_path = given_odb_file_path
-                else:
-                    odb_file_path = os.path.join(os.getcwd(), given_odb_file_path)
-            else:
-                odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
-
-            state.odb_file_path = odb_file_path
-            new_hdf_file_name: str = os.path.join(user_options.hdf_source_directory, settings_dict["hdf"])
-            print(f"Converting .odb file to .hdf5 file with name: {new_hdf_file_name}")
-            state.odb_to_hdf(new_hdf_file_name)
+            state.hdf_file_path = os.path.join(user_options.hdf_source_directory, settings_dict["hdf"])
 
     elif "hdf" in settings_dict:
         # ensure the file exists
