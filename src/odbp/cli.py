@@ -93,6 +93,12 @@ def cli() -> None:
             elif user_input in cli_options.plot_options:
                 plot_time_range(state, user_options)
 
+            elif user_input in cli_options.abaqus_options:
+                set_abaqus(state)
+
+            elif user_input in cli_options.nodeset_options:
+                set_nodeset(state)
+
             elif user_input in cli_options.state_options:
                 print_state(state, user_options)
 
@@ -624,14 +630,30 @@ def print_views(views: "dict[str, dict[str, int]]") -> None:
     print()
 
 
-def plot_time_range(state: OdbVisualizer, user_options: UserOptions):
+def set_abaqus(state: OdbVisualizer) -> None:
+    while True:
+        user_input = input("Please enter the exectuable program to process .odb files: ")
+        if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
+            state.set_abaqus(user_input)
+            break
+
+
+def set_nodeset(state: OdbVisualizer) -> None:
+    while True:
+        user_input = input("Please enter the name of the target nodeset: ")
+        if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
+            state.set_nodesets(user_input)
+            break
+
+
+def plot_time_range(state: OdbVisualizer, user_options: UserOptions) -> None:
 
     if not state.loaded:
         print('Error, you must load the contents of a .hdf5 file into memory with the "run" or "process" commands in order to plot')
         return
 
     if user_options.image_label == "" or user_options.image_title == "":
-        if not confirm(f"Warning: Either the image label or image title is unset. Consider setting them with the \"title\" or \"label\" commands.", "Do you want to continue", "no"):
+        if not confirm("Warning: Either the image label or image title is unset. Consider setting them with the \"title\" or \"label\" commands.", "Do you want to continue", "no"):
             return
 
     # out_nodes["Time"] has the time values for each node, we only need one

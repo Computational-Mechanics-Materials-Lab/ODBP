@@ -140,7 +140,7 @@ if __name__ == "__main__":
     if old_nodesets is not None:
         nodesets = list()
         for n in old_nodesets:
-            nodesets.append(str(p))
+            nodesets.append(str(n))
     else:
         nodesets = old_nodesets
 
