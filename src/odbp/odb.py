@@ -197,7 +197,6 @@ class Odb:
         else:
             odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
 
-        print(odb_file_path)
         self.odb_file_path = odb_file_path
 
 
