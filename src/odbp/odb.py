@@ -296,48 +296,36 @@ class Odb:
         # Adapted from CJ's read_hdf5.py
         coords_df: Any = get_coords(self.hdf_file_path)
         self.bounded_nodes = list(
-                coords_df[
-                        (
-                            (
-                                (coords_df["X"] == self.x.high) |
-                                (coords_df["X"] == self.x.low)
-                            ) &
-                            (
-                                (coords_df["Y"] >= self.y.low) &
-                                (coords_df["Y"] <= self.y.high) &
-                                (coords_df["Z"] >= self.z.low) &
-                                (coords_df["Z"] <= self.z.high)
-                            )
-                        )
-                        |
-                        (
-                            (
-                                (coords_df["Y"] == self.y.high) |
-                                (coords_df["Y"] == self.y.low)
-                            ) &
-                            (
-                                (coords_df["X"] >= self.x.low) &
-                                (coords_df["X"] <= self.x.high) &
-                                (coords_df["Z"] >= self.z.low) &
-                                (coords_df["Z"] <= self.z.high)
-                            )
-                        )
-                        |
-                        (
-                            (
-                                (coords_df["Z"] == self.z.high) |
-                                (coords_df["Z"] == self.z.low)
-                            ) &
-                            (
-                                (coords_df["X"] >= self.x.low) &
-                                (coords_df["X"] <= self.x.high) &
-                                (coords_df["Y"] >= self.y.low) &
-                                (coords_df["Y"] <= self.y.high)
-                            )
-                        )
-                    ]
-                    ["Node Labels"]
+            coords_df[
+                (
+                    ((coords_df["X"] == self.x.high) | (coords_df["X"] == self.x.low))
+                    & (
+                        (coords_df["Y"] >= self.y.low)
+                        & (coords_df["Y"] <= self.y.high)
+                        & (coords_df["Z"] >= self.z.low)
+                        & (coords_df["Z"] <= self.z.high)
+                    )
                 )
+                | (
+                    ((coords_df["Y"] == self.y.high) | (coords_df["Y"] == self.y.low))
+                    & (
+                        (coords_df["X"] >= self.x.low)
+                        & (coords_df["X"] <= self.x.high)
+                        & (coords_df["Z"] >= self.z.low)
+                        & (coords_df["Z"] <= self.z.high)
+                    )
+                )
+                | (
+                    ((coords_df["Z"] == self.z.high) | (coords_df["Z"] == self.z.low))
+                    & (
+                        (coords_df["X"] >= self.x.low)
+                        & (coords_df["X"] <= self.x.high)
+                        & (coords_df["Y"] >= self.y.low)
+                        & (coords_df["Y"] <= self.y.high)
+                    )
+                )
+            ]["Node Labels"]
+        )
 
         pool: Any
         with Pool() as pool:

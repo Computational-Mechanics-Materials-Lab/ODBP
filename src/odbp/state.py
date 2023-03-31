@@ -343,11 +343,12 @@ def generate_cli_settings(args: argparse.Namespace) -> "tuple[OdbVisualizer, Use
         os.makedirs(user_options.results_directory)
 
     if not state.hdf_processed:
-        if confirm(f"{state.odb_file_path} can be automatically converted to {state.hdf_file_path} with time sample {state.time_sample}", "Would you like to perfrom this conversion?", "yes"):
-            print(f"Converting {state.odb_file_path} file to .hdf5 file with name: {state.hdf_file_path}")
-            state.odb_to_hdf(state.hdf_file_path)
-        else:
-            print("You may perform this conversion later with the \"convert\" command")
+        if hasattr(state, "odb_file_path") and hasattr(state, "hdf_file_path"):
+            if confirm(f"{state.odb_file_path} can be automatically converted to {state.hdf_file_path} with time sample {state.time_sample}", "Would you like to perfrom this conversion?", "yes"):
+                print(f"Converting {state.odb_file_path} file to .hdf5 file with name: {state.hdf_file_path}")
+                state.odb_to_hdf(state.hdf_file_path)
+            else:
+                print("You may perform this conversion later with the \"convert\" command")
 
     return (state, user_options)
 
