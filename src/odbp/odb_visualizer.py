@@ -38,7 +38,7 @@ class OdbVisualizer(Odb):
             raise MeltpointNotSetError
 
         # TODO different melt color? Don't plot from as low as 0?
-        self.colormap = pv.LookupTable(cmap=self.colormap_name, scalar_range=(self.low_temp, self.meltpoint), above_range_color=(0.25, 0.25, 0.25, 1.0))
+        self.colormap = pv.LookupTable(cmap=self.colormap_name, scalar_range=(self.low_temp, self.meltpoint), above_range_color=(0.75, 0.75, 0.75, 1.0))
 
 
     # Overload parent's set_meltpoint method to always select colormap
@@ -68,8 +68,8 @@ class OdbVisualizer(Odb):
         combined_label = f"{label}-{formatted_time}"
 
         off_screen: bool = not interactive
-        plotter = pv.Plotter(off_screen=off_screen, window_size=[1920, 1080])
-        plotter.add_text(combined_label, position="upper_edge", color="white", font="courier", )
+        plotter = pv.Plotter(off_screen=off_screen, window_size=[1920, 1080], lighting="three lights")
+        plotter.add_text(combined_label, position="upper_edge", color="#000000", font="courier", )
         faces: list[str] = ["x_low", "x_high", "y_low", "y_high", "z_low", "z_high"]
         face: str
         for face in faces:
@@ -102,15 +102,24 @@ class OdbVisualizer(Odb):
             # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
             #surface = surface.rotate_z(180)
 
-            plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (Kelvins)"})
+            plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (kelvins)", "font_family": "courier", "color": "#000000", "fmt": "%.2f", "position_y": 0})
+            dims_columns: set[str] = set(["X", "Y", "Z"])
+            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - dims_columns)).to_numpy())
+            points["Temp"] = selected_nodes["Temp"].to_numpy()
+            surface: Any = points.delaunay_2d()
 
-        plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#FFFFFF", axes_ranges=[self.x.low, self.x.high, self.y.low, self.y.high, self.z.low, self.z.high])
-        plotter.set_background(color="#000000")
+            # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
+            #surface = surface.rotate_z(180)
+
+        plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#000000", axes_ranges=[self.x.low, self.x.high, self.y.low, self.y.high, self.z.low, self.z.high])
+        plotter.set_background(color="#FFFFFF")
 
         #plotter.camera.focal_point = ((self.x.high + self.x.low)/2, (self.y.high + self.y.low)/2, (self.z.high + self.z.low)/2)
         plotter.camera.elevation = 0
         plotter.camera.azimuth = 270
         plotter.camera.roll = 300
         plotter.camera_set = True
+        #plotter.disable_shadows()
+        #plotter.add_light(pv.Light(light_type="headlight"))
 
         return plotter
