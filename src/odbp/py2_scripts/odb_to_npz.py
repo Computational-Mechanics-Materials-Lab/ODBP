@@ -22,8 +22,8 @@ import pickle
 import numpy as np
 import argparse
 import multiprocessing
-from odbAccess import openOdb, version
-from abaqusConstants import *
+from odbAccess import openOdb
+#from abaqusConstants import *
 from itertools import islice
 
 
@@ -39,7 +39,7 @@ def main():
     input_args = "input args"
     parser = argparse.ArgumentParser()
     parser.add_argument(input_args, nargs="*")
-    odb_path, pickle_path = vars(parser.parse_args())[input_args]
+    odb_path, pickle_path, result_path = vars(parser.parse_args())[input_args]
 
     # Try our best to manage Python 2 file handling
     pickle_file = open(pickle_path, "rb")
@@ -55,7 +55,13 @@ def main():
     nodesets = data_to_extract["nodesets"]
     frames = data_to_extract["frames"]
 
-    return convert_odb_to_npz(odb_path, nodesets, frames)
+    result_name = convert_odb_to_npz(odb_path, nodesets, frames)
+    result_file = open(result_path, "wb")
+    try:
+        pickle.dump(result_name, result_file)
+    finally:
+        result_file.close()
+
 
 
 def convert_odb_to_npz(odb_path, nodesets, frames):
@@ -109,8 +115,8 @@ def convert_odb_to_npz(odb_path, nodesets, frames):
 
     for nodeset in nodesets:
         for step_key, base_time in base_times:
-            coord_file = os.path.join(parent_dir, "node_coords_{}.npz".format(nodeset))
-            read_nodeset_coords(odb_path, nodeset, frames, coord_file, step_key)
+            coord_file = os.path.join(parent_dir, "node_coords.npz")
+            read_nodeset_coords(odb_path, nodeset, coord_file, step_key)
             read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset)
 
     return parent_dir
@@ -127,25 +133,27 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
     manager = multiprocessing.Manager()
     frame_times = manager.list()
     #frame_times = list()
-    idx_list = [i for i in range(len(steps[step_key].frames))]
-    idx_list_len = len(idx_list)
-    num_cpus = multiprocessing.cpu_count()
-    # TODO: what if the length isn't divisible by the number of processors (is it now?)
-    final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, int(idx_list_len / num_cpus))]
-    odb.close()
+    if len(steps[step_key].frames) > 0:
+        idx_list = [i for i in range(len(steps[step_key].frames))]
+        idx_list_len = len(idx_list)
+        num_cpus = multiprocessing.cpu_count()
+        # TODO: what if the length isn't divisible by the number of processors (is it now?)
+        final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, max(int(idx_list_len / num_cpus), 1))]
+        odb.close()
 
-    temp_procs = list()
-    for idx_list in final_idx_list:
-        p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset))
-        p.start()
-        temp_procs.append(p)
+        temp_procs = list()
+        print("\tGetting Temperatures per Frame")
+        for idx_list in final_idx_list:
+            p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset))
+            p.start()
+            temp_procs.append(p)
 
-        #read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset)
+            #read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset)
 
-    for p in temp_procs:
-        p.join()
+        for p in temp_procs:
+            p.join()
 
-    np.savez_compressed("{}.npz".format(os.path.join(time_dir, step_key)), np.array(frame_times))
+        np.savez_compressed("{}.npz".format(os.path.join(time_dir, step_key)), np.array(frame_times))
 
 
 def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset):
@@ -157,9 +165,6 @@ def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, 
     for idx in idx_list:
         if frames is not None and idx not in frames:
             continue
-
-        print("\tReading Temperature Data for Frame {}".format(idx))
-
         
         frame = steps[step_key].frames[idx]
 
@@ -170,36 +175,41 @@ def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, 
             temp = item.data
             node_temps.append(temp)
 
-        np.savez_compressed(os.path.join(curr_step_dir, "frame_{}".format(idx)))
+        np.savez_compressed(os.path.join(curr_step_dir, "frame_{}".format(idx)), np.array(node_temps))
 
     odb.close()
 
 
-def read_nodeset_coords(odb_path, nodeset, frames, coord_file, step_key):
-    odb = openOdb(odb_path, readOnly=True)
-    assembly = odb.rootAssembly
-    steps = odb.steps
+def read_nodeset_coords(odb_path, nodeset, coord_file, step_key):
 
-    if frames is None:
+    # Only extract coordinates from the first given nodeset/step
+    if not os.path.exists(coord_file):
+
+        odb = openOdb(odb_path, readOnly=True)
+        assembly = odb.rootAssembly
+        steps = odb.steps
+
         frame = steps[step_key].frames[0]
-    else:
-        frame = steps[step_key].frames[frames[0]]
 
-    coords = frame.fieldOutputs['COORD'].getSubset(region=assembly.nodeSets[nodeset])
-    print("\tGetting node coordinates")
+        try:
+            coords = frame.fieldOutputs["COORD"].getSubset(region=assembly.nodeSets[nodeset])
+            print("\tGetting Node Coordinates for Step {}".format(step_key))
 
-    results_list = list()
-    for item in coords.values:
-        node = item.nodeLabel
-        coord = item.data
-        xyz = [node]
-        for axis in coord:
-            xyz.append(axis)
-        results_list.append(xyz)
+            results_list = list()
+            for item in coords.values:
+                node = item.nodeLabel
+                coord = item.data
+                xyz = [node]
+                for axis in coord:
+                    xyz.append(axis)
+                results_list.append(xyz)
 
-    np.savez_compressed(coord_file, np.array(results_list))
+            np.savez_compressed(coord_file, np.array(results_list))
 
-    odb.close()
+        except KeyError:
+            print("\tStep {} has no Node Coordinates".format(step_key))
+
+        odb.close()
 
     
 if __name__ == "__main__":

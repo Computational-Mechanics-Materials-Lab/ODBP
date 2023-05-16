@@ -38,33 +38,38 @@ def extract(hdf5_filepath: PathType, node: int, frame_sample: int, x: float, y: 
 
 
 def main() -> None:
-    frame_sample: int = 10
-    x_high: float = 9
-    x_low: float = -2.5
-    y_high: float = 3.0
-    y_low: float = -3.0
+    frame_sample: int = 1
+    x_high: float = 50.0
+    x_low: float = -50.0
+    y_high: float = 4.0
+    y_low: float = -4.0
     z_high: float = 2.0
-    z_low: float = 0
-    time_high: float = 7.1
-    time_low: float = 4.9
+    z_low: float = 0.0
+    time_high: float = np.inf
+    time_low: float = -1 * np.inf
     temp_high: float = 1727.0
     temp_low: float = 300.0
     
+    #frame_sample: int = 1
     #x_high: float = np.inf
     #x_low: float = -1 * np.inf
     #y_high: float = np.inf
     #y_low: float = -1 * np.inf
     #z_high: float = np.inf
-    #z_low: float = 0
+    #z_low: float = 0.0
     #z_low: float = -1 * np.inf
+    #time_high: float = np.inf
+    #time_low: float = -1 * np.inf
+    #temp_high: float = 1727.0
+    #temp_low: float = 300.0
     
-    hdf5_filepath: PathType = pathlib.Path(".", "hdfs", "test_old_2.hdf5")
+    hdf5_filepath: PathType = pathlib.Path("C:\\", "Users", "ch3136", "Testing", "hdfs", "PAWv13A.hdf5")
     hdf5_file: h5py.File
     with h5py.File(hdf5_filepath, "r") as hdf5_file:
         coords: NDArrayType = hdf5_file["node_coords"][:]
-        
+
     node_coords: DataFrameType = pd.DataFrame(data=coords, columns=["Node Labels", "X", "Y", "Z"]).astype({"Node Labels": int})
-    
+
     bounded_node_coords: DataFrameType = node_coords[
         (node_coords["X"] >= x_low)
         & (node_coords["X"] <= x_high)
@@ -73,31 +78,32 @@ def main() -> None:
         & (node_coords["Z"] >= z_low)
         & (node_coords["Z"] <= z_high)
     ]
-   
+
     node: int
     args: list[tuple[PathType, int, int, float, float, float]] = [(hdf5_filepath, node - 1, frame_sample, bounded_node_coords[bounded_node_coords["Node Labels"] == node]["X"], bounded_node_coords[bounded_node_coords["Node Labels"] == node]["Y"], bounded_node_coords[bounded_node_coords["Node Labels"] == node]["Z"]) for node in bounded_node_coords["Node Labels"]]
-    
+
     pool: PoolType
     with multiprocessing.Pool() as pool:
         results: list[DataFrameType] = pool.starmap(extract, args)
         
     target_nodes: DataFrameType = pd.concat(results)
+
     target_nodes = target_nodes[
         (target_nodes["Time"] >= time_low) & (target_nodes["Time"] <= time_high)
     ]
     
     dims_columns: set[str] = {"X", "Y", "Z"}
     time: float
-    for time in target_nodes["Time"].unique():
+    for time in target_nodes["Time"].unique().sort_values():
+        print(time)
         plotter: pv.Plotter = pv.Plotter(window_size=(1920, 1080), lighting="three lights")
         instance_nodes: DataFrameType = target_nodes[target_nodes["Time"] == time]
-        instance_nodes = instance_nodes[instance_nodes["Temp"] >= temp_high]
+        #instance_nodes = instance_nodes[instance_nodes["Temp"] >= temp_high]
         points: pv.PolyData = pv.PolyData(instance_nodes.drop(columns=list(set(target_nodes.columns.values.tolist()) - dims_columns)).to_numpy())
         points["Temp"] = instance_nodes["Temp"].to_numpy()
-        x_min, x_max, y_min, y_max, z_min, z_max = points.bounds
         mesh = points.delaunay_3d()
         plotter.add_mesh(mesh, scalars="Temp", cmap=pv.LookupTable(cmap="turbo", scalar_range=(temp_low, temp_high), above_range_color=(0.75, 0.75, 0.75, 1.0)))
-        plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#000000", axes_ranges=[x_min, x_max, y_min, y_max, z_min, z_max])
+        plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#000000", axes_ranges=points.bounds)
         
         plotter.show()
     

@@ -23,9 +23,11 @@ The output will be the path to a newly created .hdf5 file.
 
 import os
 import pickle
+from shutil import rmtree
 from pathlib import Path
 from subprocess import run
 from typing import TypeAlias, Union, TextIO
+from npz_to_hdf import convert_npz_to_hdf
 
 
 # Global Type Aliases for this file
@@ -81,6 +83,11 @@ def convert_odb_to_hdf(
         "odb_to_npz_conversion.pickle"
     )
 
+    npz_result_path: PathLikeType = Path(
+        Path.cwd(),
+        "npz_path.pickle"
+    )
+
     odb_to_npz_pickle_input_dict: dict[str, Union[list[str], list[int], None]]
     odb_to_npz_pickle_input_dict = {
         "nodesets": nodesets,
@@ -96,14 +103,28 @@ def convert_odb_to_hdf(
         "python",
         odb_to_npz_script_path,
         odb_path,
-        odb_to_npz_conversion_pickle_path
+        odb_to_npz_conversion_pickle_path,
+        npz_result_path
         ]
 
-    result_dir: PathLikeType = run(odb_convert_args, shell=True).stdout
-    print(result_dir)
+    run(odb_convert_args, shell=True)
+
+    result_file: TextIO
+    result_dir: PathLikeType
+    with open(npz_result_path, "rb") as result_file:
+        result_dir = Path(pickle.load(result_file))
+
+    Path.unlink(npz_result_path)
+
+    hdf_path = odb_path.parent.parent / "hdfs" / f"{odb_path.stem}.hdf5"
+
+    convert_npz_to_hdf(hdf_path, result_dir)
+
+    rmtree(result_dir)
+
 
 if __name__ == "__main__":
-    path: PathLikeType = Path("C:/", "users", "ch3136", "testing", "odbs", "v3_05mm_i0_01_T_coord.odb")
-    print(path, path.exists())
+    odb_file: str = "v3_05mm_i0_01_T_coord.odb"
+    path: PathLikeType = Path("C:/", "users", "ch3136", "testing", "odbs", odb_file)
     if path.exists():
         convert_odb_to_hdf(path)
