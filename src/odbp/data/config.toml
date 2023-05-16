@@ -106,9 +106,6 @@ high_time = +inf
 
 #####
 
-# In general, don't set mesh_seed_size or time_sample with these files
-# If you are creating a .hdf5 file from a .odb,
-# you can pass in the mesh_seed_size in an input file.
 # A default time sample of 1 works, but should almost always be overwritten
 # Otherwise, you should rely on the corresponding config file with the .hdf5
 
@@ -117,10 +114,6 @@ high_time = +inf
 # time sampling interval (N for "extract every Nth frame")
 # Default value of 1, but expect this to almost always be overwritten
 time_sample = 1
-
-# mesh seed size with which the .odb was generated
-# Not set by default. Enter a value and uncomment to pass a default value
-# mesh_seed_size =
 
 #####
 

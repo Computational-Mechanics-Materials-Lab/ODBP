@@ -65,7 +65,6 @@ class Odb:
         self.low_temp: float
 
         self.time_sample: int
-        self.mesh_seed_size: float
 
         self.abaqus_program: str
 
@@ -76,12 +75,6 @@ class Odb:
 
         self.out_nodes: Any
         self.out_nodes_low_time: Any
-
-
-    def set_mesh_seed_size(self, seed: float) -> None:
-        if not isinstance(seed, float):
-            seed = float(seed)
-        self.mesh_seed_size: float = seed
 
 
     def set_meltpoint(self, meltpoint: float) -> None:
@@ -261,8 +254,6 @@ class Odb:
         config: dict[str, Union[float, str]] = dict()
         if hasattr(self, "hdf_file_path"):
             config["hdf_file_path"] = self.hdf_file_path
-        if hasattr(self, "mesh_seed_size"):
-            config["mesh_seed_size"] = self.mesh_seed_size
         if hasattr(self, "meltpoint"):
             config["meltpoint"] = self.meltpoint
         if hasattr(self, "low_temp"):
@@ -285,10 +276,6 @@ class Odb:
         #if not (hasattr(self, "time_low") and hasattr(self, "time_high")):
         #    raise TimeNotSetError
 
-        ## Ensure the mesh seed size is set
-        #if not hasattr(self, "mesh_seed_size"):
-        #    raise SeedNotSetError
-        
         ## Ensure the hdf file is set
         #if not hasattr(self, "hdf_file_path"):
         #    raise HDFNotSetError

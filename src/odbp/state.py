@@ -56,10 +56,6 @@ class CLIOptions():
         self.convert_help: str = "Convert a selected .odb file to a .hdf5 file"
         self.convert_options_formatted: str = ", ".join(self.convert_options)
 
-        self.seed_options: list[str] = ["seed", "mesh"]
-        self.seed_help: str = "Set the Mesh Seed Size"
-        self.seed_options_formatted: str = ", ".join(self.seed_options)
-
         self.extrema_options: list[str] = ["extrema", "range"]
         self.extrema_help: str = "Set the upper and lower x, y, and z bounds for plotting"
         self.extrema_options_formatted: str = ", ".join(self.extrema_options)
@@ -124,7 +120,6 @@ class CLIOptions():
                 len(self.quit_options_formatted),
                 len(self.select_options_formatted),
                 len(self.convert_options_formatted),
-                len(self.seed_options_formatted),
                 len(self.extrema_options_formatted),
                 len(self.time_options_formatted),
                 len(self.time_sample_options_formatted),
@@ -146,7 +141,6 @@ class CLIOptions():
 {self.quit_options_formatted.ljust(self.longest_len) } -- {self.quit_help}
 {self.select_options_formatted.ljust(self.longest_len)} -- {self.select_help}
 {self.convert_options_formatted.ljust(self.longest_len)} -- {self.convert_help}
-{self.seed_options_formatted.ljust(self.longest_len)} -- {self.seed_help}
 {self.extrema_options_formatted.ljust(self.longest_len)} -- {self.extrema_help}
 {self.time_options_formatted.ljust(self.longest_len)} -- {self.time_help}
 {self.time_sample_options_formatted.ljust(self.longest_len)} -- {self.time_sample_help}
@@ -183,7 +177,6 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
             "Temperature Range": f"{state.low_temp if hasattr(state, 'low_temp') else 'not set'} to {state.meltpoint if hasattr(state, 'meltpoint') else 'not set'}",
         },
         {
-            "Seed Size of the Mesh": f"{state.mesh_seed_size if hasattr(state, 'mesh_seed_size') else 'not set'}",
             "Time Sample of the Mesh": f"{state.time_sample if hasattr(state, 'time_sample') else 'not set'}",
         },
         {
@@ -247,7 +240,6 @@ def process_input() -> "Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]":
     parser.add_argument("-o", "--odb", help="Path to the desired .odb file")
     parser.add_argument("-m", "--meltpoint", help="Melting Point of the Mesh")
     parser.add_argument("-l", "--low-temp", help="Temperature lower bound, defaults to 300 K")
-    parser.add_argument("-S", "--mesh-seed-size", help="Mesh seed size of the .odb file")
     parser.add_argument("-t", "--time-sample", help="Time-sample value (N for every Nth frame you extracted). Defaults to 1")
 
     parser.add_argument("-H", "--hdf", help="Path to desired .hdf5 file")
@@ -464,9 +456,6 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         if "low_temp" in settings_dict:
             state.set_low_temp(settings_dict["low_temp"])
 
-        if "mesh_seed_size" in settings_dict:
-            state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
-
         if "time_sample" in settings_dict:
             state.set_time_sample(settings_dict["time_sample"])
 
@@ -486,7 +475,6 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
         # If none of these values are set, read as many as are available out of the .toml config file
         # Otherwise, the file must have already been read
-        # if not hasattr(state, "meltpoint") and not hasattr(state, "low_temp") and not hasattr(state, "mesh_seed_size") and not hasattr(state, "time_sample"):
 
         # Search for the stored toml values for this hdf
         config: Union[dict[str, Any], None] = None
@@ -507,11 +495,6 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         elif "low_temp" in settings_dict:
             state.set_low_temp(settings_dict["low_temp"])
 
-        if config is not None and "mesh_seed_size" in config:
-            state.set_mesh_seed_size(config["mesh_seed_size"])
-        elif "mesh_seed_size" in settings_dict:
-            state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
-
         if config is not None and "time_sample" in config:
             state.set_time_sample(config["time_sample"])
         elif "time_sample" in settings_dict:
@@ -524,9 +507,6 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
 
         if "low_temp" in settings_dict:
             state.set_low_temp(settings_dict["low_temp"])
-
-        if "mesh_seed_size" in settings_dict:
-            state.set_mesh_seed_size(settings_dict["mesh_seed_size"])
 
         if "time_sample" in settings_dict:
             state.set_time_sample(settings_dict["time_sample"])

@@ -99,27 +99,14 @@ class OdbVisualizer(Odb):
             points["Temp"] = selected_nodes["Temp"].to_numpy()
             surface: Any = points.delaunay_2d()
 
-            # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
-            #surface = surface.rotate_z(180)
-
-            plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (kelvins)", "font_family": "courier", "color": "#000000", "fmt": "%.2f", "position_y": 0})
-            dims_columns: set[str] = set(["X", "Y", "Z"])
-            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - dims_columns)).to_numpy())
-            points["Temp"] = selected_nodes["Temp"].to_numpy()
-            surface: Any = points.delaunay_2d()
-
-            # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
-            #surface = surface.rotate_z(180)
+            plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (Kelvin)", "font_family": "courier", "color": "#000000", "fmt": "%.2f", "position_y": 0})
 
         plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#000000", axes_ranges=[self.x.low, self.x.high, self.y.low, self.y.high, self.z.low, self.z.high])
         plotter.set_background(color="#FFFFFF")
 
-        #plotter.camera.focal_point = ((self.x.high + self.x.low)/2, (self.y.high + self.y.low)/2, (self.z.high + self.z.low)/2)
         plotter.camera.elevation = 0
         plotter.camera.azimuth = 270
         plotter.camera.roll = 300
         plotter.camera_set = True
-        #plotter.disable_shadows()
-        #plotter.add_light(pv.Light(light_type="headlight"))
 
         return plotter

@@ -56,9 +56,6 @@ def cli() -> None:
             elif user_input in cli_options.convert_options:
                 convert(state)
 
-            elif user_input in cli_options.seed_options:
-                set_seed_size(state)
-
             elif user_input in cli_options.extrema_options:
                 set_extrema(state)
 
@@ -186,7 +183,6 @@ def convert(state: OdbVisualizer) -> None:
 
 
 def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
-    mesh_seed_size: Union[float, None] = None
     meltpoint: Union[float, None] = None
     low_temp: Union[float, None] = None
     time_sample: Union[int, None] = None
@@ -200,9 +196,6 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
             if config["hdf_file_path"] != state.hdf_file_path:
                 print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
 
-        if "mesh_seed_size" in config:
-            mesh_seed_size = config["mesh_seed_size"]
-
         if "meltpoint" in config:
             meltpoint = config["meltpoint"]
 
@@ -211,18 +204,6 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
 
         if "time_sample" in config:
             time_sample = config["time_sample"]
-
-        # Manage mesh_seed_size
-        if mesh_seed_size is not None:
-            print(f"Setting Mesh Seed Size to stored value of {mesh_seed_size}")
-            state.set_mesh_seed_size(mesh_seed_size)
-
-        elif hasattr(state, "mesh_seed_size"):
-            print(f"Setting Default Seed Size of the Mesh to given value of {state.mesh_seed_size}")
-
-        else: # Neither the stored value or the given value exist
-            print("No Mesh Seed Size found. You must set it:")
-            set_seed_size(state)
 
         # Manage meltpoint
         if meltpoint is not None:
@@ -260,11 +241,7 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
             print("No Time Sample found. You must set it:")
             set_time_sample(state)
 
-    if not all((hasattr(state, "mesh_seed_size"), hasattr(state, "meltpoint"), hasattr(state, "low_temp"), hasattr(state, "time_sample"))):
-
-        # here, we need to set at least one of the things
-        if mesh_seed_size is None:
-            set_seed_size(state)
+    if not all(hasattr(state, "meltpoint"), hasattr(state, "low_temp"), hasattr(state, "time_sample")):
 
         if meltpoint is None:
             set_meltpoint(state)
@@ -417,21 +394,6 @@ def set_extrema(state: OdbVisualizer):
             state.set_z_high(z_high)
             print(f"Spatial Dimensions Updated to:\nX from {state.x.low} to {state.x.high}\nY from {state.y.low} to {state.y.high}\nZ from {state.z.low} to {state.z.high}")
             break
-
-
-def set_seed_size(state: OdbVisualizer) -> None:
-    print("INFO: You must enter the Mesh Seed Size with which the .hdf5 was generated")
-    while True:
-        try:
-            seed: float = float(input("Enter the Default Seed Size of the Mesh: "))
-
-            if confirm(f"Mesh Seed Size: {seed}", "Is this correct", "yes"):
-                state.set_mesh_seed_size(seed)
-                print(f"Mesh Seed Size set to: {state.mesh_seed_size}")
-                break
-
-        except ValueError:
-            print("Error, Default Seed Size must be a number")
 
 
 def set_meltpoint(state: OdbVisualizer) -> None:

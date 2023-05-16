@@ -1,39 +1,80 @@
-# Author: CJ Nguyen
-# Heavily based off of example ODB extraction script from the CMML Github written by Will Furr and Matthew Dantin
-# This script takes an ODB and converts the nodeset data to npz files
-# The data that is created is the following
-# * npzs containing temperatures for each node at every frame, one dataframe per step of the program
-# * npz containing coordinate data for each node, organized by nodelabel - xyz coordinate
-# * npz containing the starting time of each frame
+#!/usr/bin/env python
 
-# Usage: python <script name> <odb file name> <inp file name>
-# Where <inp file name> is the .inp file used to generate the ODB (needed for the timing of each frame)
-# NOTE: This script makes three major assumptions:
-# * The Odb has a part named "PART-1-1"
-# * The part's first nodeset is the nodeset that references all nodes
-# * The first frame of the sequence outputs the coordinates of all nodes
-# Without these assumptions, the script will have unexpected behavior.
+"""
+ODBPlotter odb_to_npz.py
 
-# This script can be configured by having a file of name `odb_to_npz_config.json` in the working directory.
-# The format of this file is specified in the readme.
+ODBPlotter
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+MIT License (c) 2023
+
+This is a Python 2 file which implements an Abaqus Python interface to
+convert data from within a .odb file into a hierarchical directory of .npz
+compressed numpy arrays. This is used to translate .odb data from the Python 2
+environment to a modern Python 3 environment
+
+Originally authored by CMML member CJ Nguyen, based before on extraction
+script written by CMML members Will Furr and Matt Dantin
+"""
+
 
 import os
-from odbAccess import openOdb, version
-from abaqusConstants import *
+import pickle
 import numpy as np
 import argparse
-from multiprocessing import Process
+import multiprocessing
+from odbAccess import openOdb, version
+from abaqusConstants import *
+from itertools import islice
 
 
-def main(odb_path, frame_step, nodeset):
+def main():
+    """
+    Helper function to parse command-line arguments from subprocess.run
+    and format these values to correctly convert the .odb to the .npz files.
+    This reads the pickle file passed by file path and passes these values
+    to the convert_odb_to_npz() method
+    """
 
+    # Parse the subprocess input args
+    input_args = "input args"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(input_args, nargs="*")
+    odb_path, pickle_path = vars(parser.parse_args())[input_args]
+
+    # Try our best to manage Python 2 file handling
+    pickle_file = open(pickle_path, "rb")
+    try:
+        data_to_extract = pickle.load(pickle_file)
+
+    finally:
+        pickle_file.close()
+
+    # Now we can remove the file
+    os.remove(pickle_path)
+
+    nodesets = data_to_extract["nodesets"]
+    frames = data_to_extract["frames"]
+
+    return convert_odb_to_npz(odb_path, nodesets, frames)
+
+
+def convert_odb_to_npz(odb_path, nodesets, frames):
+    """
+    Based on the 4 lists given, convert the .odb data to .npz files
+    odb_path: str path to the .odb file
+    nodes: list[int] which nodes to convert (default to all)
+    parts: list[str] which parts to convert (default to no specific part)
+    nodesets: list[str] which nodesets to convert (default to the first
+    nodeset)
+    frames: list[int] which frames to convert (default to all)
+
+    return the name of the directory of .npz files created
+    """
+
+    # Create the results directory
     parent_dir = os.path.join(os.getcwd(), "tmp_npz")
     if not os.path.exists(parent_dir):
         os.mkdir(parent_dir)
-
-    #for part in parts:
-    # Create directory to store npzs
-    coord_file = os.path.join(parent_dir, "node_coords.npz")
 
     temps_dir = os.path.join(parent_dir, "temps")
     if not os.path.exists(temps_dir):
@@ -47,188 +88,119 @@ def main(odb_path, frame_step, nodeset):
 
     steps = odb.steps
 
-    base_times = [(step_key, step_val.totalTime) for step_key, step_val in steps.items()]
+    base_times = [
+        (step_key, step_val.totalTime) for step_key, step_val in steps.items()
+        ]
     
     assembly = odb.rootAssembly
     nodeset_keys = assembly.nodeSets.keys()
-    if nodeset not in nodeset_keys:
-        raise ValueError("'{0}' is not a valid nodeset key. Possible values in this .odb are {1}".format(nodeset, nodeset_keys))
-
-    odb.close()
-
-    if version == str(2022):
-        read_coords_procs = list()
-        for step_key, _ in base_times:
-            p = Process(target=read_frame_coords, args=(step_key, filename, frame_step, coord_file, nodeset))
-            p.start()
-            read_coords_procs.append(p)
-
-        for p in read_coords_procs:
-            p.join()
-
-
-        read_step_procs = list()
-        for step_key, base_time in base_times:
-            p = Process(target=read_step_data, args=(temps_dir, time_dir, step_key, base_time, frame_step, filename, nodeset))
-            p.start()
-            read_step_procs.append(p)
-
-        for p in read_step_procs:
-            p.join()
-            
-        """elif version == str(2019):
-        read_coords_procs = list()
-        for step_key, _ in base_times:
-            p = Process(target=read_frame_coords2019, args=(step_key, filename, frame_step, coord_file, nodeset))
-            p.start()
-            read_coords_procs.append(p)
-            
-        for p in read_coords_procs:
-            p.join()
-
-        read_step_procs = list()
-        for step_key, base_time in base_times:
-            p = Process(target=read_step_data2019, args=(temps_dir, time_dir, step_key, base_time, frame_step, filename, nodeset))
-            p.start()
-            read_step_procs.append(p)
-            
-        for p in read_step_procs:
-            p.join()"""
-            
+    if nodesets is None:
+        nodesets = nodeset_keys
     else:
-        print("Unsupported Abaqus Version")
+        for nodeset in nodesets:
+            if nodeset not in nodeset_keys:
+                raise ValueError(
+                "'{0}' is not a valid nodeset key.\
+    Possible values in this .odb are {1}"
+                .format(nodeset, nodeset_keys)
+                )
 
-
-def read_nodeset_items(nodeset_dir, nodeset_name, filename, part):
-    odb = openOdb(filename, readOnly=True)
-    assembly = odb.rootAssembly
-    nodesets = assembly.instances[part].nodeSets # returns a dictionary of ODB objects
-    out_nodeset_name = os.path.join(nodeset_dir, nodeset_name)
-    out_nodeset_name += ".npz"
-    np.savez_compressed(out_nodeset_name, np.array([node.label for node in nodesets[nodeset_name].nodes]))
     odb.close()
 
+    for nodeset in nodesets:
+        for step_key, base_time in base_times:
+            coord_file = os.path.join(parent_dir, "node_coords_{}.npz".format(nodeset))
+            read_nodeset_coords(odb_path, nodeset, frames, coord_file, step_key)
+            read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset)
 
-def read_step_data(temps_dir, time_dir, step_name, base_time, frame_step, filename, nodeset):
+    return parent_dir
 
-    odb = openOdb(filename, readOnly=True)
+
+def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset):
+    odb = openOdb(odb_path, readOnly=True)
     steps = odb.steps
-    assembly = odb.rootAssembly
 
-    curr_step_dir = os.path.join(temps_dir, step_name)
+    curr_step_dir = os.path.join(temps_dir, step_key)
     if not os.path.exists(curr_step_dir):
         os.mkdir(curr_step_dir)
 
-    frame_times = list()
-    step_size = len(steps[step_name].frames)
-    for num in range(0, step_size, frame_step):
-        frame_pct = ((num + 1) * 100) / step_size
-        print("\tGetting node temperatures for frame {0}, {1}% Complete".format(num, frame_pct))
-        frame = steps[step_name].frames[num]
-        field = frame.fieldOutputs['NT11'].getSubset(region=assembly.nodeSets[nodeset])
+    manager = multiprocessing.Manager()
+    frame_times = manager.list()
+    #frame_times = list()
+    idx_list = [i for i in range(len(steps[step_key].frames))]
+    idx_list_len = len(idx_list)
+    num_cpus = multiprocessing.cpu_count()
+    # TODO: what if the length isn't divisible by the number of processors (is it now?)
+    final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, int(idx_list_len / num_cpus))]
+    odb.close()
+
+    temp_procs = list()
+    for idx_list in final_idx_list:
+        p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset))
+        p.start()
+        temp_procs.append(p)
+
+        #read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset)
+
+    for p in temp_procs:
+        p.join()
+
+    np.savez_compressed("{}.npz".format(os.path.join(time_dir, step_key)), np.array(frame_times))
+
+
+def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset):
+
+    odb = openOdb(odb_path, readOnly=True)
+    steps = odb.steps
+    assembly = odb.rootAssembly
+
+    for idx in idx_list:
+        if frames is not None and idx not in frames:
+            continue
+
+        print("\tReading Temperature Data for Frame {}".format(idx))
+
+        
+        frame = steps[step_key].frames[idx]
+
+        field = frame.fieldOutputs["NT11"].getSubset(region=assembly.nodeSets[nodeset])
         frame_times.append(float(format(round(frame.frameValue + base_time, 5), ".2f")))
         node_temps = list()
         for item in field.values:
-            # e.g. for node in values
             temp = item.data
             node_temps.append(temp)
-        np.savez_compressed(os.path.join(curr_step_dir, "frame_{}".format(num)), np.array(node_temps))
-    np.savez_compressed("{}.npz".format(os.path.join(time_dir, step_name)), np.array(frame_times))
+
+        np.savez_compressed(os.path.join(curr_step_dir, "frame_{}".format(idx)))
 
     odb.close()
 
 
-def read_frame_coords(step_key, filename, frame_step, coord_file, nodeset):
-    odb = openOdb(filename, readOnly=True)
-    steps = odb.steps
+def read_nodeset_coords(odb_path, nodeset, frames, coord_file, step_key):
+    odb = openOdb(odb_path, readOnly=True)
     assembly = odb.rootAssembly
-    #nodesets = assembly.instances[config["first_part"]].nodeSets # returns a dictionary of ODB objects
-    frame_list = steps[step_key].frames
-    frame_size = len(frame_list)
-    for num in range(0, frame_size, frame_step):
-        frame = frame_list[num]
-        # The below reference pulls from the nodeset representing all nodes
-        coords = frame.fieldOutputs['COORD'].getSubset(region=assembly.nodeSets[nodeset])
-        frame_pct = ((num + 1) * 100) / frame_size
-        print("\tGetting node coordinates for frame {0}, {1}% Complete".format(num, frame_pct))
+    steps = odb.steps
 
-        coord_arr = list()
-        for item in coords.values:
-            node = item.nodeLabel
-            coord = item.data
-            xyz = [node]
-            for axis in coord:
-                xyz.append(axis)
-            coord_arr.append(xyz)
-        np.savez_compressed(coord_file, np.array(coord_arr))
+    if frames is None:
+        frame = steps[step_key].frames[0]
+    else:
+        frame = steps[step_key].frames[frames[0]]
+
+    coords = frame.fieldOutputs['COORD'].getSubset(region=assembly.nodeSets[nodeset])
+    print("\tGetting node coordinates")
+
+    results_list = list()
+    for item in coords.values:
+        node = item.nodeLabel
+        coord = item.data
+        xyz = [node]
+        for axis in coord:
+            xyz.append(axis)
+        results_list.append(xyz)
+
+    np.savez_compressed(coord_file, np.array(results_list))
 
     odb.close()
 
-
-"""def read_frame_coords2019(step_key, filename, frame_step, coord_file, nodeset):
-    odb = openOdb(filename, readOnly=True)
-    steps = odb.steps
-    assembly = odb.rootAssembly
-    #nodesets = assembly.instances[config["first_part"]].nodeSets # returns a dictionary of ODB objects
-    frame_list = steps[step_key].frames
-    frame_size = len(frame_list)
-    print(frame_size)
-    for num in range(0, frame_size, frame_step):
-        frame = frame_list[num]
-        # The below reference pulls from the nodeset representing all nodes
-        coords = frame.fieldOutputs['COORD'].getSubset(region=assembly.nodeSets[nodeset])
-        frame_pct = ((num + 1) * 100) / frame_size
-        print("\tGetting node coordinates for frame {0}, {1}% Complete".format(num, frame_pct))
-
-        coord_arr = list()
-        for item in coords.values:
-            node = item.nodeLabel
-            coord = item.data
-            xyz = [node]
-            for axis in coord:
-                xyz.append(axis)
-            coord_arr.append(xyz)
-        np.savez(coord_file, np.array(coord_arr))
-
-    odb.close()"""
-    
-    
-"""def read_step_data2019(temps_dir, time_dir, step_name, base_time, frame_step, filename, nodeset):
-
-    odb = openOdb(filename, readOnly=True)
-    steps = odb.steps
-    assembly = odb.rootAssembly
-
-    curr_step_dir = os.path.join(temps_dir, step_name)
-    if not os.path.exists(curr_step_dir):
-        os.mkdir(curr_step_dir)
-
-    frame_times = list()
-    step_size = len(steps[step_name].frames)
-    for num in range(0, step_size, frame_step):
-        frame_pct = ((num + 1) * 100) / step_size
-        print("\tGetting node temperatures for frame {0}, {1}% Complete".format(num, frame_pct))
-        frame = steps[step_name].frames[num]
-        field = frame.fieldOutputs['NT11'].getSubset(region=assembly.nodeSets[nodeset])
-        frame_times.append(float(format(round(frame.frameValue + base_time, 5), ".2f")))
-        node_temps = list()
-        for item in field.values:
-            # e.g. for node in values
-            temp = item.data
-            node_temps.append(temp)
-
-        np.savez(os.path.join(curr_step_dir, "frame_{}".format(num)), np.array(node_temps))
-
-    np.savez("{}.npz".format(os.path.join(time_dir, step_name)), np.array(frame_times))
-
-    odb.close()"""
-    
     
 if __name__ == "__main__":
-    input_args = "input args"
-    parser = argparse.ArgumentParser()
-    parser.add_argument(input_args, nargs="*")
-    filename, frame_step, nodeset = vars(parser.parse_args())[input_args]
-    frame_step = int(frame_step)
-
-    main(filename, frame_step, nodeset)
+    main()
