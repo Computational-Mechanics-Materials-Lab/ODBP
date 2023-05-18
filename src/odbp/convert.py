@@ -21,34 +21,29 @@ The output will be the path to a newly created .hdf5 file.
 """
 
 
-import os
 import pickle
+from os import PathLike
 from shutil import rmtree
 from pathlib import Path
 from subprocess import run
-from typing import TypeAlias, Union, TextIO
+from typing import Union, TextIO
 from npz_to_hdf import convert_npz_to_hdf
-
-
-# Global Type Aliases for this file
-PathLikeType: TypeAlias = Union[str, os.PathLike]
-NullableIntListUnion: TypeAlias = Union[None, list[int]]
-NullableStrListUnion: TypeAlias = Union[None, list[str]]
+from .util import NullableIntListUnion, NullableStrListUnion
 
 
 def convert_odb_to_hdf(
-    odb_path: PathLikeType,
+    odb_path: PathLike,
     abaqus_executable: str = "abaqus",
     nodesets: NullableStrListUnion = None,
     frames: NullableIntListUnion = None
-    ) -> PathLikeType:
+    ) -> PathLike:
     """
     convert_odb_to_hdf(
-        odb_path: PathLikeType,
+        odb_path: PathLike,
         abaqus_executable: str = "abaqus",
         nodesets: NullableStrListUnion = None,
         frames: NullableIntListUnion = None
-        ) -> PathLikeType
+        ) -> PathLike
 
     abaqus_executable will be the string name of the command-line executable
     version of abaqus being used. By default, "abaqus"
@@ -69,7 +64,7 @@ def convert_odb_to_hdf(
 
     # Normally we'd use relative imports, but that doesn't work with a
     # Python 2 file, so instead we use the absolute path to that Python 2 file
-    odb_to_npz_script_path: PathLikeType = Path(
+    odb_to_npz_script_path: PathLike = Path(
         Path(__file__).parent,
         "py2_scripts",
         "odb_to_npz.py"
@@ -78,12 +73,12 @@ def convert_odb_to_hdf(
     # The nature of sending these values to a Python 2 subprocess necessitates
     # that non-string arguments (i.e. None or lists of ints) be pickled with
     # Pickle protocol 2 and sent to the subprocess that way.
-    odb_to_npz_conversion_pickle_path: PathLikeType = Path(
+    odb_to_npz_conversion_pickle_path: PathLike = Path(
         Path.cwd(),
         "odb_to_npz_conversion.pickle"
     )
 
-    npz_result_path: PathLikeType = Path(
+    npz_result_path: PathLike = Path(
         Path.cwd(),
         "npz_path.pickle"
     )
@@ -98,7 +93,7 @@ def convert_odb_to_hdf(
     with open(odb_to_npz_conversion_pickle_path, "wb") as pickle_file:
         pickle.dump(odb_to_npz_pickle_input_dict, pickle_file, protocol=2)
 
-    odb_convert_args: list[PathLikeType] = [
+    odb_convert_args: list[Union[PathLike, str]] = [
         abaqus_executable,
         "python",
         odb_to_npz_script_path,
@@ -110,7 +105,7 @@ def convert_odb_to_hdf(
     run(odb_convert_args, shell=True)
 
     result_file: TextIO
-    result_dir: PathLikeType
+    result_dir: PathLike
     with open(npz_result_path, "rb") as result_file:
         result_dir = Path(pickle.load(result_file))
 
@@ -125,6 +120,6 @@ def convert_odb_to_hdf(
 
 if __name__ == "__main__":
     odb_file: str = "v3_05mm_i0_01_T_coord.odb"
-    path: PathLikeType = Path("C:/", "users", "ch3136", "testing", "odbs", odb_file)
+    path: PathLike = Path("C:/", "users", "ch3136", "testing", "odbs", odb_file)
     if path.exists():
         convert_odb_to_hdf(path)

@@ -4,10 +4,29 @@
 Utility methods for odb_plotter
 """
 
-from typing import Union
+from typing import Union, TypeAlias
+import h5py
+import numpy as np
+import pandas as pd
+import multiprocessing
 
 
-def confirm(message: str, confirmation: str, default: "Union[None, str]" = None) -> bool:
+###### Type Aliases for this Project
+
+# Lists that can be None, used for defaults of lists of frames or nodesets
+NullableIntListUnion: TypeAlias = Union[None, list[int]]
+NullableStrListUnion: TypeAlias = Union[None, list[str]]
+
+# Types of large data-science types
+NDArrayType: TypeAlias = np.ndarray
+DataFrameType: TypeAlias = pd.core.frame.DataFrame
+H5PYGroupType: TypeAlias = h5py._hl.group.Group
+H5PYFileType: TypeAlias = h5py.File
+MultiprocessingPoolType: TypeAlias = multiprocessing.Pool
+#####
+
+
+def confirm(message: str, confirmation: str, default: Union[None, str] = None) -> bool:
     yes_vals: Union[tuple[str, str], tuple[str, str, str]] = ("yes", "y")
     no_vals: Union[tuple[str, str], tuple[str, str, str]] = ("no", "n")
     if isinstance(default, str):

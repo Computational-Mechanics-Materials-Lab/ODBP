@@ -1,42 +1,97 @@
-# Author: CJ Nguyen
-#
+"""
+ODBPlotter npz_to_hdf.py
+ODBPlotter
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+MIT License (c) 2023
+
+This file provides tools to read .hdf5 files created by the ODBPlotter
+converter into pandas dataframes
+
+Originally written by CMML Member CJ Nguyen
+"""
 
 import h5py
 import numpy as np
 import pandas as pd
-from typing import Any
+from os import PathLike
+from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType
 
 
-def get_coords(hdf5_filename: str) -> Any:
-    hdf5_file: h5py.File
-    with h5py.File(hdf5_filename, "r") as hdf5_file:
-        coords: Any = hdf5_file["node_coords"][:]
-        # TODO type hints
-        node_labels, x, y, z = np.transpose(coords)
-    return pd.DataFrame.from_dict({"Node Labels": node_labels.astype(int), "X": x, "Y": y, "Z": z})
+def get_node_coords(hdf5_path: PathLike) -> DataFrameType:
+    """
+    get_node_coords(hdf5_path: PathLike) -> DataFrameType
+    return a data frame with nodes by integer index and floating point
+    3-dimensional coordinates.
+    """
+
+    try:
+        hdf5_file: H5PYFileType
+        with h5py.File(hdf5_path) as hdf5_file:
+            coords: DataFrameType = hdf5_file["node_coords"][:]
+    
+    except (FileNotFoundError, OSError):
+        raise "Error accessing .hdf5 file"
+
+    except KeyError:
+        raise f"{hdf5_path} file does not include node coordinates or they\
+            are not keyed by 'node_coords'"
+    
+    else:
+        return pd.DataFrame(
+            data=coords,
+            columns=["Node Labels", "X", "Y", "Z"]
+        ).astype({"Node Labels": int})
 
 
-def read_node_data(hdf5_filename: str, node_label: int, time_sample: int) -> Any:
-    hdf5_file: h5py.File
-    with h5py.File(hdf5_filename, "r") as hdf5_file:
-        coords: Any = hdf5_file["node_coords"][:]
-        node_coords: Any = coords[np.where(coords[:, 0] == node_label)[0][0]][1:]
-        temps: list[float] = list()
-        times: list[int] = list()
-        temp_steps: Any = hdf5_file["temps"]
-        time_steps: Any = hdf5_file["step_frame_times"]
+def get_node_times_temps(
+    hdf5_path: PathLike,
+    node: int,
+    frame_sample: int, # TODO frame_ind
+    x: float,
+    y: float,
+    z: float
+    ) -> DataFrameType:
+    """
+    get_node_times_temps(
+        hdf_path: PathLike,
+        node: int,
+        frame_sample: int
+        x: float,
+        y: float,
+        z: float
+    ) -> DataFrameType
+    Given a path to a .hdf5 file, the label and coodinates of a node, return
+    a dataframe associating the node with its temperatures per frame.
+
+    0.5.0 Currently this still uses the frame_sample value for stepped frames,
+    but this will be updated.
+    """
+
+    hdf5_file: H5PYFileType
+    with h5py.File(hdf5_path) as hdf5_file:
+        temp_steps: H5PYGroupType = hdf5_file["temps"]
+        time_steps: H5PYGroupType = hdf5_file["step_frame_times"]
+        target_len: int = len(temp_steps[list(temp_steps.keys())[0]])
+        temps: NDArrayType = np.zeros(target_len)
+        times: NDArrayType = np.zeros(target_len)
+        xs: NDArrayType = np.full(target_len, x)
+        ys: NDArrayType = np.full(target_len, y)
+        zs: NDArrayType = np.full(target_len, z)
+        
+        step: str
         for step in temp_steps:
-            for frame in temp_steps[step]:
-                # Nodes start at 1
-                temps.append(temp_steps[step][frame][node_label - 1])
-                times.append(time_steps[step][int(frame.replace("frame_", "")) // time_sample])
-        data_dict: dict[str, Any] = {
-                "Node Label": node_label,
-                "X": node_coords[0],
-                "Y": node_coords[1],
-                "Z": node_coords[2],
-                "Temp": temps,
-                "Time": times
-                }
-
-    return pd.DataFrame(data_dict, index=None).sort_values("Time")
+            ind: int
+            frame: str
+            for ind, frame in enumerate(temp_steps[step]):
+                temps[ind] = temp_steps[step][frame][node]
+                times[ind] = time_steps[step][int(
+                    frame.replace("frame_", "")
+                    ) // frame_sample
+                    ] # TODO frame_ind
+    
+    return pd.DataFrame(
+        data=np.vstack(
+            (temps, times, xs, ys, zs), casting="no"
+            ).T, 
+        columns=["Temp", "Time", "X", "Y", "Z"]
+        )

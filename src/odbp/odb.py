@@ -1,153 +1,186 @@
 #!/usr/bin/env python3
 
 """
-odb_plotter base classes. used for storing the state of a .odb file in the
-interactive mode
+ODBPlotter base_odb.py
+ODBPlotter
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+MIT License (c) 2023
+
+Exposes the 
 """
 
-import os
-import tomli_w
 import subprocess
 import shutil
+import pathlib
+import pickle
 
 import numpy as np
 import pandas as pd
 
 from typing import TextIO, Any, Union
 from multiprocessing import Pool
+from os import PathLike
 
-# Needed only for typing, circular import
-#from .state import UserOptions
-from .npz_to_hdf import npz_to_hdf
-from .read_hdf5 import get_coords, read_node_data
+from .base_odb import SpatialODB, ThermalODB, TemporalODB
+from .npz_to_hdf import convert_npz_to_hdf
+from .read_hdf5 import get_node_coords, get_node_times_temps
+from .util import NullableIntListUnion, NullableStrListUnion, DataFrameType
 
 
-class Axis:
-    """
-    Named Axis class, stores extrema, discrete values along the axis
-    Not to be used on its own, only a part of the Odb class
-    """
-    def __init__(self, name: str) -> None:
-        """
-        __init__(self, name: str) -> None
-        
-        """
-        self.name: str = name
-
-        # Setting default values
-        self.low: float
-        self.high: float
-
-class Odb:
+class Odb(SpatialODB, ThermalODB, TemporalODB):
     """
     Stores Data from a .hdf5, implements extractor methods to transfer from .odb to .hdf5
     Implements abilities to resize the dimenisons or timeframe of the data
     """
+
+    __slots__ = (
+        "_odb_path",
+        "_odb_source_dir",
+        "_hdf_path",
+        "_hdf_source_dir",
+        "_abaqus_executable",
+        "_nodesets",
+        "_frames",
+        "_odb_to_npz_script_path",
+        "_odb_to_npz_conversion_pickle_path",
+        "_npz_result_path"
+        )
+
     def __init__(self) -> None:
         """
         """
 
-        self.odb_file_path: str
-        self.hdf_file_path: str
+        self._odb_path: PathLike
+        self._odb_source_dir: Union[PathLike, None]
 
-        self.parts: list[str]
-        self.nodes: dict[str, list[int]]
-        self.nodesets: list[str]
+        self._hdf_path: PathLike
+        self._hdf_source_dir: Union[PathLike, None]
 
-        self.x: Axis = Axis("x")
-        self.y: Axis = Axis("y")
-        self.z: Axis = Axis("z")
+        self._abaqus_executable: str = "abaqus"
 
-        self.time_low: float = 0.0
-        self.time_high: float
+        self._nodesets: NullableStrListUnion = None
+        self._frames: NullableIntListUnion = None
 
-        self.meltpoint: float
-        self.low_temp: float
+        # Hardcoded paths for Python 3 - 2 communication
+        self._odb_to_npz_script_path: PathLike = pathlib.Path(
+            pathlib.Path(__file__).parent,
+            "py2_scripts",
+            "odb_to_npz.py"
+        )
+        self._odb_to_npz_conversion_pickle_path: PathLike = pathlib.Path(
+            pathlib.Path.cwd(),
+            "odb_to_npz_conversion.pickle"
+        )
+        self._npz_result_path: PathLike = pathlib.Path(
+            pathlib.Path.cwd(),
+            "npz_path.pickle"
+        )
 
-        self.time_sample: int
+        # TODO
+        """self._parts: NullableStrListUnion
+        self._nodes: dict[str, list[int]]
+        
+        self._frame_sample: int
 
-        self.abaqus_program: str
-
-        self.hdf_processed: bool = False
-        self.loaded: bool = False
+        self._hdf_processed: bool = False
+        self._loaded: bool = False
 
         self.bounded_nodes: Any
 
         self.out_nodes: Any
-        self.out_nodes_low_time: Any
+        self.out_nodes_low_time: Any"""
 
 
-    def set_meltpoint(self, meltpoint: float) -> None:
-        if not isinstance(meltpoint, float):
-            meltpoint = float(meltpoint)
-        self.meltpoint = meltpoint
+    @property
+    def odb_source_dir(self) -> Union[PathLike, None]:
+        return self._odb_source_dir
+
+    @odb_source_dir.setter
+    def odb_source_dir(self, value: PathLike) -> None:
+        if not isinstance(value, PathLike):
+            value = pathlib.Path(value)
+
+        if not value.exists():
+            raise FileNotFoundError(f"Directory {value} does not exist")
+        
+        self._odb_source_dir = value
+
+    @property
+    def odb_path(self) -> PathLike:
+        return self._odb_path
+
+    
+    @odb_path.setter
+    def odb_path(self, value: PathLike) -> None:
+        if not isinstance(value, PathLike):
+            value = pathlib.Path(value)
+
+        if value.exists():
+            self._odb_path = value
+            return
+
+        if self._odb_source_dir is not None:
+            if (self._odb_source_dir / value).exists():
+                self._odb_path = self.odb_source_dir / value
+                return
+
+        if (pathlib.Path.cwd() / value).exists():
+            self._odb_path = pathlib.Path.cwd() / value
+            return
+
+        raise FileNotFoundError(f"File {value} could not be found")
+
+    @property
+    def hdf_source_dir(self) -> Union[PathLike, None]:
+        return self._hdf_source_dir
+
+    @hdf_source_dir.setter
+    def hdf_source_dir(self, value: PathLike) -> None:
+        if not isinstance(value, PathLike):
+            value = pathlib.Path(value)
+
+        if not value.exists():
+            raise FileNotFoundError(f"Directory {value} does not exist")
+        
+        self._hdf_source_dir = value
+
+    @property
+    def hdf_path(self) -> PathLike:
+        return self._hdf_path
+
+    
+    @hdf_path.setter
+    def hdf_path(self, value: PathLike) -> None:
+        if not isinstance(value, PathLike):
+            value = pathlib.Path(value)
+
+        if value.exists():
+            self._hdf_path = value
+            return
+
+        if self._hdf_source_dir is not None:
+            if (self._hdf_source_dir / value).exists():
+                self._hdf_path = self.hdf_source_dir / value
+                return
+
+        if (pathlib.Path.cwd() / value).exists():
+            self._hdf_path = pathlib.Path.cwd() / value
+            return
+
+        raise FileNotFoundError(f"File {value} could not be found")
 
 
-    def set_low_temp(self, low_temp: float) -> None:
-        if not isinstance(low_temp, float):
-            low_temp = float(low_temp)
-        self.low_temp = low_temp
+    @property
+    def abaqus_executable(self) -> str:
+        return self._abaqus_executable
+    
 
+    @abaqus_executable.setter
+    def abaqus_executable(self, value: str) -> None:
+        self._abaqus_executable = value
 
-    def set_x_high(self, high: float) -> None:
-        if not isinstance(high, float):
-            high = float(high)
-        self.x.high = high
-
-
-    def set_x_low(self, low: float) -> None:
-        if not isinstance(low, float):
-            low = float(low)
-        self.x.low = low
-
-
-    def set_y_high(self, high: float) -> None:
-        if not isinstance(high, float):
-            high = float(high)
-        self.y.high = high
-
-
-    def set_y_low(self, low: float) -> None:
-        if not isinstance(low, float):
-            low = float(low)
-        self.y.low = low
-
-
-    def set_z_high(self, high: float) -> None:
-        if not isinstance(high, float):
-            high = float(high)
-        self.z.high = high
-
-
-    def set_z_low(self, low: float) -> None:
-        if not isinstance(low, float):
-            low = float(low)
-        self.z.low = low
-
-
-    def set_time_high(self, high: float) -> None:
-        if not isinstance(high, float):
-            high = float(high)
-        self.time_high = high
-
-
-    def set_time_low(self, low: float) -> None:
-        if not isinstance(low, float):
-            low = float(low)
-        if low < 0:
-            raise ValueError("Lower Time Bound must not be less than 0")
-        self.time_low = low
-
-
-    def set_time_sample(self, value: int) -> None:
-        if not isinstance(value, int):
-            value = int(value)
-        if value < 1:
-            raise ValueError("Time Sample must be an integer greater than or equal to 1")
-        self.time_sample = value
-
-
-    def set_parts(self, parts: "list[str]") -> None:
+    
+    """def set_parts(self, parts: "list[str]") -> None:
         if not isinstance(parts, list):
             new_list: list[str] = [parts]
             self.parts = new_list
@@ -169,119 +202,57 @@ class Odb:
             self.nodesets = new_list
 
         else:
-            self.nodesets = nodesets
+            self.nodesets = nodesets"""
 
 
-    def set_abaqus(self, abq: str) -> None:
-        self.abaqus_program = abq
-
-
-    def select_odb(self, user_options: Any, given_odb_file_path: str) -> "Union[None, bool]":
-        odb_file_path: str
-        if not os.path.exists(os.path.join(user_options.odb_source_directory, given_odb_file_path)):
-            if not os.path.exists(os.path.join(os.getcwd(), given_odb_file_path)):
-                if not os.path.exists(given_odb_file_path):
-                    return False
-
-                else:
-                    odb_file_path = given_odb_file_path
-            else:
-                odb_file_path = os.path.join(os.getcwd(), given_odb_file_path)
-        else:
-            odb_file_path = os.path.join(user_options.odb_source_directory, given_odb_file_path)
-
-        self.odb_file_path = odb_file_path
-
-
-    def select_hdf(self, user_options: Any, given_hdf_file_path: str) -> "Union[Any, bool]":
-        hdf_file_path: str
-        if not os.path.exists(os.path.join(user_options.hdf_source_directory, given_hdf_file_path)):
-            if not os.path.exists(os.path.join(os.getcwd(), given_hdf_file_path)):
-                if not os.path.exists(given_hdf_file_path):
-                        return False
-
-                else:
-                    hdf_file_path = given_hdf_file_path
-            else:
-                hdf_file_path = os.path.join(os.getcwd(), given_hdf_file_path)
-        else:
-            hdf_file_path = os.path.join(user_options.hdf_source_directory, given_hdf_file_path)
-
-        self.hdf_file_path = hdf_file_path
-
-        config_file_path: str = self.hdf_file_path.split(".")[0] + ".toml"
-        if os.path.exists(config_file_path):
-            user_options.config_file_path = config_file_path
-
-        else:
-            user_options.config_file_path = None
-
-        self.hdf_processed = True
-        return user_options
-
-
-    def _post_process_data(self) -> None:
-        """
-        "Private" method. Not to be used on its own, but called with process_hdf
-        """
-        self.out_nodes_low_time = self.out_nodes[self.out_nodes["Time"] == self.time_low]
-
-        self.loaded = True
-
-
-    def odb_to_hdf(self, hdf_file_path: str) -> None:
+    def convert_odb_to_hdf(self, hdf_path: Union[PathLike, None]) -> None:
         
-        assert self.odb_file_path != ""
-        # Must run this script via abaqus python
-        odb_to_npz_script_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "py2_scripts", "odb_to_npz.py")
+        if not hasattr(self, "odb_path"):
+            raise AttributeError("Path to target .odb file is not set")
 
-        if len(self.nodesets) != 1:
-            raise ValueError("You must have exactly one Nodeset specified to convert a .odb to a .hdf5")
-        odb_to_npz_args: list[str]  = [self.abaqus_program, "python", odb_to_npz_script_path, self.odb_file_path, str(self.time_sample), str(self.nodesets[0])]
-        subprocess.run(odb_to_npz_args, shell=True)
+        # If an hdf_path is passed in, update it on the user
+        if hdf_path is not None:
+            self.hdf_path = hdf_path
 
-        npz_dir: str = os.path.join(os.getcwd(), "tmp_npz")
-        npz_to_hdf(hdf_file_path, npz_dir)
+        odb_to_npz_pickle_input_dict: dict[
+            str,Union[list[str], list[int], None]
+            ] = {
+                "nodesets": self._nodesets,
+                "frames": self._frames
+            }
+        pickle_file: TextIO
+        with open(
+            self._odb_to_npz_conversion_pickle_path, "wb") as pickle_file:
+            pickle.dump(odb_to_npz_pickle_input_dict, pickle_file, protocol=2)
+
+        odb_convert_args: list[Union[PathLike, str]]  = [
+            self._abaqus_executable,
+            "python",
+            self._odb_to_npz_script_path,
+            self._odb_path,
+            self._odb_to_npz_conversion_pickle_path,
+            self._npz_result_path
+        ]
+
+        subprocess.run(odb_convert_args, shell=True)
+
+        result_file: TextIO
+        result_dir: PathLike
+        with open(self._npz_result_path, "rb") as result_file:
+            result_dir = pathlib.Path(pickle.load(result_file))
         
-        if os.path.exists(npz_dir):
-            shutil.rmtree(npz_dir)
+        pathlib.Path.unlink(self._npz_result_path)
 
-        self.hdf_processed = True
-        self.hdf_file_path = hdf_file_path
-
-
-    def dump_config_to_toml(self, toml_path: str) -> None:
-        config: dict[str, Union[float, str]] = dict()
-        if hasattr(self, "hdf_file_path"):
-            config["hdf_file_path"] = self.hdf_file_path
-        if hasattr(self, "meltpoint"):
-            config["meltpoint"] = self.meltpoint
-        if hasattr(self, "low_temp"):
-            config["low_temp"] = self.low_temp
-        if hasattr(self, "time_sample"):
-            config["time_sample"] = self.time_sample
-
-        toml_file: TextIO
-        with open(toml_path, "wb") as toml_file:
-            tomli_w.dump(config, toml_file)
+        convert_npz_to_hdf(self._hdf_path, result_dir)
+        
+        if result_dir.exists():
+            shutil.rmtree(result_dir)
 
 
-    def process_hdf(self) -> None:
-
-        # Ensure that all 6 dimension extrema are set
-        #if not (hasattr(self.x, "low") and hasattr(self.x, "high") and hasattr(self.y, "low") and hasattr(self.y, "high") and hasattr(self.z, "low") and hasattr(self.z, "high")):
-        #    raise RangeNotSetError
-
-        ## Ensure that both time boundaries are set
-        #if not (hasattr(self, "time_low") and hasattr(self, "time_high")):
-        #    raise TimeNotSetError
-
-        ## Ensure the hdf file is set
-        #if not hasattr(self, "hdf_file_path"):
-        #    raise HDFNotSetError
+    def align_hdf_to_dataframe(self) -> DataFrameType:
 
         # Adapted from CJ's read_hdf5.py
-        coords_df: Any = get_coords(self.hdf_file_path)
+        coords_df: DataFrameType = get_node_coords(self._hdf__path)
         self.bounded_nodes = list(
             coords_df[
                 (
@@ -326,4 +297,6 @@ class Odb:
         self.out_nodes = pd.concat(results)
         self.out_nodes = self.out_nodes[(self.out_nodes["Time"] <= self.time_high) & (self.out_nodes["Time"] >= self.time_low)]
 
-        self._post_process_data()
+        self.out_nodes_low_time = self.out_nodes[self.out_nodes["Time"] == self.time_low]
+
+        self.loaded = True
