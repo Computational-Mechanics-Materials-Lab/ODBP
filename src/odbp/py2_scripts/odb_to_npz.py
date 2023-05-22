@@ -23,8 +23,6 @@ import numpy as np
 import argparse
 import multiprocessing
 from odbAccess import openOdb
-#from abaqusConstants import *
-from itertools import islice
 
 
 def main():
@@ -106,8 +104,8 @@ def convert_odb_to_npz(odb_path, nodesets, frames):
         for nodeset in nodesets:
             if nodeset not in nodeset_keys:
                 raise ValueError(
-                "'{0}' is not a valid nodeset key.\
-    Possible values in this .odb are {1}"
+                    '"{0}" is not a valid nodeset key.' \
+                        'Possible values in this .odb are "{1}"'
                 .format(nodeset, nodeset_keys)
                 )
 
@@ -142,7 +140,6 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
         odb.close()
 
         temp_procs = list()
-        print("\tGetting Temperatures per Frame")
         for idx_list in final_idx_list:
             p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset))
             p.start()
@@ -153,7 +150,19 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
         for p in temp_procs:
             p.join()
 
-        np.savez_compressed("{}.npz".format(os.path.join(time_dir, step_key)), np.array(frame_times))
+        np.savez_compressed(
+            "{}.npz".format(
+                os.path.join(
+                    time_dir,
+                    step_key
+                    )
+                ),
+            np.sort(
+                np.array(
+                    frame_times
+                    )
+                )
+            )
 
 
 def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset):
@@ -193,7 +202,6 @@ def read_nodeset_coords(odb_path, nodeset, coord_file, step_key):
 
         try:
             coords = frame.fieldOutputs["COORD"].getSubset(region=assembly.nodeSets[nodeset])
-            print("\tGetting Node Coordinates for Step {}".format(step_key))
 
             results_list = list()
             for item in coords.values:
@@ -207,7 +215,7 @@ def read_nodeset_coords(odb_path, nodeset, coord_file, step_key):
             np.savez_compressed(coord_file, np.array(results_list))
 
         except KeyError:
-            print("\tStep {} has no Node Coordinates".format(step_key))
+            pass
 
         odb.close()
 

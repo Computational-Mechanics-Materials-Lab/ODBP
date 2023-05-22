@@ -17,24 +17,24 @@ from os import PathLike
 from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType
 
 
-def get_node_coords(hdf5_path: PathLike) -> DataFrameType:
+def get_node_coords(hdf_path: PathLike) -> DataFrameType:
     """
-    get_node_coords(hdf5_path: PathLike) -> DataFrameType
+    get_node_coords(hdf_path: PathLike) -> DataFrameType
     return a data frame with nodes by integer index and floating point
     3-dimensional coordinates.
     """
 
     try:
-        hdf5_file: H5PYFileType
-        with h5py.File(hdf5_path) as hdf5_file:
-            coords: DataFrameType = hdf5_file["node_coords"][:]
+        hdf_file: H5PYFileType
+        with h5py.File(hdf_path) as hdf_file:
+            coords: DataFrameType = hdf_file["node_coords"][:]
     
     except (FileNotFoundError, OSError):
         raise "Error accessing .hdf5 file"
 
     except KeyError:
-        raise f"{hdf5_path} file does not include node coordinates or they\
-            are not keyed by 'node_coords'"
+        raise f"{hdf_path} file does not include node coordinates or they" \
+            "are not keyed by 'node_coords'"
     
     else:
         return pd.DataFrame(
@@ -44,7 +44,7 @@ def get_node_coords(hdf5_path: PathLike) -> DataFrameType:
 
 
 def get_node_times_temps(
-    hdf5_path: PathLike,
+    hdf_path: PathLike,
     node: int,
     frame_sample: int, # TODO frame_ind
     x: float,
@@ -67,17 +67,17 @@ def get_node_times_temps(
     but this will be updated.
     """
 
-    hdf5_file: H5PYFileType
-    with h5py.File(hdf5_path) as hdf5_file:
-        temp_steps: H5PYGroupType = hdf5_file["temps"]
-        time_steps: H5PYGroupType = hdf5_file["step_frame_times"]
+    hdf_file: H5PYFileType
+    with h5py.File(hdf_path) as hdf_file:
+        temp_steps: H5PYGroupType = hdf_file["temps"]
+        time_steps: H5PYGroupType = hdf_file["step_frame_times"]
         target_len: int = len(temp_steps[list(temp_steps.keys())[0]])
         temps: NDArrayType = np.zeros(target_len)
         times: NDArrayType = np.zeros(target_len)
         xs: NDArrayType = np.full(target_len, x)
         ys: NDArrayType = np.full(target_len, y)
         zs: NDArrayType = np.full(target_len, z)
-        
+
         step: str
         for step in temp_steps:
             ind: int
@@ -94,4 +94,4 @@ def get_node_times_temps(
             (temps, times, xs, ys, zs), casting="no"
             ).T, 
         columns=["Temp", "Time", "X", "Y", "Z"]
-        )
+        ).sort_values("Time")
