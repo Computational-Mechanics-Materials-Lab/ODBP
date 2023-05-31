@@ -1,125 +1,186 @@
 #!/usr/bin/env python3
 
+"""
+ODBPlotter odb_visualizer.py
+ODBPlotter
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+MIT License (c) 2023
 
-import os
+A child class of the ODB class which implements two- and three-dimensional
+plotting capabilities.
+"""
+
+import operator
+import multiprocessing
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import pyvista as pv
-from typing import TextIO, Union, Any
 from .odb import Odb
-
-
-class MeltpointNotSetError(Exception):
-    def __init__(self) -> None:
-        self.message = "You must enter the meltpoint and, optionally, the string name of a plt colormap (default \"turbo\") in order to set the colormap"
+from .util import DataFrameType, MultiprocessingPoolType
 
 
 class OdbVisualizer(Odb):
     """
-
+    Serves exactly as a normal Odb instance, but includes
+    plotting capabilities
     """
+
+    __slots__ = (
+        "_interactive",
+        "_angle",
+        "_colormap"
+        )
     def __init__(self) -> None:
-        Odb.__init__(self)
+        """
+        """
+        
+        super().__init__()
 
-        self.interactive: bool
+        self._interactive: bool = False
+        self._colormap: str = "turbo"
 
-        self.angle: str
-        self.x_rot: int
-        self.y_rot: int
-        self.z_rot: int
-
-        self.colormap_name: str
-        self.colormap: pv.LookupTable
-
-
-    def select_colormap(self) -> None:
-        if not (hasattr(self, "meltpoint") or hasattr(self, "colormap_name")):
-            raise MeltpointNotSetError
-
-        # TODO different melt color? Don't plot from as low as 0?
-        self.colormap = pv.LookupTable(cmap=self.colormap_name, scalar_range=(self.low_temp, self.meltpoint), above_range_color=(0.75, 0.75, 0.75, 1.0))
+        # TODO ???
+        self._angle: str | tuple[float, float, float]
 
 
-    # Overload parent's set_meltpoint method to always select colormap
-    def set_meltpoint(self, meltpoint: float) -> None:
-        if not isinstance(meltpoint, float):
-            meltpoint = float(meltpoint)
-        self.meltpoint = meltpoint
+    @property
+    def colormap(self) -> str:
+        return self._colormap
+    
 
-        if hasattr(self, "low_temp"):
-            self.select_colormap()
-
-
-    # Overload parent's set_low_temp method to always select colormap
-    def set_low_temp(self, low_temp: float) -> None:
-        if not isinstance(low_temp, float):
-            low_temp = float(low_temp)
-        self.low_temp = low_temp
-
-        if hasattr(self, "meltpoint"):
-            self.select_colormap()
+    @colormap.setter
+    def colormap(self, value: str) -> None:
+        self._colormap = value
 
 
-    def plot_time_3d(self, time: float, label: str, interactive: bool)-> Any:
-        curr_nodes: Any = self.out_nodes[self.out_nodes["Time"] == time]
+    @property
+    def interactive(self) -> bool:
+        return self._interactive
 
-        formatted_time: str = format(round(time, 2), ".2f")
-        combined_label = f"{label}-{formatted_time}"
 
-        off_screen: bool = not interactive
-        plotter = pv.Plotter(off_screen=off_screen, window_size=[1920, 1080], lighting="three lights")
-        plotter.add_text(combined_label, position="upper_edge", color="#000000", font="courier", )
-        faces: list[str] = ["x_low", "x_high", "y_low", "y_high", "z_low", "z_high"]
-        face: str
-        for face in faces:
-            selected_nodes: Any
+    @interactive.setter
+    def interactive(self, value: bool) -> None:
+        self._interactive = value
 
-            # TODO This whole idea could be parameterized, but it might be less readable
-            if "x" in face:
-                if "low" in face:
-                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.low]
-                else: # if "high" in face:
-                    selected_nodes = curr_nodes[curr_nodes["X"] == self.x.high]
 
-            elif "y" in face:
-                if "low" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.low]
-                else: # if "high" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Y"] == self.y.high]
+    def plot_3d_all_times(self, label: str = "") -> list[pv.Plotter]:
+        """
+        """
 
-            else: # if "z" in face
-                if "low" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.low]
-                else: # if "high" in face:
-                    selected_nodes = curr_nodes[curr_nodes["Z"] == self.z.high]
+        times: DataFrameType = np.sort(self._filtered_nodes["Time"].unique())
+        
+        plotting_args: list[
+            tuple[
+                float,
+                str
+                ]
+            ] = [(time, label) for time in times]
+        results: list[pv.Plotter] = list()
+        time: float
+        for time in times:
+            results.append(self.plot_3d_single(time, label))
+        # TODO Any way to make this work?
+        """
+        # TODO dataclass
+        plotting_args: list[
+            tuple[
+                float,
+                str
+                ]
+            ] = [(time, label) for time in times]
+        results: list[pv.Plotter] = list()
+        pool: MultiprocessingPoolType
+        with multiprocessing.Pool() as pool:
+            results: list[pv.Plotter] = pool.starmap(
+                self.plot_3d_single,
+                plotting_args
+                )"""
 
-            dims_columns: set[str] = set(["X", "Y", "Z"])
-            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - dims_columns)).to_numpy())
-            points["Temp"] = selected_nodes["Temp"].to_numpy()
-            surface: Any = points.delaunay_2d()
+        return results 
 
-            # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
-            #surface = surface.rotate_z(180)
 
-            plotter.add_mesh(surface, scalars="Temp", cmap=self.colormap, scalar_bar_args={"title": "Nodal Temperature (kelvins)", "font_family": "courier", "color": "#000000", "fmt": "%.2f", "position_y": 0})
-            dims_columns: set[str] = set(["X", "Y", "Z"])
-            points: Any = pv.PolyData(selected_nodes.drop(columns=list(set(selected_nodes.columns.values.tolist()) - dims_columns)).to_numpy())
-            points["Temp"] = selected_nodes["Temp"].to_numpy()
-            surface: Any = points.delaunay_2d()
+    def plot_3d_single(
+        self,
+        time: float,
+        label: str
+        )-> pv.Plotter | None:
+        """
+        """
 
-            # For whatever reason, the input data is rotated 180 degrees about the y axis. This fixes that.
-            #surface = surface.rotate_z(180)
+        dims_columns: set[str] = {"X", "Y", "Z"}
+        combined_label: str = f"{label}-{round(time, 2):.2f}"
 
-        plotter.show_bounds(location="outer", ticks="both", font_size=14.0, font_family="courier", color="#000000", axes_ranges=[self.x.low, self.x.high, self.y.low, self.y.high, self.z.low, self.z.high])
-        plotter.set_background(color="#FFFFFF")
+        plotter: pv.Plotter = pv.Plotter(
+            off_screen=(not self._interactive),
+            window_size=(1920, 1080),
+            lighting="three lights"
+            )
 
-        #plotter.camera.focal_point = ((self.x.high + self.x.low)/2, (self.y.high + self.y.low)/2, (self.z.high + self.z.low)/2)
-        plotter.camera.elevation = 0
-        plotter.camera.azimuth = 270
-        plotter.camera.roll = 300
-        plotter.camera_set = True
-        #plotter.disable_shadows()
-        #plotter.add_light(pv.Light(light_type="headlight"))
+        plotter.add_text(
+            combined_label,
+            position="upper_edge",
+            color="#000000",
+            font="courier"
+        )
 
-        return plotter
+        instance_nodes: DataFrameType = self.filter_nodes(
+            "Time",
+            time,
+            operator.eq
+        )
+
+        if not instance_nodes.empty:
+            points: pv.PolyData = pv.PolyData(
+                instance_nodes.drop(
+                    columns=list(
+                        set(self._target_nodes.columns.values.tolist())
+                        - dims_columns
+                        )
+                    ).to_numpy()
+                )
+            
+            points["Temp"] = instance_nodes["Temp"].to_numpy()
+            mesh: pv.PolyData = points.delaunay_3d()
+
+            plotter.add_mesh(
+                mesh,
+                scalars="Temp",
+                cmap = pv.LookupTable(
+                    cmap=self._colormap,
+                    scalar_range=(
+                        self._temp_low,
+                        self._temp_high
+                        ),
+                    above_range_color=(
+                        0.75,
+                        0.75,
+                        0.75,
+                        1.0
+                    )
+                ),
+                scalar_bar_args={
+                    "title": "Nodal Temperature (Kelvin)",
+                    "font_family": "courier",
+                    "color": "#000000",
+                    "fmt": "%.2f",
+                    "position_y": 0
+                }
+            )
+
+            plotter.show_bounds(
+                location="outer",
+                ticks="both",
+                font_size=14.0,
+                font_family="courier",
+                color="#000000",
+                axes_ranges=points.bounds
+                )
+
+            plotter.set_background(color="#FFFFFF")
+
+            # TODO
+            plotter.camera.elevation = 0
+            plotter.camera.azimuth = 270
+            plotter.camera.roll = 300
+            plotter.camera_set = True
+
+            return plotter

@@ -1,62 +1,78 @@
-# Author: CJ Nguyen
-#
+"""
+ODBPlotter npz_to_hdf.py
+ODBPlotter
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+MIT License (c) 2023
+
+This file provides tools to read .hdf5 files created by the ODBPlotter
+converter into pandas dataframes
+
+Originally written by CMML Member CJ Nguyen
+"""
 
 import h5py
+import multiprocessing
+import pathlib
 import numpy as np
 import pandas as pd
-from typing import Any
-#from multiprocessing import Pool
-
-# def main():
-#     hdf5_filename: str = ""
-#     time_sample: int = 1
-#     target_csv: str = ""
-#     nodes: Any = get_coords(hdf5_filename)
-#     args: list[tuple[str, int, int]] = [(hdf5_filename, node, time_sample) for node in nodes]
-#     with Pool() as pool:
-#         results: Any = pool.starmap(read_node_data, args)
-
-#     final: Any = pd.concat(results)
-
-#     print(final)
-
-#     final.to_csv(target_csv)
+from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, MultiprocessingPoolType, PathType
 
 
-def get_coords(hdf5_filename: str) -> Any:
-    hdf5_file: h5py.File
-    with h5py.File(hdf5_filename, "r") as hdf5_file:
-        coords: Any = hdf5_file["node_coords"][:]
-        # TODO type hints
-        node_labels, x, y, z = np.transpose(coords)
-    return pd.DataFrame.from_dict({"Node Labels": node_labels.astype(int), "X": x, "Y": y, "Z": z})
+def get_odb_data(
+    hdf_path: PathType
+    ) -> DataFrameType:
+    """
+    get_node_coords(hdf_path: PathType) -> DataFrameType
+    return a data frame with nodes by integer index and floating point
+    3-dimensional coordinates.
+    """
+
+    try:
+        hdf_file: H5PYFileType
+        with h5py.File(hdf_path) as hdf_file:
+            step: str
+            for step in hdf_file["nodes"].keys():
+                frame_name: str
+                # TODO dataclass
+                args_list: list[tuple(H5PYFileType, str, str)] = [
+                        (hdf_path, step, frame_name)
+                        for frame_name
+                        in hdf_file["nodes"][step].keys() 
+                        ]
+
+                results: list[DataFrameType]
+                pool: MultiprocessingPoolType
+                with multiprocessing.Pool() as pool:
+                    results = pool.starmap(get_frame_data, args_list)
+
+                return pd.concat(results)
+
+    except (FileNotFoundError, OSError):
+        raise Exception("Error accessing .hdf5 file")
+
+    except KeyError:
+        raise Exception(f"{hdf_path} file does not include node coordinates "
+            'or they are not keyed by "nodes"')
 
 
-def read_node_data(hdf5_filename: str, node_label: int, time_sample: int) -> Any:
-    hdf5_file: h5py.File
-    with h5py.File(hdf5_filename, "r") as hdf5_file:
-        coords: Any = hdf5_file["node_coords"][:]
-        node_coords: Any = coords[np.where(coords[:, 0] == node_label)[0][0]][1:]
-        temps: list[float] = list()
-        times: list[int] = list()
-        temp_steps: Any = hdf5_file["temps"]
-        time_steps: Any = hdf5_file["step_frame_times"]
-        for step in temp_steps:
-            for frame in temp_steps[step]:
-                # Nodes start at 1
-                temps.append(temp_steps[step][frame][node_label - 1])
-                times.append(time_steps[step][int(frame.replace("frame_", "")) // time_sample])
-        data_dict: dict[str, Any] = {
-                "Node Label": node_label,
-                "X": node_coords[0],
-                "Y": node_coords[1],
-                "Z": node_coords[2],
-                "Temp": temps,
-                "Time": times
-                }
-
-    return pd.DataFrame(data_dict, index=None).sort_values("Time")
-
-
-# if __name__ == "__main__":
-#     main()
+def get_frame_data(
+    hdf_path: pathlib.Path,
+    step_name: str,
+    frame_name: str,
+    ) -> DataFrameType:
+    """
+    get_frame_data(
+        hdf_file: open H5PY.File
+        step_name: str,
+        frame_name: str,
+    ) -> DataFrameType
+    Given a .hdf5 file, a step name, and a frame name, return
+    a dataframe with data for that frame.
+    """ 
+    
+    hdf_file: H5PYFileType
+    with h5py.File(hdf_path) as hdf_file:
+        return pd.DataFrame(
+            data=hdf_file["nodes"][step_name][frame_name][:], 
+            columns=["Node Label", "X", "Y", "Z", "Temp", "Time"]
+            ).sort_values("Time")
