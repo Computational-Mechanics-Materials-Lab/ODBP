@@ -15,16 +15,15 @@ import shutil
 import pathlib
 import pickle
 import multiprocessing
-import operator
 
 import pandas as pd
 
-from typing import TextIO, Union, Callable
-from os import PathLike
+from typing import TextIO, Callable, Any
+from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
-from .read_hdf5 import get_node_coords, get_node_times_temps
-from .util import NullableIntListUnion, NullableStrListUnion, DataFrameType, MultiprocessingPoolType
+from .read_hdf5 import get_odb_data
+from .util import NullableIntList, NullableStrList, DataFrameType, MultiprocessingPoolType, PathType
 
 
 class Odb():
@@ -34,6 +33,8 @@ class Odb():
     """
 
     __slots__ = (
+        "_odb_handler",
+        "_odb",
         "_x_low",
         "_x_high",
         "_y_low",
@@ -49,51 +50,32 @@ class Odb():
         "_hdf_path",
         "_hdf_source_dir",
         "_abaqus_executable",
-        "_nodesets",
-        "_frames",
         "_odb_to_npz_script_path",
         "_odb_to_npz_conversion_pickle_path",
         "_npz_result_path",
-        "_bounded_nodes",
-        "_target_nodes",
-        "_filtered_nodes"
+        "_nodesets",
+        "_frames",
         )
 
     def __init__(self) -> None:
         """
+        Type Hints and hard-coded parameters. See the @staticmethod
+        "constructors" of this class in order to learn about initialization
         """
 
-        super().__init__()
+        self._odb_handler: OdbLoader | OdbUnloader = OdbLoader()
+        self._odb: DataFrameType 
 
-        self._odb_path: PathLike
-        self._odb_source_dir: Union[PathLike, None]
+        self._odb_path: PathType
+        self._odb_source_dir: PathType | None
 
-        self._hdf_path: PathLike
-        self._hdf_source_dir: Union[PathLike, None]
+        self._hdf_path: PathType
+        self._hdf_source_dir: PathType | None
 
         self._abaqus_executable: str = "abaqus"
 
-        self._nodesets: NullableStrListUnion = None
-        self._frames: NullableIntListUnion = None
-
-        self._bounded_nodes: DataFrameType # Spatially Bounded Nodes
-        self._target_nodes: DataFrameType # Spatially Bounded Nodes with Time/Temp
-        self._filtered_nodes: DataFrameType # Thermally/Temporally filtered
-
-        # Hardcoded paths for Python 3 - 2 communication
-        self._odb_to_npz_script_path: PathLike = pathlib.Path(
-            pathlib.Path(__file__).parent,
-            "py2_scripts",
-            "odb_to_npz.py"
-        )
-        self._odb_to_npz_conversion_pickle_path: PathLike = pathlib.Path(
-            pathlib.Path.cwd(),
-            "odb_to_npz_conversion.pickle"
-        )
-        self._npz_result_path: PathLike = pathlib.Path(
-            pathlib.Path.cwd(),
-            "npz_path.pickle"
-        )
+        self._nodesets: NullableStrList = None
+        self._frames: NullableIntList = None
 
         self._x_low: float
         self._x_high: float
@@ -108,19 +90,58 @@ class Odb():
         self._time_low: float
         self._time_high: float
 
+        # Hardcoded paths for Python 3 - 2 communication
+        self._odb_to_npz_script_path: PathType = pathlib.Path(
+            pathlib.Path(__file__).parent,
+            "py2_scripts",
+            "odb_to_npz.py"
+        )
+
+        self._odb_to_npz_conversion_pickle_path: PathType = pathlib.Path(
+            pathlib.Path.cwd(),
+            "odb_to_npz_conversion.pickle"
+        )
+
+        self._npz_result_path: PathType = pathlib.Path(
+            pathlib.Path.cwd(),
+            "npz_path.pickle"
+        )
+
         # TODO
-        """self._parts: NullableStrListUnion
-        self._nodes: dict[str, list[int]]
-        
-        self._frame_sample: int
+        """self._parts: NullableStrList
+        self._nodes: dict[str, list[int]]"""
 
-        self._hdf_processed: bool = False
-        self._loaded: bool = False
 
-        self.bounded_nodes: Any
+    # def __new__(self) -> None:
+    #     raise Exception("Do not instantiate OdbViewer instances this way."
+    #             "Please use One of the following odbp.OdbViewer methods"
+    #             "instead:\n"
+    #             "")
 
-        self.out_nodes: Any
-        self.out_nodes_low_time: Any"""
+
+    def __getitem__(self, key: Any) -> Any:
+        try:
+            return self.odb[key]
+
+        except AttributeError:
+            raise AttributeError("Odb key access is not available before "
+                    "The load_hdf() method is called."
+                    )
+
+
+    @property
+    def odb(self) -> DataFrameType:
+        return self._odb
+
+
+    @odb.setter
+    def odb(self, value: Any) -> None:
+        raise Exception('"odb" property should not be set this way')
+
+
+    @odb.deleter
+    def odb(self) -> None:
+        del self._odb
 
 
     @property
@@ -138,10 +159,10 @@ class Odb():
                 raise ValueError("x_low must be a float")
 
         # Don't let users set improper dimensions
-        if hasattr(self, "_x_high"): # If high is set
+        if hasattr(self, "x_high"): # If high is set
             if value > self.x_high:
-                raise ValueError(f"The value for x_low ({value}) must not be greater than the value for")
-        
+                raise ValueError(f"The value for x_low ({value}) must not be greater than the value for x_high ({self.x_high})")
+
         self._x_low = value
 
 
@@ -158,7 +179,12 @@ class Odb():
                 value = float(value)
             except ValueError:
                 raise ValueError("x_high must be a float")
-        
+
+        # Don't let users set improper dimensions
+        if hasattr(self, "x_low"): # If low is set
+            if value < self.x_low:
+                raise ValueError(f"The value for x_high ({value}) must not be less than the value for x_low ({self.x_low})")
+
         self._x_high = value
 
 
@@ -175,7 +201,12 @@ class Odb():
                 value = float(value)
             except ValueError:
                 raise ValueError("y_low must be a float")
-        
+
+        # Don't let users set improper dimensions
+        if hasattr(self, "y_high"): # If high is set
+            if value > self.y_high:
+                raise ValueError(f"The value for y_low ({value}) must not be greater than the value for y_high ({self.y_high})")
+
         self._y_low = value
 
 
@@ -192,14 +223,19 @@ class Odb():
                 value = float(value)
             except ValueError:
                 raise ValueError("y_high must be a float")
-        
+
+        # Don't let users set improper dimensions
+        if hasattr(self, "y_low"): # If low is set
+            if value < self.y_low:
+                raise ValueError(f"The value for y_high ({value}) must not be less than the value for y_low ({self.y_low})")
+
         self._y_high = value
 
 
     @property
     def z_low(self) -> float:
         return self._z_low
-    
+
 
     @z_low.setter
     def z_low(self, value: float) -> None:
@@ -209,7 +245,12 @@ class Odb():
                 value = float(value)
             except ValueError:
                 raise ValueError("z_low must be a float")
-        
+
+        # Don't let users set improper dimensions
+        if hasattr(self, "z_high"): # If high is set
+            if value > self.z_high:
+                raise ValueError(f"The value for z_low ({value}) must not be greater than the value for z_high ({self.z_high})")
+
         self._z_low = value
 
 
@@ -226,7 +267,12 @@ class Odb():
                 value = float(value)
             except ValueError:
                 raise ValueError("z_high must be a float")
-        
+
+        # Don't let users set improper dimensions
+        if hasattr(self, "z_low"): # If low is set
+            if value < self.z_low:
+                raise ValueError(f"The value for z_high ({value}) must not be less than the value for z_low ({self.z_low})")
+
         self._z_high = value
 
 
@@ -242,11 +288,15 @@ class Odb():
                 # Handle str/int input
                 value = float(value)
             except ValueError:
-                raise Exception("temp_low must be a float")
-        
+                raise ValueError("temp_low must be a float")
+
         if value < 0:
-            raise Exception("temp_low must be greater than or equal to 0 (Kelvins)")
-        
+            raise ValueError("temp_low must be greater than or equal to 0 (Kelvins)")
+
+        if hasattr(self, "temp_high"):
+            if value > self.temp_high:
+                raise ValueError(f"The value for temp_low ({value}) must not be greater than the value for temp_high ({self.temp_high})")
+
         self._temp_low = value
 
 
@@ -262,8 +312,12 @@ class Odb():
                 # Handle str/int input
                 value = float(value)
             except ValueError:
-                raise Exception("temp_high must be a float")
-        
+                raise ValueError("temp_high must be a float")
+
+        if hasattr(self, "temp_low"):
+            if value < self.temp_low:
+                raise ValueError(f"The value for temp_high ({value}) must not be less than the value for temp_low ({self.temp_low})")
+
         self._temp_high = value
 
 
@@ -279,11 +333,15 @@ class Odb():
                 # Handle str/int input
                 value = float(value)
             except ValueError:
-                raise Exception("time_low must be a float")
-        
+                raise ValueError("time_low must be a float")
+
         if value < 0:
-            raise Exception("time_low must be greater than or equal to 0")
-        
+            raise ValueError("time_low must be greater than or equal to 0 (Kelvins)")
+
+        if hasattr(self, "time_high"):
+            if value > self.time_high:
+                raise ValueError(f"The value for time_low ({value}) must not be greater than the value for time_high ({self.time_high})")
+
         self._time_low = value
 
 
@@ -299,108 +357,120 @@ class Odb():
                 # Handle str/int input
                 value = float(value)
             except ValueError:
-                raise Exception("time_high must be a float")
-        
+                raise ValueError("time_high must be a float")
+
+        if hasattr(self, "time_low"):
+            if value < self.time_low:
+                raise ValueError(f"The value for time_high ({value}) must not be less than the value for time_low ({self.time_low})")
+
         self._time_high = value
 
 
     @property
-    def odb_source_dir(self) -> Union[PathLike, None]:
+    def odb_source_dir(self) -> PathType | None:
         return self._odb_source_dir
 
+
     @odb_source_dir.setter
-    def odb_source_dir(self, value: PathLike) -> None:
-        if not isinstance(value, PathLike):
-            value = pathlib.Path(value)
+    def odb_source_dir(self, value: PathType) -> None:
+        value = pathlib.Path(value)
 
         if not value.exists():
             raise FileNotFoundError(f"Directory {value} does not exist")
-        
+
         self._odb_source_dir = value
 
+
     @property
-    def odb_path(self) -> PathLike:
+    def odb_path(self) -> PathType | None:
         return self._odb_path
 
-    
+
     @odb_path.setter
-    def odb_path(self, value: PathLike) -> None:
-        if not isinstance(value, PathLike):
-            value = pathlib.Path(value)
+    def odb_path(self, value: PathType) -> None:
+        value = pathlib.Path(value)
 
         if value.exists():
             self._odb_path = value
             return
 
         if self.odb_source_dir is not None:
-            if (self.odb_source_dir / value).exists():
-                self._odb_path = self.odb_source_dir / value
+            source_dir_path: PathType = self.odb_source_dir / value
+            if source_dir_path.exists():
+                self._odb_path = source_dir_path
                 return
 
-        if (pathlib.Path.cwd() / value).exists():
-            self._odb_path = pathlib.Path.cwd() / value
+        cwd_path: PathType = pathlib.Path.cwd() / value
+        if cwd_path.exists():
+            self._odb_path = cwd_path
             return
 
         raise FileNotFoundError(f"File {value} could not be found")
 
+
     @property
-    def hdf_source_dir(self) -> Union[PathLike, None]:
+    def hdf_source_dir(self) -> PathType | None:
         return self._hdf_source_dir
 
+
     @hdf_source_dir.setter
-    def hdf_source_dir(self, value: PathLike) -> None:
-        if not isinstance(value, PathLike):
-            value = pathlib.Path(value)
+    def hdf_source_dir(self, value: PathType) -> None:
+        value = pathlib.Path(value)
 
         if not value.exists():
             raise FileNotFoundError(f"Directory {value} does not exist")
-        
+
         self._hdf_source_dir = value
 
+
     @property
-    def hdf_path(self) -> PathLike:
+    def hdf_path(self) -> PathType:
         return self._hdf_path
 
-    
-    @hdf_path.setter
-    def hdf_path(self, value: PathLike) -> None:
-        if not isinstance(value, PathLike):
-            value = pathlib.Path(value)
 
-        if value.exists():
+    @hdf_path.setter
+    def hdf_path(self, value: PathType) -> None:
+        value = pathlib.Path(value)
+
+        if value.is_absolute():
             self._hdf_path = value
             return
 
-        if self.hdf_source_dir is not None:
-            if (self.hdf_source_dir / value).exists():
-                self._hdf_path = self.hdf_source_dir / value
-                return
-
-        if (pathlib.Path.cwd() / value).exists():
-            self._hdf_path = pathlib.Path.cwd() / value
+        if hasattr(self, "_hdf_source_dir"):
+            self._hdf_path = self.hdf_source_dir / value
             return
 
-        raise FileNotFoundError(f"File {value} could not be found")
+        self._hdf_path = value
 
 
     @property
     def abaqus_executable(self) -> str:
         return self._abaqus_executable
-    
+
 
     @abaqus_executable.setter
     def abaqus_executable(self, value: str) -> None:
         self._abaqus_executable = value
 
-    
+
     @property
     def frames(self) -> list[int]:
         return self._frames
 
-    
+
     @frames.setter
     def frames(self, value: list[int]) -> None:
         self._frames = value
+
+
+    @property
+    def nodesets(self) -> list[int]:
+        return self._nodesets
+
+
+    @nodesets.setter
+    def nodesets(self, value: list[int]) -> None:
+        self._nodesets = value
 
 
     """def set_parts(self, parts: "list[str]") -> None:
@@ -428,31 +498,63 @@ class Odb():
             self.nodesets = nodesets"""
 
 
-    def convert_odb_to_hdf(self, hdf_path: Union[PathLike, None] = None) -> None:
-        
-        if not hasattr(self, "odb_path"):
-            raise AttributeError("Path to target .odb file is not set")
+    def convert_odb_to_hdf(
+            self,
+            hdf_path: PathType | None = None,
+            *,
+            odb_path: PathType | None = None,
+            set_odb: bool = False,
+            set_hdf: bool = False
+            ) -> None:
 
-        # If an hdf_path is passed in, update it on the user
-        if hdf_path is not None:
-            if not isinstance(hdf_path, pathlib.Path):
-                hdf_path = pathlib.Path(hdf_path)
-            
-            if hdf_path.is_absolute():
-                self._hdf_path = hdf_path
-            
+        if odb_path is not None:
+            odb_path = pathlib.Path(odb_path)
+            if set_odb:
+                self.odb_path = odb_path
+
+        else:
+            if not hasattr(self, "odb_path"):
+                raise AttributeError("Path to target .odb file "
+                        "is not set or given.")
+
             else:
-                try:
-                    self._hdf_path = self._hdf_source_dir / hdf_path
+                odb_path = self.odb_path
 
-                except AttributeError:
-                    self._hdf_path = pathlib.Path.cwd() / hdf_path
+        if hdf_path is not None:
+            hdf_path = pathlib.Path(hdf_path)
+            if set_hdf:
+                self.hdf_path = hdf_path
 
-        assert hasattr(self, "_hdf_path")
+        else:
+            if not hasattr(self, "hdf_path"):
+                raise AttributeError("Path to target .hdf5 file "
+                        "is not set or given")
 
-        # TODO Dataclass
+            else:
+                hdf_path = self.hdf_path
+
+        self._convert_odb_to_hdf(hdf_path, odb_path)
+
+
+    @classmethod
+    def convert(
+            cls,
+            hdf_path: PathType,
+            odb_path: PathType
+            ) -> None:
+        hdf_path = pathlib.Path(hdf_path)
+        odb_path = pathlib.Path(odb_path)
+        cls()._convert_odb_to_hdf(hdf_path, odb_path)
+
+
+    def _convert_odb_to_hdf(
+            self,
+            hdf_path: PathType,
+            odb_path: PathType
+            ) -> None:
+
         odb_to_npz_pickle_input_dict: dict[
-            str,Union[list[str], list[int], None]
+            str, list[str] | list[int] | None
             ] = {
                 "nodesets": self._nodesets,
                 "frames": self._frames
@@ -462,11 +564,11 @@ class Odb():
             self._odb_to_npz_conversion_pickle_path, "wb") as pickle_file:
             pickle.dump(odb_to_npz_pickle_input_dict, pickle_file, protocol=2)
 
-        odb_convert_args: list[Union[PathLike, str]]  = [
-            self._abaqus_executable,
+        odb_convert_args: list[PathType | str]  = [
+            abaqus_executable,
             "python",
             self._odb_to_npz_script_path,
-            self._odb_path,
+            odb_path,
             self._odb_to_npz_conversion_pickle_path,
             self._npz_result_path
         ]
@@ -474,98 +576,59 @@ class Odb():
         subprocess.run(odb_convert_args, shell=True)
 
         result_file: TextIO
-        result_dir: PathLike
+        result_dir: PathType
         with open(self._npz_result_path, "rb") as result_file:
             result_dir = pathlib.Path(pickle.load(result_file))
-        
+
         pathlib.Path.unlink(self._npz_result_path)
 
-        print(self.hdf_path)
-        convert_npz_to_hdf(self.hdf_path, result_dir)
-        
+        convert_npz_to_hdf(hdf_path, result_dir)
+
         if result_dir.exists():
             shutil.rmtree(result_dir)
 
 
-    def spatially_bind_nodes(self) -> None:
-        coords_df: DataFrameType = get_node_coords(self.hdf_path)
-        self._bounded_nodes = coords_df[
-            (coords_df["X"] >= self.x_low)
-            & (coords_df["X"] <= self.x_high)
-            & (coords_df["Y"] >= self.y_low)
-            & (coords_df["Y"] <= self.y_high)
-            & (coords_df["Z"] >= self.z_low)
-            & (coords_df["Z"] <= self.z_high)
-        ]
-        bounded_nodes_labels: DataFrameType = self._bounded_nodes[
-            "Node Labels"
-            ]
+    def load_hdf(self) -> None:
 
-        node: int
-        # TODO dataclass
-        time_temp_extraction_args: list[
-            tuple[
-                PathLike, int, int, float, float, float
-                ]
-            ] = [
-            (
-                self.hdf_path,
-                node - 1,
-                1, # TODO Frame Ind
-                self._bounded_nodes[bounded_nodes_labels == node]["X"],
-                self._bounded_nodes[bounded_nodes_labels == node]["Y"],
-                self._bounded_nodes[bounded_nodes_labels == node]["Z"],
-                )
-                for node in bounded_nodes_labels
-            ]
+        if not hasattr(self, "hdf_path"):
+            raise AttributeError("hdf_path attribute must be set before "
+                    "calling load_hdf method.")
 
-        pool: MultiprocessingPoolType
-        with multiprocessing.Pool() as pool:
-            extracted_dfs: list[
-                DataFrameType
-                ] = pool.starmap(
-                    get_node_times_temps,
-                    time_temp_extraction_args
-                    )
+        try:
+            # Only case where this should be set, bypass the setter
+            self._odb = self._odb_handler.load_hdf(self.hdf_path)
+            self._odb_handler = OdbUnloader()
 
-        self._target_nodes = pd.concat(extracted_dfs)
-        self._filtered_nodes = self._target_nodes
-
-        self._filtered_nodes = self.filter_nodes(
-            "Time", 
-            self._time_low,
-            operator.ge
-            )
-        self._filtered_nodes = self.filter_nodes(
-            "Time",
-            self._time_high,
-            operator.le
-            )
+        except AttributeError:
+            raise AttributeError("load_hdf can only be used once in a row, "
+                    "before a .hdf5 file is loaded. Call unload_hdf on this "
+                    "OdbViewer before calling load_hdf.")
 
 
-    def filter_nodes(
-        self,
-        key: str,
-        value: float, op: Union[Callable[[float, float], bool], str]
-        ) -> DataFrameType:
-        """
-        """
+    def unload_hdf(self) -> None:
 
-        if isinstance(op, str):
-            op_mapping: dict[str, Callable[[float, float], bool]] = {
-                "==": operator.eq,
-                "!=": operator.ne,
-                ">": operator.gt,
-                "<": operator.lt,
-                ">=": operator.ge,
-                "<=": operator.le
-            }
-            try:
-                op = op_mapping[op]
-            except KeyError:
-                raise KeyError(f'Unsupported operator {op}. Must be one of' \
-                    '"==", "!=", ">", "<", ">=", or "<="')
+        try:
+            self._odb_handler.unload_hdf()
+            # Unified deleter
+            del self.odb
+            self._odb_handler = OdbLoader()
 
-        return self._filtered_nodes[
-            op(self._filtered_nodes[key], value)
-            ]
+        except AttributeError:
+            raise AttributeError("unload_hdf can only be called after "
+                "load_hdf.")
+
+
+    # TODO generator method for time steps. Overload __iter__?
+
+
+class OdbLoader:
+
+    def load_hdf(self, hdf_path: PathType) -> DataFrameType:
+        return get_odb_data(hdf_path)
+
+
+class OdbUnloader:
+
+    @abstractmethod
+    def unload_hdf(self) -> None:
+        ...

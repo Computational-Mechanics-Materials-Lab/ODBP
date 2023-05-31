@@ -14,7 +14,6 @@ import operator
 import multiprocessing
 import numpy as np
 import pyvista as pv
-from typing import Union
 from .odb import Odb
 from .util import DataFrameType, MultiprocessingPoolType
 
@@ -40,7 +39,7 @@ class OdbVisualizer(Odb):
         self._colormap: str = "turbo"
 
         # TODO ???
-        self._angle: Union[str, tuple[float, float, float]]
+        self._angle: str | tuple[float, float, float]
 
 
     @property
@@ -103,7 +102,7 @@ class OdbVisualizer(Odb):
         self,
         time: float,
         label: str
-        )-> Union[pv.Plotter, None]:
+        )-> pv.Plotter | None:
         """
         """
 

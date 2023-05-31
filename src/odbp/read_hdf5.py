@@ -11,15 +11,18 @@ Originally written by CMML Member CJ Nguyen
 """
 
 import h5py
+import multiprocessing
+import pathlib
 import numpy as np
 import pandas as pd
-from os import PathLike
-from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType
+from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, MultiprocessingPoolType, PathType
 
 
-def get_node_coords(hdf_path: PathLike) -> DataFrameType:
+def get_odb_data(
+    hdf_path: PathType
+    ) -> DataFrameType:
     """
-    get_node_coords(hdf_path: PathLike) -> DataFrameType
+    get_node_coords(hdf_path: PathType) -> DataFrameType
     return a data frame with nodes by integer index and floating point
     3-dimensional coordinates.
     """
@@ -27,71 +30,49 @@ def get_node_coords(hdf_path: PathLike) -> DataFrameType:
     try:
         hdf_file: H5PYFileType
         with h5py.File(hdf_path) as hdf_file:
-            coords: DataFrameType = hdf_file["node_coords"][:]
-    
+            step: str
+            for step in hdf_file["nodes"].keys():
+                frame_name: str
+                # TODO dataclass
+                args_list: list[tuple(H5PYFileType, str, str)] = [
+                        (hdf_path, step, frame_name)
+                        for frame_name
+                        in hdf_file["nodes"][step].keys() 
+                        ]
+
+                results: list[DataFrameType]
+                pool: MultiprocessingPoolType
+                with multiprocessing.Pool() as pool:
+                    results = pool.starmap(get_frame_data, args_list)
+
+                return pd.concat(results)
+
     except (FileNotFoundError, OSError):
-        raise "Error accessing .hdf5 file"
+        raise Exception("Error accessing .hdf5 file")
 
     except KeyError:
-        raise f"{hdf_path} file does not include node coordinates or they" \
-            "are not keyed by 'node_coords'"
-    
-    else:
-        return pd.DataFrame(
-            data=coords,
-            columns=["Node Labels", "X", "Y", "Z"]
-        ).astype({"Node Labels": int})
+        raise Exception(f"{hdf_path} file does not include node coordinates "
+            'or they are not keyed by "nodes"')
 
 
-def get_node_times_temps(
-    hdf_path: PathLike,
-    node: int,
-    frame_sample: int, # TODO frame_ind
-    x: float,
-    y: float,
-    z: float
+def get_frame_data(
+    hdf_path: pathlib.Path,
+    step_name: str,
+    frame_name: str,
     ) -> DataFrameType:
     """
-    get_node_times_temps(
-        hdf_path: PathLike,
-        node: int,
-        frame_sample: int
-        x: float,
-        y: float,
-        z: float
+    get_frame_data(
+        hdf_file: open H5PY.File
+        step_name: str,
+        frame_name: str,
     ) -> DataFrameType
-    Given a path to a .hdf5 file, the label and coodinates of a node, return
-    a dataframe associating the node with its temperatures per frame.
-
-    0.5.0 Currently this still uses the frame_sample value for stepped frames,
-    but this will be updated.
-    """
-
+    Given a .hdf5 file, a step name, and a frame name, return
+    a dataframe with data for that frame.
+    """ 
+    
     hdf_file: H5PYFileType
     with h5py.File(hdf_path) as hdf_file:
-        temp_steps: H5PYGroupType = hdf_file["temps"]
-        time_steps: H5PYGroupType = hdf_file["step_frame_times"]
-        target_len: int = len(temp_steps[list(temp_steps.keys())[0]])
-        temps: NDArrayType = np.zeros(target_len)
-        times: NDArrayType = np.zeros(target_len)
-        xs: NDArrayType = np.full(target_len, x)
-        ys: NDArrayType = np.full(target_len, y)
-        zs: NDArrayType = np.full(target_len, z)
-
-        step: str
-        for step in temp_steps:
-            ind: int
-            frame: str
-            for ind, frame in enumerate(temp_steps[step]):
-                temps[ind] = temp_steps[step][frame][node]
-                times[ind] = time_steps[step][int(
-                    frame.replace("frame_", "")
-                    ) // frame_sample
-                    ] # TODO frame_ind
-    
-    return pd.DataFrame(
-        data=np.vstack(
-            (temps, times, xs, ys, zs), casting="no"
-            ).T, 
-        columns=["Temp", "Time", "X", "Y", "Z"]
-        ).sort_values("Time")
+        return pd.DataFrame(
+            data=hdf_file["nodes"][step_name][frame_name][:], 
+            columns=["Node Label", "X", "Y", "Z", "Temp", "Time"]
+            ).sort_values("Time")

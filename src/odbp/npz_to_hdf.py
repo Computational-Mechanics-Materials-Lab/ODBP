@@ -18,34 +18,98 @@ Originally written by CMML Member CJ Nguyen
 
 
 import h5py
+import pathlib
+import os
 import numpy as np
-from pathlib import Path
-from os import PathLike, walk
-from .util import NDArrayType, H5PYFileType
+from .util import NDArrayType, NPZFileType, H5PYFileType, PathType
 
 
 def convert_npz_to_hdf(
-    hdf_path: PathLike,
-    npz_dir: PathLike = Path("tmp_npz")
+    hdf_path: PathType,
+    npz_dir: PathType = pathlib.Path("tmp_npz")
     ) -> None:
 
-    # To my knowledge, h5py does not ship type hints
+    # Format of the npz_dir:
+    # node_coords.npz (locations per node)
+    # step_frame_times/<step>.npz (times per step)
+    # temps/<step>/<frame>.npz (temperatures per node per frame)
+    # All of these must exist (error if they do not)
+    # They're the only things we care about
+
+    hdf_path = pathlib.Path(hdf_path)
+    npz_dir = pathlib.Path(npz_dir)
+
+    step_frame_times_dir = npz_dir / pathlib.Path("step_frame_times")
+    step_frame_times: dict[str, NDArrayType] = dict()
+    root: PathType
+    files: list[PathType]
+    for root, _, files in os.walk(step_frame_times_dir):
+        root = pathlib.Path(root)
+        file: PathType
+        for file in files:
+            file = pathlib.Path(file)
+            key: str = str(file.stem)
+            step_frame_times_file: NPZFileType
+            with np.load(root / file) as step_frame_times_file:
+                time_data: NDArrayType = step_frame_times_file[
+                        step_frame_times_file.files[0]
+                        ]
+
+            step_frame_times[key] = time_data
+
+    node_coords_path: PathType = npz_dir / pathlib.Path("node_coords.npz")
+    node_coords_file: NPZFileType
+    with np.load(node_coords_path) as node_coords_file:
+        coordinate_data: NDArrayType = node_coords_file[
+                node_coords_file.files[0]
+                ]
+
+    temps_dir: PathType = npz_dir / pathlib.Path("temps")
+    temp_dict: dict[str, dict[str, NDArrayType]] = dict()
+    root: PathType
+    files: list[PathType]
+    for root, _, files in os.walk(temps_dir):
+        root = pathlib.Path(root)
+        step_name: str = root.stem
+        temp_dict[step_name] = dict()
+        files.sort()
+        file: PathType
+        for file in files:
+            file = pathlib.Path(file)
+            temps_file: NPZFileType
+            with np.load(root / file) as temps_file:
+                temps_data: NDArrayType = temps_file[
+                        temps_file.files[0]
+                        ]
+                temp_dict[step_name][file] = np.hstack((
+                    coordinate_data,
+                    np.vstack(temps_data)
+                    ))
+
     hdf5_file: H5PYFileType
     with h5py.File(hdf_path, "w") as hdf5_file:
-        root: PathLike
-        files: list[PathLike]
-        for root, _, files in walk(npz_dir, topdown=True):
-            filename: PathLike
-            for filename in files:
-                item: PathLike = Path(root, filename)
-                read_npz_to_hdf(item, npz_dir, hdf5_file)
-
-
-def read_npz_to_hdf(item: PathLike, npz_dir: PathLike, hdf5_file: H5PYFileType) -> None:
-    npz: NDArrayType = np.load(item)
-    arr: NDArrayType = npz[npz.files[0]]
-    item_name: PathLike = item.relative_to(npz_dir)
-    item_name = Path(item_name.parent, item_name.stem)
-    hdf5_file.create_dataset(
-        str(item_name).replace("\\", "/"), data=arr, compression="gzip"
-        )
+        # Temps/Coords
+        step: str
+        node_data: NDArrayType
+        for step in temp_dict:
+            i: int
+            items: tuple[str, dict[str, NDArrayType]]
+            for i, items in enumerate(temp_dict[step].items()):
+                file: str
+                node_data: NDArrayType
+                file, node_data = items
+                frame: str = pathlib.Path(file).stem
+                target_len: int = len(node_data)
+                hdf5_file.create_dataset(
+                        f"nodes/{step}/{frame}",
+                        data = np.hstack((
+                            node_data,
+                            np.vstack(
+                                np.full(
+                                    (target_len,),
+                                    step_frame_times[step][i]
+                                    )
+                                )
+                            )),
+                        compression = "gzip"
+                        )

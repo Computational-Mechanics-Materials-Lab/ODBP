@@ -128,12 +128,21 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
     if not os.path.exists(curr_step_dir):
         os.mkdir(curr_step_dir)
 
+    if frames is not None:
+        max_frame = max(frames)
+
+    else:
+        max_frame = len(steps[step_key].frames)
+
+    max_pad = len(str(max_frame))
+
     manager = multiprocessing.Manager()
     frame_times = manager.list()
     #frame_times = list()
     if len(steps[step_key].frames) > 0:
         idx_list = [i for i in range(len(steps[step_key].frames))]
         idx_list_len = len(idx_list)
+        idx_list_max = idx_list[-1]
         num_cpus = multiprocessing.cpu_count()
         # TODO: what if the length isn't divisible by the number of processors (is it now?)
         final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, max(int(idx_list_len / num_cpus), 1))]
@@ -141,11 +150,9 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
 
         temp_procs = list()
         for idx_list in final_idx_list:
-            p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset))
+            p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, max_pad, frames, step_key, curr_step_dir, frame_times, base_time, nodeset))
             p.start()
             temp_procs.append(p)
-
-            #read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset)
 
         for p in temp_procs:
             p.join()
@@ -165,7 +172,7 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
             )
 
 
-def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, frame_times, base_time, nodeset):
+def read_single_frame_temp(odb_path, idx_list, max_pad, frames, step_key, curr_step_dir, frame_times, base_time, nodeset):
 
     odb = openOdb(odb_path, readOnly=True)
     steps = odb.steps
@@ -184,7 +191,14 @@ def read_single_frame_temp(odb_path, idx_list, frames, step_key, curr_step_dir, 
             temp = item.data
             node_temps.append(temp)
 
-        np.savez_compressed(os.path.join(curr_step_dir, "frame_{}".format(idx)), np.array(node_temps))
+        num = str(idx + 1).zfill(max_pad)
+        np.savez_compressed(
+                os.path.join(
+                    curr_step_dir,
+                    "frame_{".format(num)
+                    ),
+                np.array(node_temps)
+                )
 
     odb.close()
 
