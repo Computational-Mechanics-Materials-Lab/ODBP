@@ -1,9 +1,9 @@
 [project]
 name = "odb-plotter"
-description = "Python3 API for Abaqus FEA .odb Files and related Command Line Visualization Tool, with an Additive Manufacturing Focus"
+description = "Python3 API for Abaqus .odb Files and related Command Line Visualization Tool. Focused on Additive Manufacturing Thermal Transfer"
 readme = "README.md"
 license = {file = "LICENSE"}
-keywords = ["TODO"]
+keywords = ["abaqus", "abq", "fea", "odb", "waam", "wa-ded", "visualization"]
 authors = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
 maintainers = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
 dependencies = [
