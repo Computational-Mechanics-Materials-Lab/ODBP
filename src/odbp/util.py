@@ -13,11 +13,11 @@ import pandas as pd
 
 # Python 3.10+ version
 ####### Type Aliases for this Project
-#from typing import TypeAlias
+#from typing import TypeAlias, Optional
 #
 ## Lists that can be None, used for defaults of lists of frames or nodesets
-#NullableIntList: TypeAlias = list[int] | None
-#NullableStrList: TypeAlias = list[str] | None
+#NullableIntList: TypeAlias = Optional[list[int]]
+#NullableStrList: TypeAlias = Optional[list[str]]
 #
 ## Types of large data-science types
 #NDArrayType: TypeAlias = np.ndarray
@@ -30,9 +30,9 @@ import pandas as pd
 ######
 
 # Python 3.6+ version
-from typing import Union, Tuple, List
-NullableIntList = Union[List[int], None]
-NullableStrList = Union[List[str], None]
+from typing import Union, Tuple, List, Optional
+NullableIntList = Optional[List[int]]
+NullableStrList = Optional[List[str]]
 
 NDArrayType = np.ndarray
 NPZFileType = np.lib.npyio.NpzFile
@@ -42,7 +42,7 @@ H5PYFileType = h5py.File
 MultiprocessingPoolType = multiprocessing.Pool
 
 
-def confirm(message: str, confirmation: str, default: "Union[str, None]" = None) -> bool:
+def confirm(message: str, confirmation: str, default: "Optional[str]" = None) -> bool:
     yes_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("yes", "y")
     no_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("no", "n")
     if isinstance(default, str):
