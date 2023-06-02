@@ -29,6 +29,7 @@ from odbp import Odb
 * Before 0.5.0: Did not have the Changelog here.
 * 0.5.0: API Updates and better dataframe filtering
     * 0.5.1 Implement new system information (pypi tags, this changelog)
+    * 0.5.2 Returning support to Python 3.8+ (type hinting)
 * Upcoming:
     * 0.6.0: Improved extractor across all file types. Improved Odb object iteration.
     * 0.7.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline

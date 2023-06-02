@@ -15,14 +15,15 @@ import multiprocessing
 import pathlib
 import numpy as np
 import pandas as pd
-from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, MultiprocessingPoolType, PathType
+from typing import Tuple, List
+from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, MultiprocessingPoolType
 
 
 def get_odb_data(
-    hdf_path: PathType
+    hdf_path: pathlib.Path
     ) -> DataFrameType:
     """
-    get_node_coords(hdf_path: PathType) -> DataFrameType
+    get_node_coords(hdf_path: pathlib.Path) -> DataFrameType
     return a data frame with nodes by integer index and floating point
     3-dimensional coordinates.
     """
@@ -34,13 +35,13 @@ def get_odb_data(
             for step in hdf_file["nodes"].keys():
                 frame_name: str
                 # TODO dataclass
-                args_list: list[tuple(H5PYFileType, str, str)] = [
+                args_list: List[Tuple(H5PYFileType, str, str)] = [
                         (hdf_path, step, frame_name)
                         for frame_name
                         in hdf_file["nodes"][step].keys() 
                         ]
 
-                results: list[DataFrameType]
+                results: List[DataFrameType]
                 pool: MultiprocessingPoolType
                 with multiprocessing.Pool() as pool:
                     results = pool.starmap(get_frame_data, args_list)

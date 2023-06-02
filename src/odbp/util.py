@@ -11,29 +11,40 @@ import numpy as np
 import pandas as pd
 
 
-###### Type Aliases for this Project
-from typing import TypeAlias
+# Python 3.10+ version
+####### Type Aliases for this Project
+#from typing import TypeAlias
+#
+## Lists that can be None, used for defaults of lists of frames or nodesets
+#NullableIntList: TypeAlias = list[int] | None
+#NullableStrList: TypeAlias = list[str] | None
+#
+## Types of large data-science types
+#NDArrayType: TypeAlias = np.ndarray
+#NPZFileType: TypeAlias = np.lib.npyio.NpzFile
+#DataFrameType: TypeAlias = pd.core.frame.DataFrame
+#H5PYGroupType: TypeAlias = h5py._hl.group.Group
+#H5PYFileType: TypeAlias = h5py.File
+#MultiprocessingPoolType: TypeAlias = multiprocessing.Pool
+#
+######
 
-# Lists that can be None, used for defaults of lists of frames or nodesets
-NullableIntList: TypeAlias = list[int] | None
-NullableStrList: TypeAlias = list[str] | None
+# Python 3.6+ version
+from typing import Union, Tuple, List
+NullableIntList = Union[List[int], None]
+NullableStrList = Union[List[str], None]
 
-# Types of large data-science types
-NDArrayType: TypeAlias = np.ndarray
-NPZFileType: TypeAlias = np.lib.npyio.NpzFile
-DataFrameType: TypeAlias = pd.core.frame.DataFrame
-H5PYGroupType: TypeAlias = h5py._hl.group.Group
-H5PYFileType: TypeAlias = h5py.File
-MultiprocessingPoolType: TypeAlias = multiprocessing.Pool
-
-# Path Handling Types
-PathType: TypeAlias = pathlib.Path | str
-#####
+NDArrayType = np.ndarray
+NPZFileType = np.lib.npyio.NpzFile
+DataFrameType = pd.core.frame.DataFrame
+H5PYGroupType = h5py._hl.group.Group
+H5PYFileType = h5py.File
+MultiprocessingPoolType = multiprocessing.Pool
 
 
-def confirm(message: str, confirmation: str, default: str | None = None) -> bool:
-    yes_vals: tuple[str, str] | tuple[str, str, str] = ("yes", "y")
-    no_vals: tuple[str, str] | tuple[str, str, str] = ("no", "n")
+def confirm(message: str, confirmation: str, default: "Union[str, None]" = None) -> bool:
+    yes_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("yes", "y")
+    no_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("no", "n")
     if isinstance(default, str):
         if default.lower() in yes_vals:
             yes_vals = ("yes", "y", "")

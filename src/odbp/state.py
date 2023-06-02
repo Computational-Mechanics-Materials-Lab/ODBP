@@ -10,7 +10,7 @@ import platformdirs
 import subprocess
 import pickle
 import pandas as pd
-from typing import Union, Any, TextIO
+from typing import Union, Any, TextIO, Tuple, List, Dict
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from odbp import __version__
@@ -44,75 +44,75 @@ class CLIOptions():
     Struct to store cli options without repeating
     """
     def __init__(self) -> None:
-        self.quit_options: list[str] = ["exit", "quit", "q"]
+        self.quit_options: List[str] = ["exit", "quit", "q"]
         self.quit_help: str = "Exit ODBPlotter"
         self.quit_options_formatted: str = ", ".join(self.quit_options)
 
-        self.select_options: list[str] = ["select"]
+        self.select_options: List[str] = ["select"]
         self.select_help: str = "Select a .hdf5 file or a .odb file"
         self.select_options_formatted: str = ", ".join(self.select_options)
 
-        self.convert_options: list[str] = ["convert"]
+        self.convert_options: List[str] = ["convert"]
         self.convert_help: str = "Convert a selected .odb file to a .hdf5 file"
         self.convert_options_formatted: str = ", ".join(self.convert_options)
 
-        self.extrema_options: list[str] = ["extrema", "range"]
+        self.extrema_options: List[str] = ["extrema", "range"]
         self.extrema_help: str = "Set the upper and lower x, y, and z bounds for plotting"
         self.extrema_options_formatted: str = ", ".join(self.extrema_options)
 
-        self.time_options: list[str] = ["time"]
+        self.time_options: List[str] = ["time"]
         self.time_help: str = "Set the upper and lower time bounds"
         self.time_options_formatted: str = ", ".join(self.time_options)
 
-        self.time_sample_options: list[str] = ["sample"]
+        self.time_sample_options: List[str] = ["sample"]
         self.time_sample_help: str = "Set the Time Sample for the hdf5 file"
         self.time_sample_options_formatted: str = ", ".join(self.time_sample_options)
 
-        self.meltpoint_options: list[str] = ["meltpoint", "melt", "point"]
+        self.meltpoint_options: List[str] = ["meltpoint", "melt", "point"]
         self.meltpoint_help: str = "Set the Melting Point for the hdf5 file"
         self.meltpoint_options_formatted: str = ", ".join(self.meltpoint_options)
 
-        self.low_temp_options: list[str] = ["low", "low-temp"]
+        self.low_temp_options: List[str] = ["low", "low-temp"]
         self.low_temp_help: str = "Set the Lower Temperate Bound for the hdf5 file"
         self.low_temp_options_formatted: str = ", ".join(self.low_temp_options)
 
-        self.title_label_options: list[str] = ["title", "label"]
+        self.title_label_options: List[str] = ["title", "label"]
         self.title_label_help: str = "Set the title and label of the output plots"
         self.title_label_options_formatted: str = ", ".join(self.title_label_options)
 
-        self.directory_options: list[str] = ["dir", "dirs", "directory", "directories"]
+        self.directory_options: List[str] = ["dir", "dirs", "directory", "directories"]
         self.directory_help: str = "Set the source and output directories"
         self.directory_options_formatted: str = ", ".join(self.directory_options)
 
-        self.process_options: list[str] = ["process", "run", "load"]
+        self.process_options: List[str] = ["process", "run", "load"]
         self.process_help: str = "Actually load the selected data from the file set in select"
         self.process_options_formatted: str = ", ".join(self.process_options)
 
-        self.angle_options: list[str] = ["angle",]
+        self.angle_options: List[str] = ["angle",]
         self.angle_help: str = "Update the viewing angle"
         self.angle_options_formatted: str = ", ".join(self.angle_options)
 
-        self.show_all_options: list[str] = ["show-all", "plot-all"]
+        self.show_all_options: List[str] = ["show-all", "plot-all"]
         self.show_all_help: str = "Toggle if each time step will be shown in the PyVista interactive viewer"
         self.show_all_options_formatted: str = ", ".join(self.show_all_options)
 
-        self.plot_options: list[str] = ["plot", "show"]
+        self.plot_options: List[str] = ["plot", "show"]
         self.plot_help: str = "Plot each selected timestep"
         self.plot_options_formatted: str = ", ".join(self.plot_options)
         
-        self.state_options: list[str] = ["state", "status", "settings"]
+        self.state_options: List[str] = ["state", "status", "settings"]
         self.state_help: str = "Show the current state of the settings of the plotter"
         self.state_options_formatted: str = ", ".join(self.state_options)
 
-        self.abaqus_options: list[str] = ["abaqus", "abq", "abqpy"]
+        self.abaqus_options: List[str] = ["abaqus", "abq", "abqpy"]
         self.abaqus_help: str = "Select the Abaqus executable program to use to process .odb file"
         self.abaqus_options_formatted: str = ", ".join(self.abaqus_options)
 
-        self.nodeset_options: list[str] = ["node", "nodes", "nodeset", "nodesets"]
+        self.nodeset_options: List[str] = ["node", "nodes", "nodeset", "nodesets"]
         self.nodeset_help: str = "Select the target nodeset (i.e., the named nodeset that contains all the data)"
         self.nodeset_options_formatted: str = ", ".join(self.nodeset_options)
 
-        self.help_options: list[str] = ["help", "use", "usage"]
+        self.help_options: List[str] = ["help", "use", "usage"]
         self.help_help: str = "Show this menu"
         self.help_options_formatted: str = ", ".join(self.help_options)
 
@@ -159,7 +159,7 @@ class CLIOptions():
 
 
 def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
-    lines: list[dict[str, str]] = [
+    lines: List[Dict[str, str]] = [
         {
             ".hdf5 file": f"{state.hdf_file_path if hasattr(state, 'hdf_file_path') else 'not set'}",
             ".odb file": f"{state.odb_file_path if hasattr(state, 'odb_file_path') else 'not set'}",
@@ -202,7 +202,7 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
 
     key: str
     val: str
-    sub_dict: dict[str, str]
+    sub_dict: Dict[str, str]
     max_len = 0
     for sub_dict in lines:
         for key in sub_dict.keys():
@@ -217,7 +217,7 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
     print(final_state_output, end="") # No ending newline because we added it above
 
 
-def process_input() -> "Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]": # Returns UserOptions or Pandas Dataframe
+def process_input() -> "Union[Tuple[OdbVisualizer, UserOptions], pd.DataFrame]": # Returns UserOptions or Pandas Dataframe
     """
     The goal is to have a hierarchy of options. If a user passes in an option via a command-line switch, that option is set.
     If an option is not set by a switch, then the toml input file is used.
@@ -281,7 +281,7 @@ def process_input() -> "Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]":
         return generate_cli_settings(args)
 
 
-def generate_cli_settings(args: argparse.Namespace) -> "tuple[OdbVisualizer, UserOptions]":
+def generate_cli_settings(args: argparse.Namespace) -> "Tuple[OdbVisualizer, UserOptions]":
 
     state: OdbVisualizer = OdbVisualizer()
     user_options: UserOptions = UserOptions()
@@ -303,7 +303,7 @@ def generate_cli_settings(args: argparse.Namespace) -> "tuple[OdbVisualizer, Use
             new_config_file.write(config_data)
 
     config_file: TextIO
-    config_settings: dict[str, Any]
+    config_settings: Dict[str, Any]
     with open(config_file_path, "rb") as config_file:
         config_settings = tomllib.load(config_file)
     state, user_options = read_setting_dict(state, user_options, config_settings)
@@ -319,14 +319,14 @@ def generate_cli_settings(args: argparse.Namespace) -> "tuple[OdbVisualizer, Use
                 input_file_path = os.path.join(os.getcwd(), input_file_path)
 
         input_file: TextIO
-        input_settings: dict[str, Any]
+        input_settings: Dict[str, Any]
         with open(input_file_path, "rb") as input_file:
             input_settings = tomllib.load(input_file)
 
         state, user_options = read_setting_dict(state, user_options, input_settings)
 
     # Stage 3: pass in the (other) dict values from args
-    cli_flags: dict[str, any] = vars(args)
+    cli_flags: Dict[str, any] = vars(args)
     cli_flags = {k: v for k, v in cli_flags.items() if v is not None}
     state, user_options = read_setting_dict(state, user_options, cli_flags)
 
@@ -357,9 +357,9 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     temp_save_path = os.path.join(os.getcwd(), "temp.pickle")
 
     # Because of the python3-2 cross-talk, we use strings of "None", unfortunately
-    parts: Union[list[str], None] = None
-    nodesets: Union[list[str], None] = None
-    nodes: Union[dict[str, list[int]], None] = None
+    parts: Union[List[str], None] = None
+    nodesets: Union[List[str], None] = None
+    nodes: Union[Dict[str, List[int]], None] = None
     if hasattr(state, "parts"):
         parts = state.parts
 
@@ -372,7 +372,7 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     # subprocess won't handle the Nones or dicts or lists well, so instead we pickle in the output path, and read in the python2 version
     # They're all built-ins, so pickle should work
     temp_file: TextIO
-    input_dict: dict[str, Any] = {
+    input_dict: Dict[str, Any] = {
         "parts": parts,
         "nodesets": nodesets,
         "nodes": nodes,
@@ -380,10 +380,10 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     # TODO Time Sample
     with open(temp_save_path, "wb") as temp_file:
         pickle.dump(input_dict, temp_file, protocol=2)
-    odb_extract_args: list[str] = [state.abaqus_program, "python", odb_extract_script_path, state.odb_file_path, temp_save_path]
+    odb_extract_args: List[str] = [state.abaqus_program, "python", odb_extract_script_path, state.odb_file_path, temp_save_path]
     subprocess.run(odb_extract_args, shell=True)
 
-    #odb_to_npz_args: list[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
+    #odb_to_npz_args: List[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
     #subprocess.run(odb_to_npz_args, shell=True)
 
     return_data: pd.DataFrame
@@ -397,7 +397,7 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     return return_data
 
 
-def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: "dict[str, Any]") -> "tuple[OdbVisualizer, UserOptions]":
+def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: "Dict[str, Any]") -> "Tuple[OdbVisualizer, UserOptions]":
     hdf_source_dir: str
     if "hdf_source_directory" in settings_dict:
         hdf_source_dir = os.path.abspath(settings_dict["hdf_source_directory"])
@@ -477,7 +477,7 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         # Otherwise, the file must have already been read
 
         # Search for the stored toml values for this hdf
-        config: Union[dict[str, Any], None] = None
+        config: Union[Dict[str, Any], None] = None
         if user_options.config_file_path is None:
             print(f".toml config file for {state.hdf_file_path} could not be found")
         else:
@@ -588,7 +588,7 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
             state.roll = settings_dict["view"]["roll"]
         
         else:
-            given_view: dict[str, int] = view(settings_dict["view"])
+            given_view: Dict[str, int] = view(settings_dict["view"])
             elev: int = given_view["elev"]
             azim: int = given_view["azim"]
             roll: int = given_view["roll"]
@@ -626,15 +626,15 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
     return (state, user_options)
 
 
-def load_views_dict() -> "dict[str, dict[str, int]]":
+def load_views_dict() -> "Dict[str, Dict[str, int]]":
     views_file: TextIO
     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "views.toml"), "rb") as views_file:
         return tomllib.load(views_file)
 
 
 # Used to define the "view" type for argparse
-def view(string: str) -> "dict[str, int]":
-    views_dict: dict[str, dict[str, int]] = load_views_dict()
+def view(string: str) -> "Dict[str, int]":
+    views_dict: Dict[str, Dict[str, int]] = load_views_dict()
     if string in views_dict:
         return views_dict[string]
 
