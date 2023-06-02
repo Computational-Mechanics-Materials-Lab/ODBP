@@ -18,12 +18,12 @@ import multiprocessing
 
 import pandas as pd
 
-from typing import TextIO, Callable, Any
+from typing import TextIO, Callable, Union, Any, List, Dict
 from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
 from .read_hdf5 import get_odb_data
-from .util import NullableIntList, NullableStrList, DataFrameType, MultiprocessingPoolType, PathType
+from .util import NullableIntList, NullableStrList, DataFrameType, MultiprocessingPoolType
 
 
 class Odb():
@@ -63,14 +63,14 @@ class Odb():
         "constructors" of this class in order to learn about initialization
         """
 
-        self._odb_handler: OdbLoader | OdbUnloader = OdbLoader()
+        self._odb_handler: Union[OdbLoader, OdbUnloader] = OdbLoader()
         self._odb: DataFrameType 
 
-        self._odb_path: PathType
-        self._odb_source_dir: PathType | None
+        self._odb_path: pathlib.Path
+        self._odb_source_dir: Union[pathlib.Path, None]
 
-        self._hdf_path: PathType
-        self._hdf_source_dir: PathType | None
+        self._hdf_path: pathlib.Path
+        self._hdf_source_dir: Union[pathlib.Path, None]
 
         self._abaqus_executable: str = "abaqus"
 
@@ -91,18 +91,18 @@ class Odb():
         self._time_high: float
 
         # Hardcoded paths for Python 3 - 2 communication
-        self._odb_to_npz_script_path: PathType = pathlib.Path(
+        self._odb_to_npz_script_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
             "py2_scripts",
             "odb_to_npz.py"
         )
 
-        self._odb_to_npz_conversion_pickle_path: PathType = pathlib.Path(
+        self._odb_to_npz_conversion_pickle_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
             "odb_to_npz_conversion.pickle"
         )
 
-        self._npz_result_path: PathType = pathlib.Path(
+        self._npz_result_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
             "npz_path.pickle"
         )
@@ -367,12 +367,12 @@ class Odb():
 
 
     @property
-    def odb_source_dir(self) -> PathType | None:
+    def odb_source_dir(self) -> "Union[pathlib.Path, None]":
         return self._odb_source_dir
 
 
     @odb_source_dir.setter
-    def odb_source_dir(self, value: PathType) -> None:
+    def odb_source_dir(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
         if not value.exists():
@@ -382,12 +382,12 @@ class Odb():
 
 
     @property
-    def odb_path(self) -> PathType | None:
+    def odb_path(self) -> "Union[pathlib.Path, None]":
         return self._odb_path
 
 
     @odb_path.setter
-    def odb_path(self, value: PathType) -> None:
+    def odb_path(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
         if value.exists():
@@ -395,12 +395,12 @@ class Odb():
             return
 
         if self.odb_source_dir is not None:
-            source_dir_path: PathType = self.odb_source_dir / value
+            source_dir_path: pathlib.Path = self.odb_source_dir / value
             if source_dir_path.exists():
                 self._odb_path = source_dir_path
                 return
 
-        cwd_path: PathType = pathlib.Path.cwd() / value
+        cwd_path: pathlib.Path = pathlib.Path.cwd() / value
         if cwd_path.exists():
             self._odb_path = cwd_path
             return
@@ -409,12 +409,12 @@ class Odb():
 
 
     @property
-    def hdf_source_dir(self) -> PathType | None:
+    def hdf_source_dir(self) -> "Union[pathlib.Path, None]":
         return self._hdf_source_dir
 
 
     @hdf_source_dir.setter
-    def hdf_source_dir(self, value: PathType) -> None:
+    def hdf_source_dir(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
         if not value.exists():
@@ -424,12 +424,12 @@ class Odb():
 
 
     @property
-    def hdf_path(self) -> PathType:
+    def hdf_path(self) -> pathlib.Path:
         return self._hdf_path
 
 
     @hdf_path.setter
-    def hdf_path(self, value: PathType) -> None:
+    def hdf_path(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
         if value.is_absolute():
@@ -454,22 +454,22 @@ class Odb():
 
 
     @property
-    def frames(self) -> list[int]:
+    def frames(self) -> "List[int]":
         return self._frames
 
 
     @frames.setter
-    def frames(self, value: list[int]) -> None:
+    def frames(self, value: "List[int]") -> None:
         self._frames = value
 
 
     @property
-    def nodesets(self) -> list[int]:
+    def nodesets(self) -> "List[int]":
         return self._nodesets
 
 
     @nodesets.setter
-    def nodesets(self, value: list[int]) -> None:
+    def nodesets(self, value: "List[int]") -> None:
         self._nodesets = value
 
 
@@ -500,9 +500,9 @@ class Odb():
 
     def convert_odb_to_hdf(
             self,
-            hdf_path: PathType | None = None,
+            hdf_path: "Union[pathlib.Path, None]" = None,
             *,
-            odb_path: PathType | None = None,
+            odb_path: "Union[pathlib.Path, None]" = None,
             set_odb: bool = False,
             set_hdf: bool = False
             ) -> None:
@@ -539,8 +539,8 @@ class Odb():
     @classmethod
     def convert(
             cls,
-            hdf_path: PathType,
-            odb_path: PathType
+            hdf_path: pathlib.Path,
+            odb_path: pathlib.Path
             ) -> None:
         hdf_path = pathlib.Path(hdf_path)
         odb_path = pathlib.Path(odb_path)
@@ -549,12 +549,12 @@ class Odb():
 
     def _convert_odb_to_hdf(
             self,
-            hdf_path: PathType,
-            odb_path: PathType
+            hdf_path: pathlib.Path,
+            odb_path: pathlib.Path
             ) -> None:
 
-        odb_to_npz_pickle_input_dict: dict[
-            str, list[str] | list[int] | None
+        odb_to_npz_pickle_input_dict: Dict[
+            str, Union[List[str], List[int], None]
             ] = {
                 "nodesets": self._nodesets,
                 "frames": self._frames
@@ -564,7 +564,7 @@ class Odb():
             self._odb_to_npz_conversion_pickle_path, "wb") as pickle_file:
             pickle.dump(odb_to_npz_pickle_input_dict, pickle_file, protocol=2)
 
-        odb_convert_args: list[PathType | str]  = [
+        odb_convert_args: List[Union[pathlib.Path, str]]  = [
             abaqus_executable,
             "python",
             self._odb_to_npz_script_path,
@@ -576,7 +576,7 @@ class Odb():
         subprocess.run(odb_convert_args, shell=True)
 
         result_file: TextIO
-        result_dir: PathType
+        result_dir: pathlib.Path
         with open(self._npz_result_path, "rb") as result_file:
             result_dir = pathlib.Path(pickle.load(result_file))
 
@@ -623,7 +623,7 @@ class Odb():
 
 class OdbLoader:
 
-    def load_hdf(self, hdf_path: PathType) -> DataFrameType:
+    def load_hdf(self, hdf_path: pathlib.Path) -> DataFrameType:
         return get_odb_data(hdf_path)
 
 

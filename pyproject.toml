@@ -14,8 +14,6 @@ dependencies = [
 "tomli_w",
 "pandas",
 "matplotlib",
-"vtk==9.2.2; python_version < '3.11'", # pyvista is unstable on some platforms with vtk 9.2.5 or greater
-"vtk==9.2.4; python_version >= '3.11'",
 "pyreadline3; platform_system == 'Windows'",
 "pyvista",
 ]

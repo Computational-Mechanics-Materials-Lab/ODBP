@@ -14,6 +14,7 @@ import operator
 import multiprocessing
 import numpy as np
 import pyvista as pv
+from typing import Union, Tuple, List
 from .odb import Odb
 from .util import DataFrameType, MultiprocessingPoolType
 
@@ -39,7 +40,7 @@ class OdbVisualizer(Odb):
         self._colormap: str = "turbo"
 
         # TODO ???
-        self._angle: str | tuple[float, float, float]
+        self._angle: Union[str, Tuple[float, float, float]]
 
 
     @property
@@ -62,32 +63,32 @@ class OdbVisualizer(Odb):
         self._interactive = value
 
 
-    def plot_3d_all_times(self, label: str = "") -> list[pv.Plotter]:
+    def plot_3d_all_times(self, label: str = "") -> "List[pv.Plotter]":
         """
         """
 
         times: DataFrameType = np.sort(self._filtered_nodes["Time"].unique())
         
-        plotting_args: list[
-            tuple[
+        plotting_args: List[
+            Tuple[
                 float,
                 str
                 ]
             ] = [(time, label) for time in times]
-        results: list[pv.Plotter] = list()
+        results: List[pv.Plotter] = list()
         time: float
         for time in times:
             results.append(self.plot_3d_single(time, label))
         # TODO Any way to make this work?
         """
         # TODO dataclass
-        plotting_args: list[
-            tuple[
+        plotting_args: List[
+            Tuple[
                 float,
                 str
                 ]
             ] = [(time, label) for time in times]
-        results: list[pv.Plotter] = list()
+        results: List[pv.Plotter] = list()
         pool: MultiprocessingPoolType
         with multiprocessing.Pool() as pool:
             results: list[pv.Plotter] = pool.starmap(
@@ -102,7 +103,7 @@ class OdbVisualizer(Odb):
         self,
         time: float,
         label: str
-        )-> pv.Plotter | None:
+        )-> "Union[pv.Plotter, None]":
         """
         """
 

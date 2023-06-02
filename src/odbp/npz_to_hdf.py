@@ -21,12 +21,13 @@ import h5py
 import pathlib
 import os
 import numpy as np
-from .util import NDArrayType, NPZFileType, H5PYFileType, PathType
+from typing import Dict, List, Tuple
+from .util import NDArrayType, NPZFileType, H5PYFileType
 
 
 def convert_npz_to_hdf(
-    hdf_path: PathType,
-    npz_dir: PathType = pathlib.Path("tmp_npz")
+    hdf_path: pathlib.Path,
+    npz_dir: pathlib.Path = pathlib.Path("tmp_npz")
     ) -> None:
 
     # Format of the npz_dir:
@@ -39,13 +40,13 @@ def convert_npz_to_hdf(
     hdf_path = pathlib.Path(hdf_path)
     npz_dir = pathlib.Path(npz_dir)
 
-    step_frame_times_dir = npz_dir / pathlib.Path("step_frame_times")
-    step_frame_times: dict[str, NDArrayType] = dict()
-    root: PathType
-    files: list[PathType]
+    step_frame_times_dir: pathlib.Path = npz_dir / pathlib.Path("step_frame_times")
+    step_frame_times: Dict[str, NDArrayType] = dict()
+    root: pathlib.Path
+    files: List[pathlib.Path]
     for root, _, files in os.walk(step_frame_times_dir):
         root = pathlib.Path(root)
-        file: PathType
+        file: pathlib.Path
         for file in files:
             file = pathlib.Path(file)
             key: str = str(file.stem)
@@ -57,23 +58,23 @@ def convert_npz_to_hdf(
 
             step_frame_times[key] = time_data
 
-    node_coords_path: PathType = npz_dir / pathlib.Path("node_coords.npz")
+    node_coords_path: pathlib.Path = npz_dir / pathlib.Path("node_coords.npz")
     node_coords_file: NPZFileType
     with np.load(node_coords_path) as node_coords_file:
         coordinate_data: NDArrayType = node_coords_file[
                 node_coords_file.files[0]
                 ]
 
-    temps_dir: PathType = npz_dir / pathlib.Path("temps")
-    temp_dict: dict[str, dict[str, NDArrayType]] = dict()
-    root: PathType
-    files: list[PathType]
+    temps_dir: pathlib.Path = npz_dir / pathlib.Path("temps")
+    temp_dict: Dict[str, Dict[str, NDArrayType]] = dict()
+    root: pathlib.Path
+    files: List[pathlib.Path]
     for root, _, files in os.walk(temps_dir):
         root = pathlib.Path(root)
         step_name: str = root.stem
         temp_dict[step_name] = dict()
         files.sort()
-        file: PathType
+        file: pathlib.Path
         for file in files:
             file = pathlib.Path(file)
             temps_file: NPZFileType
@@ -93,7 +94,7 @@ def convert_npz_to_hdf(
         node_data: NDArrayType
         for step in temp_dict:
             i: int
-            items: tuple[str, dict[str, NDArrayType]]
+            items: Tuple[str, Dict[str, NDArrayType]]
             for i, items in enumerate(temp_dict[step].items()):
                 file: str
                 node_data: NDArrayType

@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     import tomli as tomllib
 import numpy as np
 import pandas as pd
-from typing import Any, Union, TextIO
+from typing import Any, Union, TextIO, List, Tuple, Dict
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from .state import CLIOptions, UserOptions, process_input, print_state, load_views_dict
@@ -26,7 +26,7 @@ def cli() -> None:
     # TODO Process input toml file and/or cli switches here
     state: OdbVisualizer
     user_options: UserOptions
-    result: Union[tuple[OdbVisualizer, UserOptions], pd.DataFrame]
+    result: Union[Tuple[OdbVisualizer, UserOptions], pd.DataFrame]
     result = process_input()
     print(f"ODBPlotter {__version__}")
     if isinstance(result, pd.DataFrame):
@@ -115,8 +115,8 @@ def cli() -> None:
 
 
 def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
-    odb_options: tuple[str, str] = ("odb", ".odb")
-    hdf_options: tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
+    odb_options: Tuple[str, str] = ("odb", ".odb")
+    hdf_options: Tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
     user_input: str
 
     # select odb
@@ -190,7 +190,7 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
     if user_options.config_file_path is not None:
         config_file: TextIO
         with open(user_options.config_file_path, "rb") as config_file:
-            config: dict[str, Any] = tomllib.load(config_file)
+            config: Dict[str, Any] = tomllib.load(config_file)
 
         if "hdf_file_path" in config:
             if config["hdf_file_path"] != state.hdf_file_path:
@@ -258,7 +258,7 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
     state.select_colormap()
 
 
-def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
+def set_title_and_label(state: OdbVisualizer, user_options: UserOptions) -> None:
     default_title: str = ""
 
     if hasattr(state, "hdf_file_path"):
@@ -298,7 +298,7 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions):
             break
 
 
-def set_directories(user_options: UserOptions):
+def set_directories(user_options: UserOptions) -> None:
     print(f"For setting all of these data directories, Please enter either absolute paths, or paths relative to your present working directory: {os.getcwd()}")
     user_input: str
 
@@ -363,7 +363,7 @@ def set_directories(user_options: UserOptions):
                 print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
 
 
-def set_extrema(state: OdbVisualizer):
+def set_extrema(state: OdbVisualizer) -> None:
     x_low: float
     x_high: float
     y_low: float
@@ -372,12 +372,12 @@ def set_extrema(state: OdbVisualizer):
     z_high: float
     while True:
         # Get the desired coordinates and time steps to plot
-        extrema: dict[tuple[str, str], tuple[float, float]] = {
+        extrema: Dict[Tuple[str, str], Tuple[float, float]] = {
                 ("lower X", "upper X"): tuple(),
                 ("lower Y", "upper Y"): tuple(),
                 ("lower Z", "upper Z"): tuple(),
                 }
-        extremum: tuple[str, str]
+        extremum: Tuple[str, str]
         for extremum in extrema.keys():
             extrema[extremum] = process_extrema(extremum)
 
@@ -441,9 +441,9 @@ def set_time(state: OdbVisualizer) -> None:
     lower_time: Union[int, float] = 0
     upper_time: Union[int, float] = float("inf")
     while True:
-        values: list[tuple[str, Union[int, float], str]] = [("lower time", 0, "0"), ("upper time", float("inf"), "infinity")]
+        values: List[Tuple[str, Union[int, float], str]] = [("lower time", 0, "0"), ("upper time", float("inf"), "infinity")]
         i: int
-        v: tuple[str, Union[int, float], str]
+        v: Tuple[str, Union[int, float], str]
         for i, v in enumerate(values): 
             key: str
             default: Union[int, float]
@@ -474,8 +474,8 @@ def set_time(state: OdbVisualizer) -> None:
             break
 
 
-def process_extrema(keys: "tuple[str, str]") -> "tuple[float, float]":
-    results: list[float] = list()
+def process_extrema(keys: "Tuple[str, str]") -> "Tuple[float, float]":
+    results: List[float] = list()
     i: int
     key: str
     inf_addon: str
@@ -502,13 +502,13 @@ def process_extrema(keys: "tuple[str, str]") -> "tuple[float, float]":
     return tuple(results)
 
 
-def load_hdf(state: OdbVisualizer):
+def load_hdf(state: OdbVisualizer) -> None:
     state.process_hdf()
 
 
 # TODO Fix
-def set_views(state: OdbVisualizer):
-    views_dict: dict[str, dict[str, int]] = load_views_dict()
+def set_views(state: OdbVisualizer) -> None:
+    views_dict: Dict[str, Dict[str, int]] = load_views_dict()
     while True:
         print("Please Select a Preset View for your plots")
         print('To view all default presets, please enter "list"')
@@ -546,7 +546,7 @@ def set_views(state: OdbVisualizer):
                 print('Error: input must be "list," "custom," or the index or name of a named view as seen from the "list" command.')
 
 
-def get_custom_view() -> "tuple[int, int, int]":
+def get_custom_view() -> "Tuple[int, int, int]":
     elev: int
     azim: int
     roll: int
@@ -576,11 +576,11 @@ def get_custom_view() -> "tuple[int, int, int]":
     return (elev, azim, roll)
 
 
-def print_views(views: "dict[str, dict[str, int]]") -> None:
+def print_views(views: "Dict[str, Dict[str, int]]") -> None:
     print("Index | Name | Rotation Values")
-    v: tuple[str, dict[str, int]]
+    v: Tuple[str, Dict[str, int]]
     view: str
-    vals: dict[str, int]
+    vals: Dict[str, int]
     key: str
     val: int
     for i, v in enumerate(views.items()):
