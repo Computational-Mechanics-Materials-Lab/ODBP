@@ -10,7 +10,7 @@ import platformdirs
 import subprocess
 import pickle
 import pandas as pd
-from typing import Union, Any, TextIO, Tuple, List, Dict
+from typing import Union, Any, TextIO, Tuple, List, Dict, Optional
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from odbp import __version__
@@ -35,7 +35,7 @@ class UserOptions():
         self.results_directory: str = ""
         self.image_title: str = ""
         self.image_label: str = ""
-        self.config_file_path: Union[str, None] = None
+        self.config_file_path: Optional[str] = None
         self.run_immediate: bool = False
 
 
@@ -357,9 +357,9 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     temp_save_path = os.path.join(os.getcwd(), "temp.pickle")
 
     # Because of the python3-2 cross-talk, we use strings of "None", unfortunately
-    parts: Union[List[str], None] = None
-    nodesets: Union[List[str], None] = None
-    nodes: Union[Dict[str, List[int]], None] = None
+    parts: Optional[List[str]] = None
+    nodesets: Optional[List[str]] = None
+    nodes: Optional[Dict[str, List[int]]] = None
     if hasattr(state, "parts"):
         parts = state.parts
 
@@ -477,7 +477,7 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         # Otherwise, the file must have already been read
 
         # Search for the stored toml values for this hdf
-        config: Union[Dict[str, Any], None] = None
+        config: Optional[Dict[str, Any]] = None
         if user_options.config_file_path is None:
             print(f".toml config file for {state.hdf_file_path} could not be found")
         else:

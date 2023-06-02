@@ -8,6 +8,17 @@ ODB Plotter is being developed by [CMML](https://www.cmml.me.msstate.edu), and a
 pip install odb-plotter
 ```
 
+## ODB Plotter is a Plotter. It is also a Data Science Tool
+## Install with plotting capabilities
+```shell
+pip instlal odb-plotter["plot"]
+```
+
+## OR
+```shell
+pip instlal odb-plotter["all"]
+```
+
 ## Run the cli with python
 ```shell
 python -m odbp

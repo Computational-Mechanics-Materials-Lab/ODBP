@@ -36,7 +36,7 @@ def get_odb_data(
             for step in hdf_file["nodes"].keys():
                 frame_name: str
                 # TODO dataclass
-                args_list: List[Tuple(H5PYFileType, str, str)] = [
+                args_list: List[Tuple[H5PYFileType, str, str]] = [
                         (hdf_path, step, frame_name)
                         for frame_name
                         in hdf_file["nodes"][step].keys() 

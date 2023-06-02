@@ -18,12 +18,19 @@ import multiprocessing
 
 import pandas as pd
 
-from typing import TextIO, Callable, Union, Any, List, Dict
+from typing import TextIO, Callable, Union, Any, List, Dict, Optional
 from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
 from .read_hdf5 import get_odb_data
 from .util import NullableIntList, NullableStrList, DataFrameType, MultiprocessingPoolType
+
+try:
+    import pyvista as pv
+except ImportError:
+    PYVISTA_AVILABLE = False
+else:
+    PYVISTA_AVAILABLE = True
 
 
 class Odb():
@@ -56,7 +63,13 @@ class Odb():
         "_npz_result_path",
         "_nodesets",
         "_frames",
+<<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
         "_cpus",
+=======
+        "_interactive",
+        "_angle",
+        "_colormap",
+>>>>>>> Starting to implement 0.6.0
         )
 
     def __init__(self) -> None:
@@ -69,10 +82,10 @@ class Odb():
         self._odb: DataFrameType 
 
         self._odb_path: pathlib.Path
-        self._odb_source_dir: Union[pathlib.Path, None]
+        self._odb_source_dir: Optional[pathlib.Path]
 
         self._hdf_path: pathlib.Path
-        self._hdf_source_dir: Union[pathlib.Path, None]
+        self._hdf_source_dir: Optional[pathlib.Path]
 
         self._abaqus_executable: str = "abaqus"
 
@@ -109,7 +122,15 @@ class Odb():
             "npz_path.pickle"
         )
 
+<<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
         self._cpus = multiprocessing.cpu_count()
+=======
+        self._interactive: bool = False
+        self._colormap: str = "turbo"
+
+        # TODO
+        self._angle = Union[str, Tuple[float, float, float]]
+>>>>>>> Starting to implement 0.6.0
 
         # TODO
         """self._parts: NullableStrList
@@ -371,7 +392,7 @@ class Odb():
 
 
     @property
-    def odb_source_dir(self) -> "Union[pathlib.Path, None]":
+    def odb_source_dir(self) -> "Optional[pathlib.Path]":
         return self._odb_source_dir
 
 
@@ -386,7 +407,7 @@ class Odb():
 
 
     @property
-    def odb_path(self) -> "Union[pathlib.Path, None]":
+    def odb_path(self) -> "Optional[pathlib.Path]":
         return self._odb_path
 
 
@@ -413,7 +434,7 @@ class Odb():
 
 
     @property
-    def hdf_source_dir(self) -> "Union[pathlib.Path, None]":
+    def hdf_source_dir(self) -> "Optional[pathlib.Path]":
         return self._hdf_source_dir
 
 
@@ -513,11 +534,31 @@ class Odb():
             self.nodesets = nodesets"""
 
 
+    @property
+    def colormap(self) -> str:
+        return self._colormap
+
+
+    @colormap.setter
+    def colormap(self, value: str) -> None:
+        self._colormap = value
+
+
+    @property
+    def interactive(self) -> bool:
+        return self._interactive
+
+
+    @interactive.setter
+    def interactive(self, value: bool) -> None:
+        self._interactive = value
+
+
     def convert_odb_to_hdf(
             self,
-            hdf_path: "Union[pathlib.Path, None]" = None,
+            hdf_path: "Optional[pathlib.Path]" = None,
             *,
-            odb_path: "Union[pathlib.Path, None]" = None,
+            odb_path: "Optional[pathlib.Path]" = None,
             set_odb: bool = False,
             set_hdf: bool = False
             ) -> None:
@@ -569,7 +610,7 @@ class Odb():
             ) -> None:
 
         odb_to_npz_pickle_input_dict: Dict[
-            str, Union[List[str], List[int], None]
+            str, Optional[Union[List[str], List[int]]]
             ] = {
                 "nodesets": self._nodesets,
                 "frames": self._frames,
@@ -632,6 +673,147 @@ class Odb():
         except AttributeError:
             raise AttributeError("unload_hdf can only be called after "
                 "load_hdf.")
+
+
+    def plot_3d_all_times(
+            self,
+            label: str = "",
+            ) -> "List[pv.Plotter]":
+        """
+
+        """
+        if not PYVISTA_AVAIL:
+            raise Exception("Plotting capabilities are not included."
+                            'Please pip install odb-plotter["plot"]'
+                            'or pip install odb-plotter["all"] to use'
+                            "three-dimensional plotting")
+
+        times: DataFrameType = np.sort(self["Time"].unique())
+
+        plotting_args: List[
+            Tuple[
+                float,
+                str
+                ]
+            ] = [(time, label) for time in times]
+        results: List[pv.Plotter] = list()
+        time: float
+        for time in times:
+            result = self._plot_3d_single(time, label)
+            if result is not None:
+                results.append(result)
+        # TODO Any way to make this work?
+        """
+        # TODO dataclass
+        plotting_args: List[
+            Tuple[
+                float,
+                str
+                ]
+            ] = [(time, label) for time in times]
+        results: List[pv.Plotter] = list()
+        pool: MultiprocessingPoolType
+        with multiprocessing.Pool() as pool:
+            results: list[pv.Plotter] = pool.starmap(
+                self._plot_3d_single,
+                plotting_args
+                )"""
+
+        return results 
+
+
+    def _plot_3d_single(
+        self,
+        time: float,
+        label: str
+        )-> "Optional[pv.Plotter]":
+        """
+        """
+
+        if not PYVISTA_AVAIL:
+            raise Exception("Plotting capabilities are not included."
+                            'Please pip install odb-plotter["plot"]'
+                            'or pip install odb-plotter["all"] to use'
+                            "three-dimensional plotting")
+
+        dims_columns: set[str] = {"X", "Y", "Z"}
+        combined_label: str = f"{label}-{round(time, 2):.2f}"
+
+        plotter: pv.Plotter = pv.Plotter(
+            off_screen=(not self._interactive),
+            window_size=(1920, 1080),
+            lighting="three lights"
+            )
+
+        plotter.add_text(
+            combined_label,
+            position="upper_edge",
+            color="#000000",
+            font="courier"
+        )
+
+        instance_nodes: DataFrameType = self.filter_nodes(
+            "Time",
+            time,
+            operator.eq
+        )
+
+        if not instance_nodes.empty:
+            points: pv.PolyData = pv.PolyData(
+                instance_nodes.drop(
+                    columns=list(
+                        set(self._target_nodes.columns.values.tolist())
+                        - dims_columns
+                        )
+                    ).to_numpy()
+                )
+            
+            points["Temp"] = instance_nodes["Temp"].to_numpy()
+            mesh: pv.PolyData = points.delaunay_3d()
+
+            plotter.add_mesh(
+                mesh,
+                scalars="Temp",
+                cmap = pv.LookupTable(
+                    cmap=self._colormap,
+                    scalar_range=(
+                        self._temp_low,
+                        self._temp_high
+                        ),
+                    above_range_color=(
+                        0.75,
+                        0.75,
+                        0.75,
+                        1.0
+                    )
+                ),
+                scalar_bar_args={
+                    "title": "Nodal Temperature (Kelvin)",
+                    "font_family": "courier",
+                    "color": "#000000",
+                    "fmt": "%.2f",
+                    "position_y": 0
+                }
+            )
+
+            plotter.show_bounds(
+                location="outer",
+                ticks="both",
+                font_size=14.0,
+                font_family="courier",
+                color="#000000",
+                axes_ranges=points.bounds
+                )
+
+            plotter.set_background(color="#FFFFFF")
+
+            # TODO
+            plotter.camera.elevation = 0
+            plotter.camera.azimuth = 270
+            plotter.camera.roll = 300
+            plotter.camera_set = True
+
+            return plotter
 
 
     # TODO generator method for time steps. Overload __iter__?
