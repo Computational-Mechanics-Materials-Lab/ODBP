@@ -565,7 +565,7 @@ class Odb():
             pickle.dump(odb_to_npz_pickle_input_dict, pickle_file, protocol=2)
 
         odb_convert_args: List[Union[pathlib.Path, str]]  = [
-            abaqus_executable,
+            self.abaqus_executable,
             "python",
             self._odb_to_npz_script_path,
             odb_path,
