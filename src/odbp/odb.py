@@ -32,6 +32,7 @@ class Odb():
     Implements abilities to resize the dimenisons or timeframe of the data
     """
 
+    # TODO user settings sub-section, overload getattr
     __slots__ = (
         "_odb_handler",
         "_odb",
@@ -55,6 +56,7 @@ class Odb():
         "_npz_result_path",
         "_nodesets",
         "_frames",
+        "_cpus",
         )
 
     def __init__(self) -> None:
@@ -106,6 +108,8 @@ class Odb():
             pathlib.Path.cwd(),
             "npz_path.pickle"
         )
+
+        self._cpus = multiprocessing.cpu_count()
 
         # TODO
         """self._parts: NullableStrList
@@ -473,6 +477,17 @@ class Odb():
         self._nodesets = value
 
 
+    @property
+    def cpus(self) -> int:
+        return self._cpus
+
+
+    @cpus.setter
+    def cpus(self, value: int) -> None:
+        assert value > 0
+        self._cpus = value
+
+
     """def set_parts(self, parts: "list[str]") -> None:
         if not isinstance(parts, list):
             new_list: list[str] = [parts]
@@ -557,7 +572,8 @@ class Odb():
             str, Union[List[str], List[int], None]
             ] = {
                 "nodesets": self._nodesets,
-                "frames": self._frames
+                "frames": self._frames,
+                "cpus": self.cpus
             }
         pickle_file: TextIO
         with open(
@@ -596,7 +612,7 @@ class Odb():
 
         try:
             # Only case where this should be set, bypass the setter
-            self._odb = self._odb_handler.load_hdf(self.hdf_path)
+            self._odb = self._odb_handler.load_hdf(self.hdf_path, self.cpus)
             self._odb_handler = OdbUnloader()
 
         except AttributeError:
@@ -623,8 +639,8 @@ class Odb():
 
 class OdbLoader:
 
-    def load_hdf(self, hdf_path: pathlib.Path) -> DataFrameType:
-        return get_odb_data(hdf_path)
+    def load_hdf(self, hdf_path: pathlib.Path, cpus: int) -> DataFrameType:
+        return get_odb_data(hdf_path, cpus)
 
 
 class OdbUnloader:

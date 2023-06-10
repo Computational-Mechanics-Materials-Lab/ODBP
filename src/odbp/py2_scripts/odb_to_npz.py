@@ -52,8 +52,9 @@ def main():
 
     nodesets = data_to_extract["nodesets"]
     frames = data_to_extract["frames"]
+    num_cpus = data_to_extract["cpus"]
 
-    result_name = convert_odb_to_npz(odb_path, nodesets, frames)
+    result_name = convert_odb_to_npz(odb_path, nodesets, frames, num_cpus)
     result_file = open(result_path, "wb")
     try:
         pickle.dump(result_name, result_file)
@@ -62,7 +63,7 @@ def main():
 
 
 
-def convert_odb_to_npz(odb_path, nodesets, frames):
+def convert_odb_to_npz(odb_path, nodesets, frames, num_cpus):
     """
     Based on the 4 lists given, convert the .odb data to .npz files
     odb_path: str path to the .odb file
@@ -115,12 +116,12 @@ def convert_odb_to_npz(odb_path, nodesets, frames):
         for step_key, base_time in base_times:
             coord_file = os.path.join(parent_dir, "node_coords.npz")
             read_nodeset_coords(odb_path, nodeset, coord_file, step_key)
-            read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset)
+            read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset, num_cpus)
 
     return parent_dir
 
 
-def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset):
+def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset, num_cpus):
     odb = openOdb(odb_path, readOnly=True)
     steps = odb.steps
 
@@ -143,7 +144,6 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, n
         idx_list = [i for i in range(len(steps[step_key].frames))]
         idx_list_len = len(idx_list)
         idx_list_max = idx_list[-1]
-        num_cpus = multiprocessing.cpu_count()
         # TODO: what if the length isn't divisible by the number of processors (is it now?)
         final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, max(int(idx_list_len / num_cpus), 1))]
         odb.close()
