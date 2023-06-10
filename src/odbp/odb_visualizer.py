@@ -90,7 +90,7 @@ class OdbVisualizer(Odb):
             ] = [(time, label) for time in times]
         results: List[pv.Plotter] = list()
         pool: MultiprocessingPoolType
-        with multiprocessing.Pool() as pool:
+        with multiprocessing.Pool(processes=self.cpus) as pool:
             results: list[pv.Plotter] = pool.starmap(
                 self.plot_3d_single,
                 plotting_args

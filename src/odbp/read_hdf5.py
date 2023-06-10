@@ -21,6 +21,7 @@ from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, Multi
 
 def get_odb_data(
     hdf_path: pathlib.Path
+    cpus: int
     ) -> DataFrameType:
     """
     get_node_coords(hdf_path: pathlib.Path) -> DataFrameType
@@ -43,7 +44,7 @@ def get_odb_data(
 
                 results: List[DataFrameType]
                 pool: MultiprocessingPoolType
-                with multiprocessing.Pool() as pool:
+                with multiprocessing.Pool(processes=cpus) as pool:
                     results = pool.starmap(get_frame_data, args_list)
 
                 return pd.concat(results)

@@ -31,6 +31,7 @@ from odbp import Odb
     * 0.5.1: Implement new system information (pypi tags, this changelog)
     * 0.5.2: Returning support to Python 3.8+ (type hinting)
     * 0.5.3: Patching conversion bugs
+    * 0.5.4: Parametrize number of cpus for testing
 * Upcoming:
     * 0.6.0: Improved extractor across all file types. Improved Odb object iteration.
     * 0.7.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline
