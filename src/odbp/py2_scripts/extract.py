@@ -16,7 +16,45 @@ import argparse
 import numpy as np
 from odbAccess import openOdb
 
-def main(odb_path, save_path, parts=None, nodesets=None, nodes=None):
+
+def main():
+    input_args = "input args"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(input_args, nargs="*")
+    odb_path, save_path = vars(parser.parse_args())[input_args]
+
+    input_file = open(save_path, "rb")
+    input_dict = pickle.load(input_file)
+    input_file.close()
+    old_parts = input_dict["parts"]
+    old_nodesets = input_dict["nodesets"]
+    old_nodes = input_dict["nodes"]
+
+    if old_parts is not None:
+        parts = list()
+        for p in old_parts:
+            parts.append(str(p))
+    else:
+        parts = old_parts
+
+    if old_nodesets is not None:
+        nodesets = list()
+        for n in old_nodesets:
+            nodesets.append(str(n))
+    else:
+        nodesets = old_nodesets
+
+    if old_nodes is not None:
+        nodes = dict()
+        for k, v in old_nodes:
+            nodes[str(k)] = int(v)
+    else:
+        nodes = old_nodes
+
+    extract(odb_path, save_path, parts, nodesets, nodes)
+
+
+def extract(odb_path, save_path, parts=None, nodesets=None, nodes=None):
     odb = openOdb(odb_path, readOnly=True)
     steps = odb.steps
     root_assembly = odb.rootAssembly
@@ -118,37 +156,4 @@ def main(odb_path, save_path, parts=None, nodesets=None, nodes=None):
 
  
 if __name__ == "__main__":
-    input_args = "input args"
-    parser = argparse.ArgumentParser()
-    parser.add_argument(input_args, nargs="*")
-    odb_path, save_path = vars(parser.parse_args())[input_args]
-
-    input_file = open(save_path, "rb")
-    input_dict = pickle.load(input_file)
-    input_file.close()
-    old_parts = input_dict["parts"]
-    old_nodesets = input_dict["nodesets"]
-    old_nodes = input_dict["nodes"]
-
-    if old_parts is not None:
-        parts = list()
-        for p in old_parts:
-            parts.append(str(p))
-    else:
-        parts = old_parts
-
-    if old_nodesets is not None:
-        nodesets = list()
-        for n in old_nodesets:
-            nodesets.append(str(n))
-    else:
-        nodesets = old_nodesets
-
-    if old_nodes is not None:
-        nodes = dict()
-        for k, v in old_nodes:
-            nodes[str(k)] = int(v)
-    else:
-        nodes = old_nodes
-
-    main(odb_path, save_path, parts, nodesets, nodes)
+    main()

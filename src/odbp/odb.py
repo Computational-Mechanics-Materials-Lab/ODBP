@@ -16,9 +16,10 @@ import pathlib
 import pickle
 import multiprocessing
 
+import numpy as np
 import pandas as pd
 
-from typing import TextIO, Callable, Union, Any, List, Dict, Optional
+from typing import TextIO, Callable, Union, Any, Tuple, List, Dict, Optional, Iterator
 from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
@@ -62,9 +63,14 @@ class Odb():
         "_npz_result_path",
         "_nodesets",
         "_frames",
+        "_nodes",
+        "_coord_key",
+        "_temp_key",
         "_interactive",
         "_angle",
         "_colormap",
+        "_iterator_ind",
+        "_times"
         )
 
     def __init__(self) -> None:
@@ -86,6 +92,10 @@ class Odb():
 
         self._nodesets: NullableStrList = None
         self._frames: NullableIntList = None
+        self._nodes: Optional[Dict[str, List[int]]] = None
+
+        self._coord_key: str = "COORD"
+        self._temp_key: str = "NT11"
 
         self._x_low: float
         self._x_high: float
@@ -125,7 +135,10 @@ class Odb():
 
         # TODO
         """self._parts: NullableStrList
-        self._nodes: dict[str, list[int]]"""
+        self._steps: NullableStrList"""
+
+        self._iterator_ind: int = 0
+        self._times: NDArrayType
 
 
     # def __new__(self) -> None:
@@ -134,6 +147,24 @@ class Odb():
     #             "instead:\n"
     #             "")
 
+
+    def __iter__(self) -> Iterator[DataFrameType]:
+        return self
+
+
+    def __next__(self) -> DataFrameType:
+        try:
+            if self._iterator_ind >= len(self._times):
+                self._iterator_ind = 0
+                raise StopIteration
+
+            ind: int = self._iterator_ind
+            self._iterator_ind += 1
+            return self[self["Time"] == self._times[ind]]
+
+        except AttributeError:
+            raise AttributeError("Odb() object only functions as an iterator"
+                                 "After load_hdf() has been called.")
 
     def __getitem__(self, key: Any) -> Any:
         try:
@@ -593,7 +624,9 @@ class Odb():
             str, Optional[Union[List[str], List[int]]]
             ] = {
                 "nodesets": self._nodesets,
-                "frames": self._frames
+                "frames": self._frames,
+                "coord_key": self._coord_key,
+                "temp_key": self._temp_key
             }
         pickle_file: TextIO
         with open(
@@ -634,6 +667,7 @@ class Odb():
             # Only case where this should be set, bypass the setter
             self._odb = self._odb_handler.load_hdf(self.hdf_path)
             self._odb_handler = OdbUnloader()
+            self._times = np.sort(self["Time"].unique())
 
         except AttributeError:
             raise AttributeError("load_hdf can only be used once in a row, "
@@ -793,9 +827,6 @@ class Odb():
             plotter.camera_set = True
 
             return plotter
-
-
-    # TODO generator method for time steps. Overload __iter__?
 
 
 class OdbLoader:

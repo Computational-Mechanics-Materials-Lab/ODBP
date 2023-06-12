@@ -20,7 +20,8 @@ from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, Multi
 
 
 def get_odb_data(
-    hdf_path: pathlib.Path
+    hdf_path: pathlib.Path,
+    cpus: int
     ) -> DataFrameType:
     """
     get_node_coords(hdf_path: pathlib.Path) -> DataFrameType

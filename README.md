@@ -43,7 +43,7 @@ from odbp import Odb
     * 0.5.2: Returning support to Python 3.8+ (type hinting)
     * 0.5.3: Patching conversion bugs
 * Upcoming:
-    * 0.6.0: Improved extractor across all file types. Improved Odb object iteration.
+    * 0.6.0: Improve extractor across all file types. Improve Odb object iteration.
     * 0.7.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline
     * 0.8.0: Parametrize input values such as nodes, nodesets, frames, steps, parts, and colors (both in the API and CLI).
     * 0.9.0: Create two-dimensional plotting capabilities and sane defaults.
