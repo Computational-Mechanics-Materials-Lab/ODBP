@@ -18,7 +18,11 @@ import pickle
 import numpy as np
 import pandas as pd
 
+<<<<<<< HEAD
 from typing import TextIO, Union, Any, Tuple, List, Dict, Optional, Iterator
+=======
+from typing import TextIO, Callable, Union, Any, Tuple, List, Dict, Optional, Iterator
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
@@ -31,6 +35,13 @@ except ImportError:
     PYVISTA_AVILABLE = False
 else:
     PYVISTA_AVAILABLE = True"""
+
+try:
+    import pyvista as pv
+except ImportError:
+    PYVISTA_AVILABLE = False
+else:
+    PYVISTA_AVAILABLE = True
 
 
 class Odb():
@@ -67,6 +78,7 @@ class Odb():
         "_nodes",
         "_nodesets",
         "_frames",
+<<<<<<< HEAD
 <<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
 <<<<<<< 21a136b0d8bcaeb68e44c96b26dbe823e2798029
 <<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
@@ -82,6 +94,9 @@ class Odb():
         "_parts",
         "_steps",
 >>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
+=======
+        "_nodes",
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         "_coord_key",
         "_temp_key",
         "_interactive",
@@ -89,7 +104,10 @@ class Odb():
         "_colormap",
         "_iterator_ind",
         "_times"
+<<<<<<< HEAD
 >>>>>>> 0.6.0 Moving to Desktop
+=======
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         )
 
 
@@ -113,8 +131,12 @@ class Odb():
         self._nodes: NullableNodeType = None
         self._nodesets: NullableStrList = None
         self._frames: NullableIntList = None
+<<<<<<< HEAD
         self._parts: NullableStrList = None
         self._steps: NullableStrList = None
+=======
+        self._nodes: Optional[Dict[str, List[int]]] = None
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
         self._coord_key: str = "COORD"
         self._temp_key: str = "NT11"
@@ -160,6 +182,7 @@ class Odb():
             "npz_path.pickle"
         )
 
+<<<<<<< HEAD
 <<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
 <<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
         self._cpus = multiprocessing.cpu_count()
@@ -177,6 +200,17 @@ class Odb():
         # TODO
         self._angle = Union[str, Tuple[float, float, float]]
 >>>>>>> Starting to implement 0.6.0
+=======
+        self._interactive: bool = False
+        self._colormap: str = "turbo"
+
+        # TODO
+        self._angle = Union[str, Tuple[float, float, float]]
+
+        # TODO
+        """self._parts: NullableStrList
+        self._steps: NullableStrList"""
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
         self._iterator_ind: int = 0
         self._times: NDArrayType
@@ -620,6 +654,7 @@ class Odb():
 
 
     @property
+<<<<<<< HEAD
     def frames(self) -> NullableIntList:
         return self._frames
 
@@ -651,6 +686,8 @@ class Odb():
 
     """
     @property
+=======
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
     def colormap(self) -> str:
         return self._colormap
 
@@ -668,7 +705,11 @@ class Odb():
     @interactive.setter
     def interactive(self, value: bool) -> None:
         self._interactive = value
+<<<<<<< HEAD
 """
+=======
+
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
     def convert_odb_to_hdf(
             self,
@@ -731,6 +772,7 @@ class Odb():
 <<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
                 "nodesets": self._nodesets,
                 "frames": self._frames,
+<<<<<<< HEAD
 <<<<<<< 21a136b0d8bcaeb68e44c96b26dbe823e2798029
                 "cpus": self.cpus
 =======
@@ -746,6 +788,10 @@ class Odb():
                 "coord_key": self.coord_key,
                 "temp_key": self.temp_key
 >>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
+=======
+                "coord_key": self._coord_key,
+                "temp_key": self._temp_key
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
             }
         pickle_file: TextIO
         with open(
@@ -916,13 +962,21 @@ class Odb():
                 "load_hdf.")
 
 
+<<<<<<< HEAD
     """def plot_3d_all_times(
+=======
+    def plot_3d_all_times(
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
             self,
             label: str = "",
             ) -> "List[pv.Plotter]":
         """
 
+<<<<<<< HEAD
     """
+=======
+        """
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         if not PYVISTA_AVAIL:
             raise Exception("Plotting capabilities are not included."
                             'Please pip install odb-plotter["plot"]'
@@ -942,9 +996,15 @@ class Odb():
         for time in times:
             result = self._plot_3d_single(time, label)
             if result is not None:
+<<<<<<< HEAD
                 results.append(result)"""
         # TODO Any way to make this work?
     """
+=======
+                results.append(result)
+        # TODO Any way to make this work?
+        """
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         # TODO dataclass
         plotting_args: List[
             Tuple[
@@ -960,16 +1020,27 @@ class Odb():
                 plotting_args
                 )"""
 
+<<<<<<< HEAD
         #return results 
 
 
     """def _plot_3d_single(
+=======
+        return results 
+
+
+    def _plot_3d_single(
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         self,
         time: float,
         label: str
         )-> "Optional[pv.Plotter]":
         """
+<<<<<<< HEAD
     """
+=======
+        """
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
         if not PYVISTA_AVAIL:
             raise Exception("Plotting capabilities are not included."
@@ -1054,7 +1125,11 @@ class Odb():
             plotter.camera.roll = 300
             plotter.camera_set = True
 
+<<<<<<< HEAD
             return plotter"""
+=======
+            return plotter
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
 
 class OdbLoader:

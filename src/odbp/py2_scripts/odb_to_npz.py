@@ -51,6 +51,7 @@ def main():
     # Now we can remove the file
     os.remove(pickle_path)
 
+<<<<<<< HEAD
     user_nodes = input_dict.get("nodes")
     if isinstance(user_nodes, collections.Mapping):
         temp_nodes = dict()
@@ -88,6 +89,16 @@ def main():
     temp_key = str(input_dict.get("temp_key", "NT11"))
 
     result_name = convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_parts, user_steps, coord_key, temp_key)
+=======
+    nodesets = input_dict["nodesets"]
+    frames = input_dict["frames"]
+    nodes = input_dict["nodes"]
+    coord_key = input_dict["coord_key"]
+    temp_key = input_dict["temp_key"]
+
+    result_name = convert_odb_to_npz(odb_path, nodesets, frames, nodes, coord_key, temp_key)
+    result_file = open(result_path, "wb")
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
     try:
         result_file = open(result_path, "wb")
         pickle.dump(result_name, result_file)
@@ -95,7 +106,11 @@ def main():
         result_file.close()
 
 
+<<<<<<< HEAD
 def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_parts, user_steps, coord_key, temp_key):
+=======
+def convert_odb_to_npz(odb_path, nodesets, frames, nodes, coord_key, temp_key):
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
     """
     Based on the 4 lists given, convert the .odb data to .npz files
     odb_path: str path to the .odb file
@@ -126,9 +141,35 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_pa
 
         steps = odb.steps
 
+<<<<<<< HEAD
         base_times = [
             (step_key, step_val.totalTime) for step_key, step_val in steps.items()
             ]
+=======
+    base_times = [
+        (step_key, step_val.totalTime) for step_key, step_val in steps.items()
+        ]
+
+    assembly = odb.rootAssembly
+
+    if nodes is not None:
+        for key, val in nodes:
+            assembly.NodeSetFromNodeLabels(name=key, nodeLabels=(val,))
+            if nodesets is not None:
+                nodesets.append(key)
+
+    nodeset_keys = assembly.nodeSets.keys()
+    if nodesets is None:
+        nodesets = nodeset_keys
+    else:
+        for nodeset in nodesets:
+            if nodeset not in nodeset_keys:
+                raise ValueError(
+                    '"{0}" is not a valid nodeset key.' \
+                        'Possible values in this .odb are "{1}"'
+                .format(nodeset, nodeset_keys)
+                )
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
         assembly = odb.rootAssembly
 
@@ -184,12 +225,20 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_pa
         for step_key, base_time in base_times:
             coord_file = os.path.join(parent_dir, "node_coords.npz")
             read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key)
+<<<<<<< HEAD
             read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, target_frames, nodeset, temp_key)
+=======
+            read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset, temp_key)
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
     return parent_dir
 
 
+<<<<<<< HEAD
 def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, target_frames, nodeset, temp_key):
+=======
+def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, frames, nodeset, temp_key):
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
     odb = openOdb(odb_path, readOnly=True)
     steps = odb.steps
 
@@ -217,7 +266,11 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, target_fr
 
         temp_procs = list()
         for idx_list in final_idx_list:
+<<<<<<< HEAD
             p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, max_pad, target_frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key))
+=======
+            p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, max_pad, frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key))
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
             p.start()
             temp_procs.append(p)
 
@@ -239,7 +292,11 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, target_fr
             )
 
 
+<<<<<<< HEAD
 def read_single_frame_temp(odb_path, idx_list, max_pad, target_frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key):
+=======
+def read_single_frame_temp(odb_path, idx_list, max_pad, frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key):
+>>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
     odb = openOdb(odb_path, readOnly=True)
     steps = odb.steps
