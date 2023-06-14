@@ -124,7 +124,7 @@ class Odb():
         self._odb_to_npz_script_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
             "py2_scripts",
-            "odb_to_npz.py"
+            "convert.py"
         )
 
         self._extract_from_odb_script_path: pathlib.Path = pathlib.Path(
@@ -760,7 +760,7 @@ class Odb():
 
     def extract(self) -> DataFrameType:
         if hasattr(self, "hdf_path"):
-            return self._extract_from_hdf()
+            return self.extract_from_hdf()
         elif hasattr(self, "odb_path"):
             return self.extract_from_odb()
 
@@ -816,7 +816,7 @@ class Odb():
         results_df_list: List[DataFrameType] = list()
         for result in results:
             time = result.pop("time")
-            results_df_list.append(pd.DataFrame({time: result}, orient="index"))
+            results_df_list.append(pd.DataFrame.from_dict({time: result}, orient="index"))
 
         result_df: pd.DataFrame = pd.concat(results_df_list)
 
@@ -845,12 +845,22 @@ class Odb():
             if not hasattr(self, "odb"):
                 self.load_hdf()
 
+        results: List[DataFrameType] = list()
         frame: DataFrameType
         for frame in self:
-            min: frame["Temp"].min()
-            max: frame["Temp"].max()
+            time: float = frame["Time"].values[0]
+            temp_df: DataFrameType = frame[frame["Temp"] != 300]
+            temp_df = temp_df[temp_df["Temp"] != 0]
+            temp_df = temp_df[temp_df["Temp"] != np.nan]
+            temp_vals: NDArrayType = temp_df["Temp"].values
+            min: float = np.min(temp_vals) if len(temp_vals) > 0 else np.nan
+            max: float = np.max(temp_vals) if len(temp_vals) > 0 else np.nan
+            mean: float = np.mean(temp_vals) if len(temp_vals) > 0 else np.nan
+            results.append(pd.DataFrame.from_dict({time: {"max": max, "min": min, "mean": mean}}, orient="index"))
 
+        results_df: pd.DataFrame = pd.concat(results)
 
+        return results_df
 
 
     def load_hdf(self) -> None:

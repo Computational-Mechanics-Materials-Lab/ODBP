@@ -141,7 +141,8 @@ def extract(odb_path, save_path, target_nodesets, target_frames, temp_key):
                     region = assembly.nodeSets[nodeset]
                     temp_subset = selected_temp_results.getSubset(region=region)
                     temp = np.copy(temp_subset.bulkDataBlocks[0].data).astype("float64")
-                    temp[temp >= 301] = np.nan
+                    temp[temp == 0] = np.nan
+                    temp[temp == 300] = np.nan
                     temp = temp[~np.isnan(temp)]
 
                     final_record.append({

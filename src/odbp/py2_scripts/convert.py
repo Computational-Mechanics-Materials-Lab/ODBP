@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-ODBPlotter odb_to_npz.py
+ODBPlotter convert.py
 
 ODBPlotter
 https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
