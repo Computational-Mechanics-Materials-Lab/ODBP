@@ -14,20 +14,17 @@ import subprocess
 import shutil
 import pathlib
 import pickle
+import multiprocessing
 
 import numpy as np
 import pandas as pd
 
-<<<<<<< HEAD
 from typing import TextIO, Union, Any, Tuple, List, Dict, Optional, Iterator
-=======
-from typing import TextIO, Callable, Union, Any, Tuple, List, Dict, Optional, Iterator
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
 from .read_hdf5 import get_odb_data
-from .util import NullableIntList, NullableStrList, DataFrameType, NDArrayType, NullableNodeType, NodeType, ODB_MAGIC_NUM, HDF_MAGIC_NUM, H5PYFileType, H5PYGroupType
+from .util import NullableIntList, NullableStrList, DataFrameType, NDArrayType, NullableNodeType, NodeType, ODB_MAGIC_NUM, HDF_MAGIC_NUM
 
 """try:
     import pyvista as pv
@@ -35,13 +32,6 @@ except ImportError:
     PYVISTA_AVILABLE = False
 else:
     PYVISTA_AVAILABLE = True"""
-
-try:
-    import pyvista as pv
-except ImportError:
-    PYVISTA_AVILABLE = False
-else:
-    PYVISTA_AVAILABLE = True
 
 
 class Odb():
@@ -75,28 +65,12 @@ class Odb():
         "_extract_from_odb_script_path",
         "_extract_from_odb_pickle_path",
         "_extract_result_path",
-        "_nodes",
+        "_cpus",
         "_nodesets",
         "_frames",
-<<<<<<< HEAD
-<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
-<<<<<<< 21a136b0d8bcaeb68e44c96b26dbe823e2798029
-<<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
-        "_cpus",
-=======
-        "_interactive",
-        "_angle",
-        "_colormap",
->>>>>>> Starting to implement 0.6.0
-=======
         "_nodes",
-=======
         "_parts",
         "_steps",
->>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
-=======
-        "_nodes",
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         "_coord_key",
         "_temp_key",
         "_interactive",
@@ -104,10 +78,6 @@ class Odb():
         "_colormap",
         "_iterator_ind",
         "_times"
-<<<<<<< HEAD
->>>>>>> 0.6.0 Moving to Desktop
-=======
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
         )
 
 
@@ -131,12 +101,8 @@ class Odb():
         self._nodes: NullableNodeType = None
         self._nodesets: NullableStrList = None
         self._frames: NullableIntList = None
-<<<<<<< HEAD
         self._parts: NullableStrList = None
         self._steps: NullableStrList = None
-=======
-        self._nodes: Optional[Dict[str, List[int]]] = None
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
         self._coord_key: str = "COORD"
         self._temp_key: str = "NT11"
@@ -182,35 +148,18 @@ class Odb():
             "npz_path.pickle"
         )
 
-<<<<<<< HEAD
-<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
-<<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
         self._cpus = multiprocessing.cpu_count()
-=======
-=======
+
         self._extract_result_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
             "extract_results.pickle"
         )
 
->>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
         self._interactive: bool = False
         self._colormap: str = "turbo"
 
         # TODO
         self._angle = Union[str, Tuple[float, float, float]]
->>>>>>> Starting to implement 0.6.0
-=======
-        self._interactive: bool = False
-        self._colormap: str = "turbo"
-
-        # TODO
-        self._angle = Union[str, Tuple[float, float, float]]
-
-        # TODO
-        """self._parts: NullableStrList
-        self._steps: NullableStrList"""
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
         self._iterator_ind: int = 0
         self._times: NDArrayType
@@ -597,6 +546,17 @@ class Odb():
 
 
     @property
+    def cpus(self) -> int:
+        return self._cpus
+
+
+    @cpus.setter
+    def cpus(self, value: int) -> None:
+        assert value > 0
+        self._cpus = value
+
+
+    @property
     def nodes(self) -> NullableNodeType:
         return self._nodes
 
@@ -617,44 +577,26 @@ class Odb():
 
 
     @property
-<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
-    def cpus(self) -> int:
-        return self._cpus
-
-
-    @cpus.setter
-    def cpus(self, value: int) -> None:
-        assert value > 0
-        self._cpus = value
-
-
-    """def set_parts(self, parts: "list[str]") -> None:
-        if not isinstance(parts, list):
-            new_list: list[str] = [parts]
-            self.parts = new_list
-=======
     def parts(self) -> NullableStrList:
         return self._parts
->>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
 
 
     @parts.setter
     def parts(self, value: "List[str]") -> None:
         self._parts = value
-
+    
 
     @property
     def steps(self) -> NullableStrList:
         return self._steps
 
-
+    
     @steps.setter
     def steps(self, value: "List[str]") -> None:
         self._steps = value
 
 
     @property
-<<<<<<< HEAD
     def frames(self) -> NullableIntList:
         return self._frames
 
@@ -686,8 +628,6 @@ class Odb():
 
     """
     @property
-=======
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
     def colormap(self) -> str:
         return self._colormap
 
@@ -705,11 +645,7 @@ class Odb():
     @interactive.setter
     def interactive(self, value: bool) -> None:
         self._interactive = value
-<<<<<<< HEAD
 """
-=======
-
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
 
     def convert_odb_to_hdf(
             self,
@@ -769,29 +705,14 @@ class Odb():
         odb_to_npz_pickle_input_dict: Dict[
             str, Optional[Union[List[str], List[int]]]
             ] = {
-<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
-                "nodesets": self._nodesets,
-                "frames": self._frames,
-<<<<<<< HEAD
-<<<<<<< 21a136b0d8bcaeb68e44c96b26dbe823e2798029
-                "cpus": self.cpus
-=======
-                "coord_key": self._coord_key,
-                "temp_key": self._temp_key
->>>>>>> 0.6.0 Moving to Desktop
-=======
+                "cpus": self.cpus,
                 "nodes": self.nodes,
                 "nodesets": self.nodesets,
                 "frames": self.frames,
                 "parts": self.parts,
                 "steps": self.steps,
-                "coord_key": self.coord_key,
-                "temp_key": self.temp_key
->>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
-=======
                 "coord_key": self._coord_key,
                 "temp_key": self._temp_key
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
             }
         pickle_file: TextIO
         with open(
@@ -860,7 +781,8 @@ class Odb():
                 "frames": self.frames,
                 "parts": self.parts,
                 "steps": self.steps,
-                "temp_key": self.temp_key
+                "temp_key": self.temp_key,
+                "cpus": self.cpus
             }
             
         temp_file: TextIO
@@ -962,183 +884,149 @@ class Odb():
                 "load_hdf.")
 
 
-<<<<<<< HEAD
-    """def plot_3d_all_times(
-=======
-    def plot_3d_all_times(
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
-            self,
-            label: str = "",
-            ) -> "List[pv.Plotter]":
-        """
+    #def plot_3d_all_times(
+    #        self,
+    #        label: str = "",
+    #        ) -> "List[pv.Plotter]":
+    #    """
 
-<<<<<<< HEAD
-    """
-=======
-        """
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
-        if not PYVISTA_AVAIL:
-            raise Exception("Plotting capabilities are not included."
-                            'Please pip install odb-plotter["plot"]'
-                            'or pip install odb-plotter["all"] to use'
-                            "three-dimensional plotting")
+    #    """
+    #    if not PYVISTA_AVAIL:
+    #        raise Exception("Plotting capabilities are not included."
+    #                        'Please pip install odb-plotter["plot"]'
+    #                        'or pip install odb-plotter["all"] to use'
+    #                        "three-dimensional plotting")
 
-        times: DataFrameType = np.sort(self["Time"].unique())
+    #    times: DataFrameType = np.sort(self["Time"].unique())
 
-        plotting_args: List[
-            Tuple[
-                float,
-                str
-                ]
-            ] = [(time, label) for time in times]
-        results: List[pv.Plotter] = list()
-        time: float
-        for time in times:
-            result = self._plot_3d_single(time, label)
-            if result is not None:
-<<<<<<< HEAD
-                results.append(result)"""
-        # TODO Any way to make this work?
-    """
-=======
-                results.append(result)
-        # TODO Any way to make this work?
-        """
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
-        # TODO dataclass
-        plotting_args: List[
-            Tuple[
-                float,
-                str
-                ]
-            ] = [(time, label) for time in times]
-        results: List[pv.Plotter] = list()
-        pool: MultiprocessingPoolType
-        with multiprocessing.Pool() as pool:
-            results: list[pv.Plotter] = pool.starmap(
-                self._plot_3d_single,
-                plotting_args
-                )"""
+    #    plotting_args: List[
+    #        Tuple[
+    #            float,
+    #            str
+    #            ]
+    #        ] = [(time, label) for time in times]
+    #    results: List[pv.Plotter] = list()
+    #    time: float
+    #    for time in times:
+    #        result = self._plot_3d_single(time, label)
+    #        if result is not None:
+    #            results.append(result)
+    #    # TODO Any way to make this work?
+    #    # TODO dataclass
+    #    plotting_args: List[
+    #        Tuple[
+    #            float,
+    #            str
+    #            ]
+    #        ] = [(time, label) for time in times]
+    #    results: List[pv.Plotter] = list()
+    #    pool: MultiprocessingPoolType
+    #    with multiprocessing.Pool() as pool:
+    #        results: list[pv.Plotter] = pool.starmap(
+    #            self._plot_3d_single,
+    #            plotting_args
+    #            )
 
-<<<<<<< HEAD
-        #return results 
+    #    return results 
 
 
-    """def _plot_3d_single(
-=======
-        return results 
+    #def _plot_3d_single(
+    #    self,
+    #    time: float,
+    #    label: str
+    #    )-> "Optional[pv.Plotter]":
+    #    """
+    #    """
 
+    #    if not PYVISTA_AVAIL:
+    #        raise Exception("Plotting capabilities are not included."
+    #                        'Please pip install odb-plotter["plot"]'
+    #                        'or pip install odb-plotter["all"] to use'
+    #                        "three-dimensional plotting")
 
-    def _plot_3d_single(
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
-        self,
-        time: float,
-        label: str
-        )-> "Optional[pv.Plotter]":
-        """
-<<<<<<< HEAD
-    """
-=======
-        """
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
+    #    dims_columns: set[str] = {"X", "Y", "Z"}
+    #    combined_label: str = f"{label}-{round(time, 2):.2f}"
 
-        if not PYVISTA_AVAIL:
-            raise Exception("Plotting capabilities are not included."
-                            'Please pip install odb-plotter["plot"]'
-                            'or pip install odb-plotter["all"] to use'
-                            "three-dimensional plotting")
+    #    plotter: pv.Plotter = pv.Plotter(
+    #        off_screen=(not self._interactive),
+    #        window_size=(1920, 1080),
+    #        lighting="three lights"
+    #        )
 
-        dims_columns: set[str] = {"X", "Y", "Z"}
-        combined_label: str = f"{label}-{round(time, 2):.2f}"
+    #    plotter.add_text(
+    #        combined_label,
+    #        position="upper_edge",
+    #        color="#000000",
+    #        font="courier"
+    #    )
 
-        plotter: pv.Plotter = pv.Plotter(
-            off_screen=(not self._interactive),
-            window_size=(1920, 1080),
-            lighting="three lights"
-            )
+    #    instance_nodes: DataFrameType = self.filter_nodes(
+    #        "Time",
+    #        time,
+    #        operator.eq
+    #    )
 
-        plotter.add_text(
-            combined_label,
-            position="upper_edge",
-            color="#000000",
-            font="courier"
-        )
+    #    if not instance_nodes.empty:
+    #        points: pv.PolyData = pv.PolyData(
+    #            instance_nodes.drop(
+    #                columns=list(
+    #                    set(self._target_nodes.columns.values.tolist())
+    #                    - dims_columns
+    #                    )
+    #                ).to_numpy()
+    #            )
 
-        instance_nodes: DataFrameType = self.filter_nodes(
-            "Time",
-            time,
-            operator.eq
-        )
+    #        points["Temp"] = instance_nodes["Temp"].to_numpy()
+    #        mesh: pv.PolyData = points.delaunay_3d()
 
-        if not instance_nodes.empty:
-            points: pv.PolyData = pv.PolyData(
-                instance_nodes.drop(
-                    columns=list(
-                        set(self._target_nodes.columns.values.tolist())
-                        - dims_columns
-                        )
-                    ).to_numpy()
-                )
-            
-            points["Temp"] = instance_nodes["Temp"].to_numpy()
-            mesh: pv.PolyData = points.delaunay_3d()
+    #        plotter.add_mesh(
+    #            mesh,
+    #            scalars="Temp",
+    #            cmap = pv.LookupTable(
+    #                cmap=self._colormap,
+    #                scalar_range=(
+    #                    self._temp_low,
+    #                    self._temp_high
+    #                    ),
+    #                above_range_color=(
+    #                    0.75,
+    #                    0.75,
+    #                    0.75,
+    #                    1.0
+    #                )
+    #            ),
+    #            scalar_bar_args={
+    #                "title": "Nodal Temperature (Kelvin)",
+    #                "font_family": "courier",
+    #                "color": "#000000",
+    #                "fmt": "%.2f",
+    #                "position_y": 0
+    #            }
+    #        )
 
-            plotter.add_mesh(
-                mesh,
-                scalars="Temp",
-                cmap = pv.LookupTable(
-                    cmap=self._colormap,
-                    scalar_range=(
-                        self._temp_low,
-                        self._temp_high
-                        ),
-                    above_range_color=(
-                        0.75,
-                        0.75,
-                        0.75,
-                        1.0
-                    )
-                ),
-                scalar_bar_args={
-                    "title": "Nodal Temperature (Kelvin)",
-                    "font_family": "courier",
-                    "color": "#000000",
-                    "fmt": "%.2f",
-                    "position_y": 0
-                }
-            )
+    #        plotter.show_bounds(
+    #            location="outer",
+    #            ticks="both",
+    #            font_size=14.0,
+    #            font_family="courier",
+    #            color="#000000",
+    #            axes_ranges=points.bounds
+    #            )
 
-            plotter.show_bounds(
-                location="outer",
-                ticks="both",
-                font_size=14.0,
-                font_family="courier",
-                color="#000000",
-                axes_ranges=points.bounds
-                )
+    #        plotter.set_background(color="#FFFFFF")
 
-            plotter.set_background(color="#FFFFFF")
+    #        # TODO
+    #        plotter.camera.elevation = 0
+    #        plotter.camera.azimuth = 270
+    #        plotter.camera.roll = 300
+    #        plotter.camera_set = True
 
-            # TODO
-            plotter.camera.elevation = 0
-            plotter.camera.azimuth = 270
-            plotter.camera.roll = 300
-            plotter.camera_set = True
-
-<<<<<<< HEAD
-            return plotter"""
-=======
-            return plotter
->>>>>>> e5096a3e1d21e9c5d8b0f783afcbd47f9876b482
+    #        return plotter
 
 
 class OdbLoader:
 
-<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
     def load_hdf(self, hdf_path: pathlib.Path, cpus: int) -> DataFrameType:
-=======
-    def load_hdf(self, hdf_path: pathlib.Path) -> DataFrameType:
->>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
         return get_odb_data(hdf_path, cpus)
 
 
