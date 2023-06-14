@@ -14,24 +14,23 @@ import subprocess
 import shutil
 import pathlib
 import pickle
-import multiprocessing
 
 import numpy as np
 import pandas as pd
 
-from typing import TextIO, Callable, Union, Any, Tuple, List, Dict, Optional, Iterator
+from typing import TextIO, Union, Any, Tuple, List, Dict, Optional, Iterator
 from abc import abstractmethod
 
 from .npz_to_hdf import convert_npz_to_hdf
 from .read_hdf5 import get_odb_data
-from .util import NullableIntList, NullableStrList, DataFrameType, MultiprocessingPoolType
+from .util import NullableIntList, NullableStrList, DataFrameType, NDArrayType, NullableNodeType, NodeType, ODB_MAGIC_NUM, HDF_MAGIC_NUM, H5PYFileType, H5PYGroupType
 
-try:
+"""try:
     import pyvista as pv
 except ImportError:
     PYVISTA_AVILABLE = False
 else:
-    PYVISTA_AVAILABLE = True
+    PYVISTA_AVAILABLE = True"""
 
 
 class Odb():
@@ -62,8 +61,13 @@ class Odb():
         "_odb_to_npz_script_path",
         "_odb_to_npz_conversion_pickle_path",
         "_npz_result_path",
+        "_extract_from_odb_script_path",
+        "_extract_from_odb_pickle_path",
+        "_extract_result_path",
+        "_nodes",
         "_nodesets",
         "_frames",
+<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
 <<<<<<< 21a136b0d8bcaeb68e44c96b26dbe823e2798029
 <<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
         "_cpus",
@@ -74,6 +78,10 @@ class Odb():
 >>>>>>> Starting to implement 0.6.0
 =======
         "_nodes",
+=======
+        "_parts",
+        "_steps",
+>>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
         "_coord_key",
         "_temp_key",
         "_interactive",
@@ -83,6 +91,7 @@ class Odb():
         "_times"
 >>>>>>> 0.6.0 Moving to Desktop
         )
+
 
     def __init__(self) -> None:
         """
@@ -101,9 +110,11 @@ class Odb():
 
         self._abaqus_executable: str = "abaqus"
 
+        self._nodes: NullableNodeType = None
         self._nodesets: NullableStrList = None
         self._frames: NullableIntList = None
-        self._nodes: Optional[Dict[str, List[int]]] = None
+        self._parts: NullableStrList = None
+        self._steps: NullableStrList = None
 
         self._coord_key: str = "COORD"
         self._temp_key: str = "NT11"
@@ -128,9 +139,20 @@ class Odb():
             "odb_to_npz.py"
         )
 
+        self._extract_from_odb_script_path: pathlib.Path = pathlib.Path(
+            pathlib.Path(__file__).parent,
+            "py2_scripts",
+            "extract.py"
+        )
+
         self._odb_to_npz_conversion_pickle_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
             "odb_to_npz_conversion.pickle"
+        )
+
+        self._extract_from_odb_pickle_path: pathlib.Path = pathlib.Path(
+            pathlib.Path.cwd(),
+            "extract_from_odb.pickle"
         )
 
         self._npz_result_path: pathlib.Path = pathlib.Path(
@@ -138,19 +160,23 @@ class Odb():
             "npz_path.pickle"
         )
 
+<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
 <<<<<<< a573ef9c876b6fa2f1de8a4a293a941abf5b9c0e
         self._cpus = multiprocessing.cpu_count()
 =======
+=======
+        self._extract_result_path: pathlib.Path = pathlib.Path(
+            pathlib.Path.cwd(),
+            "extract_results.pickle"
+        )
+
+>>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
         self._interactive: bool = False
         self._colormap: str = "turbo"
 
         # TODO
         self._angle = Union[str, Tuple[float, float, float]]
 >>>>>>> Starting to implement 0.6.0
-
-        # TODO
-        """self._parts: NullableStrList
-        self._steps: NullableStrList"""
 
         self._iterator_ind: int = 0
         self._times: NDArrayType
@@ -198,6 +224,7 @@ class Odb():
 
     @odb.setter
     def odb(self, value: Any) -> None:
+        _ = value
         raise Exception('"odb" property should not be set this way')
 
 
@@ -448,26 +475,45 @@ class Odb():
         return self._odb_path
 
 
+    @staticmethod
+    def ensure_magic(file_path: pathlib.Path, magic: bytes) -> bool:
+        file: TextIO
+        first_line: bytes
+        with open(file_path, "rb") as file:
+            first_line = file.readline()
+
+        return first_line.startswith(magic)
+
+
     @odb_path.setter
     def odb_path(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
+        target_path: pathlib.Path
+        cwd_path: pathlib.Path = pathlib.Path.cwd() / value
         if value.exists():
-            self._odb_path = value
-            return
+            target_path = value
 
-        if self.odb_source_dir is not None:
+        elif self.odb_source_dir is not None:
             source_dir_path: pathlib.Path = self.odb_source_dir / value
             if source_dir_path.exists():
-                self._odb_path = source_dir_path
-                return
+                target_path = source_dir_path
 
-        cwd_path: pathlib.Path = pathlib.Path.cwd() / value
-        if cwd_path.exists():
-            self._odb_path = cwd_path
-            return
+        elif cwd_path.exists():
+            target_path = cwd_path
 
-        raise FileNotFoundError(f"File {value} could not be found")
+        else:
+            raise FileNotFoundError(f"File {value} could not be found")
+
+        # Ensure magic numbers
+        if not self.ensure_magic(target_path, ODB_MAGIC_NUM):
+            raise ValueError(f"Given file {value} is not a .odb object"
+            "database file.")
+
+        self._odb_path = target_path
+
+
+        
 
 
     @property
@@ -494,13 +540,14 @@ class Odb():
     def hdf_path(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
-        if value.is_absolute():
-            self._hdf_path = value
-            return
+        if not value.is_absolute() and hasattr(self, "hdf_source_dir"):
+            value = self.hdf_source_dir / value
 
-        if hasattr(self, "_hdf_source_dir"):
-            self._hdf_path = self.hdf_source_dir / value
-            return
+        if value.exists():
+            # Ensure magic numbers
+            if not self.ensure_magic(value, HDF_MAGIC_NUM):
+                raise ValueError(f"Given file {value} is not a .hdf5 hierarchical"
+                "data format file.")
 
         self._hdf_path = value
 
@@ -516,26 +563,27 @@ class Odb():
 
 
     @property
-    def frames(self) -> "List[int]":
-        return self._frames
+    def nodes(self) -> NullableNodeType:
+        return self._nodes
 
 
-    @frames.setter
-    def frames(self, value: "List[int]") -> None:
-        self._frames = value
+    @nodes.setter
+    def nodes(self, value: NodeType) -> None:
+        self._nodes = value
 
 
     @property
-    def nodesets(self) -> "List[int]":
+    def nodesets(self) -> NullableStrList:
         return self._nodesets
 
 
     @nodesets.setter
-    def nodesets(self, value: "List[int]") -> None:
+    def nodesets(self, value: "List[str]") -> None:
         self._nodesets = value
 
 
     @property
+<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
     def cpus(self) -> int:
         return self._cpus
 
@@ -550,27 +598,58 @@ class Odb():
         if not isinstance(parts, list):
             new_list: list[str] = [parts]
             self.parts = new_list
-
-        else:
-            self.parts = parts
-
-    
-    def set_nodes(self, nodes: "dict[str, list[int]]") -> None:
-        if not isinstance(nodes, dict):
-            nodes = dict(nodes)
-
-        self.nodes = nodes
-
-    
-    def set_nodesets(self, nodesets: "list[str]") -> None:
-        if not isinstance(nodesets, list):
-            new_list: list[str] = [nodesets]
-            self.nodesets = new_list
-
-        else:
-            self.nodesets = nodesets"""
+=======
+    def parts(self) -> NullableStrList:
+        return self._parts
+>>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
 
 
+    @parts.setter
+    def parts(self, value: "List[str]") -> None:
+        self._parts = value
+
+
+    @property
+    def steps(self) -> NullableStrList:
+        return self._steps
+
+
+    @steps.setter
+    def steps(self, value: "List[str]") -> None:
+        self._steps = value
+
+
+    @property
+    def frames(self) -> NullableIntList:
+        return self._frames
+
+
+    @frames.setter
+    def frames(self, value: "List[int]") -> None:
+        self._frames = value
+
+
+    @property
+    def coord_key(self) -> str:
+        return self._coord_key
+
+
+    @coord_key.setter
+    def coord_key(self, value: str) -> None:
+        self._coord_key = value
+
+
+    @property
+    def temp_key(self) -> str:
+        return self._temp_key
+
+
+    @temp_key.setter
+    def temp_key(self, value: str) -> None:
+        self._temp_key = value
+
+
+    """
     @property
     def colormap(self) -> str:
         return self._colormap
@@ -589,7 +668,7 @@ class Odb():
     @interactive.setter
     def interactive(self, value: bool) -> None:
         self._interactive = value
-
+"""
 
     def convert_odb_to_hdf(
             self,
@@ -649,6 +728,7 @@ class Odb():
         odb_to_npz_pickle_input_dict: Dict[
             str, Optional[Union[List[str], List[int]]]
             ] = {
+<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
                 "nodesets": self._nodesets,
                 "frames": self._frames,
 <<<<<<< 21a136b0d8bcaeb68e44c96b26dbe823e2798029
@@ -657,6 +737,15 @@ class Odb():
                 "coord_key": self._coord_key,
                 "temp_key": self._temp_key
 >>>>>>> 0.6.0 Moving to Desktop
+=======
+                "nodes": self.nodes,
+                "nodesets": self.nodesets,
+                "frames": self.frames,
+                "parts": self.parts,
+                "steps": self.steps,
+                "coord_key": self.coord_key,
+                "temp_key": self.temp_key
+>>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
             }
         pickle_file: TextIO
         with open(
@@ -672,6 +761,7 @@ class Odb():
             self._npz_result_path
         ]
 
+        # shell=True is BAD PRACTICE, but abaqus python won't run without it
         subprocess.run(odb_convert_args, shell=True)
 
         result_file: TextIO
@@ -685,6 +775,114 @@ class Odb():
 
         if result_dir.exists():
             shutil.rmtree(result_dir)
+
+
+    @classmethod
+    def extract_by_path(
+            cls,
+            path: pathlib.Path,
+            ) -> DataFrameType:
+
+        if cls.ensure_magic(path, HDF_MAGIC_NUM):
+            # Extract from .hdf5
+            return cls.extract_from_hdf(path)
+
+        elif cls.ensure_magic(path, ODB_MAGIC_NUM):
+            # extract from .odb
+            return cls.extract_from_odb(path)
+
+    def extract(self) -> DataFrameType:
+        if hasattr(self, "hdf_path"):
+            return self._extract_from_hdf()
+        elif hasattr(self, "odb_path"):
+            return self.extract_from_odb()
+
+
+    def extract_from_odb(
+        self,
+        target_file: Optional[pathlib.Path] = None
+        )-> DataFrameType:
+
+        if target_file is None:
+            target_file = self.odb_path
+
+        extract_odb_pickle_input_dict: Dict[
+            str, Optional[Union[List[str], List[int]]]
+            ] = {
+                "nodes": self.nodes,
+                "nodesets": self.nodesets,
+                "frames": self.frames,
+                "parts": self.parts,
+                "steps": self.steps,
+                "temp_key": self.temp_key
+            }
+            
+        temp_file: TextIO
+        with open(self._extract_from_odb_pickle_path, "wb") as temp_file:
+            pickle.dump(
+                extract_odb_pickle_input_dict,
+                temp_file,
+                protocol=2
+                )
+        args_list: List[Union[str, pathlib.Path]] = [
+            self.abaqus_executable,
+            "python",
+            self._extract_from_odb_script_path,
+            target_file,
+            self._extract_from_odb_pickle_path,
+            self._extract_result_path
+            ]
+
+        # shell=True is bad practice, but abaqus python will not run without it.
+        subprocess.run(args_list, shell=True)
+
+        temp_file: TextIO
+        with open(self._extract_result_path, "rb") as temp_file:
+            # From the Pickle spec, decoding python 2 numpy arrays must use
+            # "latin-1" encoding
+            results: List[Dict[str, float]]
+            results = pickle.load(temp_file, encoding="latin-1")
+
+        results = sorted(results, key=lambda d: d["time"])
+
+        results_df_list: List[DataFrameType] = list()
+        for result in results:
+            time = result.pop("time")
+            results_df_list.append(pd.DataFrame({time: result}, orient="index"))
+
+        result_df: pd.DataFrame = pd.concat(results_df_list)
+
+        if self._extract_result_path.exists():
+            self._extract_result_path.unlink()
+
+        return result_df
+
+
+    def extract_from_hdf(
+        self,
+        target_file: Optional[pathlib.Path] = None
+        ) -> DataFrameType:
+
+        if target_file is not None:
+            if hasattr(self, "odb"):
+                raise AttributeError("Do not pass in a new path to an "
+                "existing Odb() object for extracting. Use the classmethod "
+                "instead.")
+
+            else:
+                self.hdf_path = target_file
+                self.load_hdf()
+
+        else:
+            if not hasattr(self, "odb"):
+                self.load_hdf()
+
+        frame: DataFrameType
+        for frame in self:
+            min: frame["Temp"].min()
+            max: frame["Temp"].max()
+
+
 
 
     def load_hdf(self) -> None:
@@ -718,13 +916,13 @@ class Odb():
                 "load_hdf.")
 
 
-    def plot_3d_all_times(
+    """def plot_3d_all_times(
             self,
             label: str = "",
             ) -> "List[pv.Plotter]":
         """
 
-        """
+    """
         if not PYVISTA_AVAIL:
             raise Exception("Plotting capabilities are not included."
                             'Please pip install odb-plotter["plot"]'
@@ -744,9 +942,9 @@ class Odb():
         for time in times:
             result = self._plot_3d_single(time, label)
             if result is not None:
-                results.append(result)
+                results.append(result)"""
         # TODO Any way to make this work?
-        """
+    """
         # TODO dataclass
         plotting_args: List[
             Tuple[
@@ -762,16 +960,16 @@ class Odb():
                 plotting_args
                 )"""
 
-        return results 
+        #return results 
 
 
-    def _plot_3d_single(
+    """def _plot_3d_single(
         self,
         time: float,
         label: str
         )-> "Optional[pv.Plotter]":
         """
-        """
+    """
 
         if not PYVISTA_AVAIL:
             raise Exception("Plotting capabilities are not included."
@@ -856,12 +1054,16 @@ class Odb():
             plotter.camera.roll = 300
             plotter.camera_set = True
 
-            return plotter
+            return plotter"""
 
 
 class OdbLoader:
 
+<<<<<<< a6aac100c2a26d98ddcb557f5a6002969770018e
     def load_hdf(self, hdf_path: pathlib.Path, cpus: int) -> DataFrameType:
+=======
+    def load_hdf(self, hdf_path: pathlib.Path) -> DataFrameType:
+>>>>>>> 0.6.0, API is almost fully functional apart from iterator and plotting
         return get_odb_data(hdf_path, cpus)
 
 

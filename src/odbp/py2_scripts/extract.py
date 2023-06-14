@@ -13,6 +13,7 @@ Updated by Clark Hensley for CMML
 """
 import pickle
 import argparse
+import collections
 import numpy as np
 from odbAccess import openOdb
 
@@ -21,138 +22,144 @@ def main():
     input_args = "input args"
     parser = argparse.ArgumentParser()
     parser.add_argument(input_args, nargs="*")
-    odb_path, save_path = vars(parser.parse_args())[input_args]
+    odb_path, pickle_path, save_path = vars(parser.parse_args())[input_args]
 
-    input_file = open(save_path, "rb")
-    input_dict = pickle.load(input_file)
-    input_file.close()
-    old_parts = input_dict["parts"]
-    old_nodesets = input_dict["nodesets"]
-    old_nodes = input_dict["nodes"]
+    try:
+        input_file = open(pickle_path, "rb")
+        input_dict = pickle.load(input_file)
+    finally:
+        input_file.close()
 
-    if old_parts is not None:
-        parts = list()
-        for p in old_parts:
-            parts.append(str(p))
+    user_nodes = input_dict.get("nodes")
+    if isinstance(user_nodes, collections.Mapping):
+        temp_nodes = dict()
+        for key, val in user_nodes.items():
+            temp_nodes[str(key)] = val
+        user_nodes = temp_nodes
+
+    unicode_nodesets = input_dict.get("nodesets")
+    if unicode_nodesets is not None:
+        user_nodesets = list()
+        for nodeset in unicode_nodesets:
+            user_nodesets.append(str(nodeset))
     else:
-        parts = old_parts
+        user_nodesets = None
 
-    if old_nodesets is not None:
-        nodesets = list()
-        for n in old_nodesets:
-            nodesets.append(str(n))
+    user_frames = input_dict.get("frames")
+
+    unicode_parts = input_dict.get("parts")
+    if unicode_parts is not None:
+        user_parts = list()
+        for part in unicode_parts:
+            user_parts.append(str(part))
     else:
-        nodesets = old_nodesets
+        user_parts = None
 
-    if old_nodes is not None:
-        nodes = dict()
-        for k, v in old_nodes:
-            nodes[str(k)] = int(v)
+    unicode_steps = input_dict.get("steps")
+    if unicode_steps is not None:
+        user_steps = list()
+        for step in unicode_steps:
+            user_steps.append(str(step))
     else:
-        nodes = old_nodes
+        user_steps = None
 
-    extract(odb_path, save_path, parts, nodesets, nodes)
+    temp_key = str(input_dict.get("temp_key", "NT11"))
+
+    try:
+        odb = openOdb(odb_path, readOnly=True)
+        steps = odb.steps
+        assembly = odb.rootAssembly
+
+        target_frames = set()
+        if user_steps is not None:
+            for step in user_steps:
+                step_data = steps[step]
+                for frame in step_data.frames:
+                    target_frames.add(frame.frameId)
+
+        if user_frames is not None:
+            for frame in user_frames:
+                target_frames.add(frame.frameId)
+
+        target_frames = sorted(list(target_frames))
+
+        if len(target_frames) == 0:
+            for step_data in steps.values():
+                for frame in step_data.frames:
+                    target_frames.append(frame.frameId) 
+
+        target_nodesets = set()
+        if user_nodes is not None:
+            if isinstance(user_nodes, collections.Mapping):
+                for key, val in user_nodes.items():
+                    assembly.NodeSetFromNodeLabels(name=key, nodeLabels=(val,))
+                    target_nodesets.add(key)
+            elif isinstance(user_nodes, collections.Iterable):
+                if isinstance(user_nodes[0], int):
+                    user_nodes = [user_nodes]
+                for i, val in enumerate(user_nodes):
+                    assembly.NodeSetFromNodeLabels(name=i, nodeLabels=(val,))
+                    target_nodesets.add(i)
+
+        if user_parts is not None:
+            for part in assembly.instances.keys():
+                for nodeset in assembly.instances[part].nodeSets:
+                    target_nodesets.append(nodeset)
+
+        if user_nodesets is not None:
+            for nodeset in user_nodesets:
+                target_nodesets.add(nodeset)
+
+        target_nodesets = sorted(list(target_nodesets))
+
+        if len(target_nodesets) == 0:
+            target_nodesets = list(assembly.nodeSets.keys())
+
+    finally:
+        odb.close()
+
+    extract(odb_path, save_path, target_nodesets, target_frames, temp_key)
 
 
-def extract(odb_path, save_path, parts=None, nodesets=None, nodes=None):
-    odb = openOdb(odb_path, readOnly=True)
-    steps = odb.steps
-    root_assembly = odb.rootAssembly
-    instances = root_assembly.instances
+def extract(odb_path, save_path, target_nodesets, target_frames, temp_key):
 
-    final_record = dict()
-    if parts is not None:
-        parts_to_values = dict()
-        nodesets_to_values = dict()
+    try:
+        odb = openOdb(odb_path, readOnly=True)
+        steps = odb.steps
+        assembly = odb.rootAssembly
 
-        # If nodes is not none, it should be a dictionary
-        # of str: list[int]
-        if nodes is not None:
-            for key, val in nodes:
-                root_assembly.NodeSetFromNodeLabels(name=key, nodeLabels=(val,))
+        final_record = list()
+        for step in steps.keys():
+            step_start_time = steps[step].totalTime
+            for frame in steps[step].frames:
+                if frame.frameId not in target_frames:
+                    continue
+                frame_time = step_start_time + frame.frameValue
+                selected_temp_results = frame.fieldOutputs[temp_key]
+                for nodeset in target_nodesets:
 
-        if nodesets is None:
-            nodesets = dict()
-            for part in parts:
-                parts_to_values[part] = instances[part]
-                nodesets_to_values[part] = parts_to_values[part].nodeSets
-                nodesets[part] = nodesets_to_values[part].keys()
+                    region = assembly.nodeSets[nodeset]
+                    temp_subset = selected_temp_results.getSubset(region=region)
+                    temp = np.copy(temp_subset.bulkDataBlocks[0].data).astype("float64")
+                    temp[temp >= 301] = np.nan
+                    temp = temp[~np.isnan(temp)]
 
-        elif isinstance(nodesets, list):
-            new_nodesets_dict = dict()
-            for part in parts:
-                new_nodesets = list()
-                for n in nodesets:
-                    parts_to_values[part] = instances[part]
-                    nodesets_to_values[part] = parts_to_values[part].nodeSets
-                    if n in nodesets_to_values[part].keys():
-                        new_nodesets.append(n)
-                new_nodesets_dict[part] = new_nodesets
-            nodesets = new_nodesets_dict
+                    final_record.append({
+                        "time": frame_time,
+                        "max": np.max(temp) if len(temp) > 0 else np.nan,
+                        "mean": np.mean(temp) if len(temp) > 0 else np.nan,
+                        "min": np.min(temp) if len(temp) > 0 else np.nan,
+                    })
 
-        for part in parts:
-            final_record[part] = dict()
-            print("Extracting for Part {}".format(part))
-            for step_key in steps.keys():
-                print("\tExtracting for Step {}".format(steps[step_key].name))
-                final_record[part][step_key] = dict()
-                final_record[part][step_key]["time"] = list()
-                ## Building in time output 
-                step_start_time = steps[step_key].totalTime # time till the 'Step-1'
-                for frame in steps[step_key].frames:
-                    current_time = step_start_time + frame.frameValue
-                    print("\t\tExtracting for Time {}".format(current_time))
-                    selected_temp_results = frame.fieldOutputs["NT11"]
-                    final_record[part][step_key]["time"].append(current_time)
-                    for nodeset in nodesets[part]:
-                        final_record[part][step_key][nodeset] = {
-                                "max": list(),
-                                "avg": list(),
-                                "min": list(),
-                                }
-                        region = nodesets_to_values[part][nodeset]
-                        temp_subset = selected_temp_results.getSubset(region = region)
-                        temp = np.copy(temp_subset.bulkDataBlocks[0].data).astype("float64")
-                        temp[temp == 0] = np.nan
-                        temp[temp == 300] = np.nan
-                        updated_temp = temp[~np.isnan(temp)]
+    finally:
+        odb.close()
 
-                        final_record[part][step_key][nodeset]["max"].append(np.max(updated_temp) if len(updated_temp) > 0 else np.nan)
-                        final_record[part][step_key][nodeset]["avg"].append(np.mean(updated_temp) if len(updated_temp) > 0 else np.nan)
-                        final_record[part][step_key][nodeset]["min"].append(np.min(updated_temp) if len(updated_temp) > 0 else np.nan)
+    try:
+        save_file = open(save_path, "wb")
+        pickle.dump(final_record, save_file, protocol=2)
 
-    else:
-        for step_key in steps.keys():
-            print("Extracting for Step {}".format(steps[step_key].name))
-            final_record[step_key] = dict()
-            final_record[step_key]["time"] = list()
-            step_start_time = steps[step_key].totalTime
-            for frame in steps[step_key].frames:
-                current_time = step_start_time + frame.frameValue
-                print("\t\tExtracting for Time {}".format(current_time))
-                final_record[step_key]["time"].append(current_time)
-                selected_temp_results = frame.fieldOutputs["NT11"]
-                final_record[step_key]["ALL NODES"] = {
-                    "max": list(),
-                    "avg": list(),
-                    "min": list(),
-                }
-                region = root_assembly.nodeSets["ALL NODES"]
-                temp_subset = selected_temp_results.getSubset(region=region)
-                temp = np.copy(temp_subset.bulkDataBlocks[0].data).astype("float64")
-                temp[temp == 0] = np.nan
-                temp[temp == 300] = np.nan
-                updated_temp = temp[~np.isnan(temp)]
-
-                final_record[part][step_key]["ALL NODES"]["max"].append(np.max(updated_temp) if len(updated_temp) > 0 else np.nan)
-                final_record[part][step_key]["ALL NODES"]["avg"].append(np.mean(updated_temp) if len(updated_temp) > 0 else np.nan)
-                final_record[part][step_key]["ALL NODES"]["min"].append(np.min(updated_temp) if len(updated_temp) > 0 else np.nan)
-
-    odb.close()
-
-    save_file = open(save_path, "wb")
-    pickle.dump(final_record, save_file, protocol=2)
-    save_file.close()
+    finally:
+        save_file.close()
 
  
 if __name__ == "__main__":

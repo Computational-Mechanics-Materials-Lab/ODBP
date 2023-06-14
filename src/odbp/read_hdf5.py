@@ -16,7 +16,7 @@ import pathlib
 import numpy as np
 import pandas as pd
 from typing import Tuple, List
-from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, MultiprocessingPoolType
+from .util import DataFrameType, H5PYFileType, MultiprocessingPoolType
 
 
 def get_odb_data(
