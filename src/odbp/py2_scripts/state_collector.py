@@ -17,24 +17,23 @@ script written by CMML members Will Furr and Matt Dantin
 """
 
 import argparse
+import pickle
 from odbAccess import openOdb
 
 def main():
     input_args = "input args"
     parser = argparse.ArgumentParser()
     parser.add_argument(input_args, nargs="*")
-    args = vars(parser.parse_args())[input_args]
-    if len(args) > 0:
-        arg = args[0]
-        if arg.lower() in ("true", "t", "verbose", "v"):
-            print_state(True)
-        else:
-            print_state(False)
-    else:
-        print_state(False)
+    odb_path, result_path = vars(parser.parse_args())[input_args]
+    results = collect_state(odb_path)
+    try:
+        result_file = open(result_path, "wb")
+        pickle.dump(results, result_file)
+    finally:
+        result_file.close()
 
-def print_state(verbose):
-    odb_path = r"C:\Users\ch3136\Testing\odbs\v3_05mm_i0_01_T_coord.odb"
+def collect_state(odb_path):
+    result = dict()
     try:
         odb = openOdb(odb_path, readOnly=True)
 
@@ -66,41 +65,37 @@ def print_state(verbose):
 
         all_parts = assembly.instances.keys()
 
-        if verbose:
-            all_nodes = list()
-            parts_to_nodes = dict()
-            for key in all_parts:
-                parts_to_nodes[key] = list()
-                for node in assembly.instances[key].nodes:
-                    parts_to_nodes[key].append(node.label)
-                    all_nodes.append(node.label)
+        all_nodes = list()
+        parts_to_nodes = dict()
+        for key in all_parts:
+            parts_to_nodes[key] = list()
+            for node in assembly.instances[key].nodes:
+                parts_to_nodes[key].append(node.label)
+                all_nodes.append(node.label)
 
-        print("Temporal:")
-        print("Range of Frames: {} to {}".format(all_frames[0][0], all_frames[-1][-1]))
-        print("")
-        print("Keys within each frame: {}".format(frame_keys))
-        print("")
-        print("List of Steps: {}".format(list(steps_to_frames.keys())))
+        #Temporal
+        result["frame_range"] = (all_frames[0][0], all_frames[-1][-1])
+        result["frame_keys"] = frame_keys
+        result["step_names"] = list(steps_to_frames.keys())
+        frame_ranges_per_steps = dict()
         for s, f in steps_to_frames.items():
-            print('Range of Frames for Step "{}": {} to {}'.format(s, *f))
+            frame_ranges_per_steps[s] = f
+        result["frame_ranges_per_steps"] = frame_ranges_per_steps 
         
-        print("")
-        print("Spatial:")
-        print("Predefined Nodesets: {}".format(nodesets))
-        print("")
-        print("List of Parts: {}".format(list(all_parts)))
+        #Spatial
+        result["nodeset_names"] = nodesets
+        result["part_names"] = list(all_parts)
 
-        if verbose:
-            print("")
-            print("Range of All Nodes: {} to {}".format(all_nodes[0], all_nodes[-1]))
-            for s, f in parts_to_nodes.items():
-                max_node = max(f)
-                min_node = min(f)
-                print('Range of Nodes for Part "{}": {} to {}'.format(s, min_node, max_node))
-
+        result["node_range"] = (all_nodes[0], all_nodes[-1])
+        node_ranges_per_part = dict()
+        for s, f in parts_to_nodes.items():
+            node_ranges_per_part[s] = (min(f), max(f))
+        result["node_ranges_per_part"] = node_ranges_per_part
     
     finally:
         odb.close()
+
+    return result
 
 
 if __name__ == "__main__":

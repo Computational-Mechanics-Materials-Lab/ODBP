@@ -13,7 +13,6 @@ Originally written by CMML Member CJ Nguyen
 import h5py
 import multiprocessing
 import pathlib
-import numpy as np
 import pandas as pd
 from typing import Tuple, List
 from .util import DataFrameType, H5PYFileType, MultiprocessingPoolType

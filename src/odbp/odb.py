@@ -22,8 +22,8 @@ import pandas as pd
 from typing import TextIO, Union, Any, Tuple, List, Dict, Optional, Iterator
 from abc import abstractmethod
 
-from .npz_to_hdf import convert_npz_to_hdf
-from .read_hdf5 import get_odb_data
+from .writer import convert_npz_to_hdf
+from .reader import get_odb_data
 from .util import NullableIntList, NullableStrList, DataFrameType, NDArrayType, NullableNodeType, NodeType, ODB_MAGIC_NUM, HDF_MAGIC_NUM
 
 """try:
@@ -42,8 +42,32 @@ class Odb():
 
     # TODO user settings sub-section, overload getattr
     __slots__ = (
+        
+        # file-defined components
         "_odb_handler",
         "_odb",
+        "_convert_script_path",
+        "_convert_pickle_path",
+        "_convert_result_path",
+        "_extract_script_path",
+        "_extract_pickle_path",
+        "_extract_result_path",
+        "_collect_state_script_path",
+        "_collect_state_result_path",
+        "_iterator_ind",
+        "_times",
+        "_frame_keys",
+        "_frame_range",
+        "_step_names",
+        "_frame_ranges_per_step",
+        "_nodeset_names",
+        "_part_names",
+        "_node_range",
+        "_node_ranges_per_part",
+
+        # User-defined components
+        # TODO turn these into a subclass member, overload
+        # __getattr__/__setattr__ on this object
         "_x_low",
         "_x_high",
         "_y_low",
@@ -59,12 +83,6 @@ class Odb():
         "_hdf_path",
         "_hdf_source_dir",
         "_abaqus_executable",
-        "_odb_to_npz_script_path",
-        "_odb_to_npz_conversion_pickle_path",
-        "_npz_result_path",
-        "_extract_from_odb_script_path",
-        "_extract_from_odb_pickle_path",
-        "_extract_result_path",
         "_cpus",
         "_nodesets",
         "_frames",
@@ -76,8 +94,6 @@ class Odb():
         "_interactive",
         "_angle",
         "_colormap",
-        "_iterator_ind",
-        "_times"
         )
 
 
@@ -121,39 +137,59 @@ class Odb():
         self._time_high: float
 
         # Hardcoded paths for Python 3 - 2 communication
-        self._odb_to_npz_script_path: pathlib.Path = pathlib.Path(
+        self._convert_script_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
             "py2_scripts",
-            "convert.py"
+            "converter.py"
         )
 
-        self._extract_from_odb_script_path: pathlib.Path = pathlib.Path(
+        self._extract_script_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
             "py2_scripts",
-            "extract.py"
+            "extractor.py"
         )
 
-        self._odb_to_npz_conversion_pickle_path: pathlib.Path = pathlib.Path(
+        self._convert_pickle_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
-            "odb_to_npz_conversion.pickle"
+            "convert.pickle"
         )
 
-        self._extract_from_odb_pickle_path: pathlib.Path = pathlib.Path(
+        self._extract_pickle_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
             "extract_from_odb.pickle"
         )
 
-        self._npz_result_path: pathlib.Path = pathlib.Path(
+        self._convert_result_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
-            "npz_path.pickle"
+            "convert_result.pickle"
         )
-
-        self._cpus = multiprocessing.cpu_count()
 
         self._extract_result_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
             "extract_results.pickle"
         )
+
+        self._collect_state_script_path: pathlib.Path = pathlib.Path(
+            pathlib.Path(__file__).parent,
+            "py2_scripts",
+            "state_collector.py"
+        )
+
+        self._collect_state_result_path: pathlib.Path = pathlib.Path(
+            pathlib.Path.cwd(),
+            "collect_state_result.pickle"
+        )
+
+        self._frame_keys: List[str]
+        self._frame_range: Tuple[int, int]
+        self._step_names: List[str]
+        self._frame_ranges_per_step: Dict[str, Tuple[int, int]]
+        self._nodeset_names: List[str]
+        self._part_names: List[str]
+        self._node_range: Tuple[int, int]
+        self._node_ranges_per_part: Dict[str, Tuple[int, int]]
+
+        self._cpus = multiprocessing.cpu_count()
 
         self._interactive: bool = False
         self._colormap: str = "turbo"
@@ -203,12 +239,6 @@ class Odb():
     @property
     def odb(self) -> DataFrameType:
         return self._odb
-
-
-    @odb.setter
-    def odb(self, value: Any) -> None:
-        _ = value
-        raise Exception('"odb" property should not be set this way')
 
 
     @odb.deleter
@@ -626,6 +656,46 @@ class Odb():
         self._temp_key = value
 
 
+    @property
+    def frame_range(self) -> "Tuple[int, int]":
+        return self._frame_range
+
+    
+    @property
+    def frame_keys(self) -> "List[str]":
+        return self._frame_keys
+
+
+    @property
+    def step_names(self) -> "List[str]":
+        return self._step_names
+
+
+    @property
+    def frame_ranges_per_step(self) -> "Dict[str, Tuple[int, int]]":
+        return self._frame_ranges_per_step
+
+
+    @property
+    def nodeset_names(self) -> "List[str]":
+        return self._nodeset_names
+
+
+    @property
+    def part_names(self) -> "List[str]":
+        return self._part_names
+
+
+    @property
+    def node_range(self) -> "Tuple[int, int]":
+        return self._node_range
+
+
+    @property
+    def node_ranges_per_part(self) -> "Dict[str, Tuple[int, int]]":
+        return self._node_ranges_per_part
+
+
     """
     @property
     def colormap(self) -> str:
@@ -647,7 +717,7 @@ class Odb():
         self._interactive = value
 """
 
-    def convert_odb_to_hdf(
+    def convert(
             self,
             hdf_path: "Optional[pathlib.Path]" = None,
             *,
@@ -682,27 +752,27 @@ class Odb():
             else:
                 hdf_path = self.hdf_path
 
-        self._convert_odb_to_hdf(hdf_path, odb_path)
+        self._convert(hdf_path, odb_path)
 
 
     @classmethod
-    def convert(
+    def convert_by_path(
             cls,
             hdf_path: pathlib.Path,
             odb_path: pathlib.Path
             ) -> None:
         hdf_path = pathlib.Path(hdf_path)
         odb_path = pathlib.Path(odb_path)
-        cls()._convert_odb_to_hdf(hdf_path, odb_path)
+        cls()._convert(hdf_path, odb_path)
 
 
-    def _convert_odb_to_hdf(
+    def _convert(
             self,
             hdf_path: pathlib.Path,
             odb_path: pathlib.Path
             ) -> None:
 
-        odb_to_npz_pickle_input_dict: Dict[
+        convert_pickle_input_dict: Dict[
             str, Optional[Union[List[str], List[int]]]
             ] = {
                 "cpus": self.cpus,
@@ -716,16 +786,16 @@ class Odb():
             }
         pickle_file: TextIO
         with open(
-            self._odb_to_npz_conversion_pickle_path, "wb") as pickle_file:
-            pickle.dump(odb_to_npz_pickle_input_dict, pickle_file, protocol=2)
+            self._convert_pickle_path, "wb") as pickle_file:
+            pickle.dump(convert_pickle_input_dict, pickle_file, protocol=2)
 
         odb_convert_args: List[Union[pathlib.Path, str]]  = [
             self.abaqus_executable,
             "python",
-            self._odb_to_npz_script_path,
+            self._convert_script_path,
             odb_path,
-            self._odb_to_npz_conversion_pickle_path,
-            self._npz_result_path
+            self._convert_pickle_path,
+            self._convert_result_path
         ]
 
         # shell=True is BAD PRACTICE, but abaqus python won't run without it
@@ -733,7 +803,7 @@ class Odb():
 
         result_file: TextIO
         result_dir: pathlib.Path
-        with open(self._npz_result_path, "rb") as result_file:
+        with open(self._convert_result_path, "rb") as result_file:
             result_dir = pathlib.Path(pickle.load(result_file))
 
         pathlib.Path.unlink(self._npz_result_path)
@@ -758,11 +828,14 @@ class Odb():
             # extract from .odb
             return cls.extract_from_odb(path)
 
+
     def extract(self) -> DataFrameType:
-        if hasattr(self, "hdf_path"):
+        if hasattr(self, "hdf_path") or hasattr(self, "odb"):
             return self.extract_from_hdf()
         elif hasattr(self, "odb_path"):
             return self.extract_from_odb()
+        else:
+            raise AttributeError("This Odb object does not have")
 
 
     def extract_from_odb(
@@ -786,7 +859,7 @@ class Odb():
             }
             
         temp_file: TextIO
-        with open(self._extract_from_odb_pickle_path, "wb") as temp_file:
+        with open(self._extract_pickle_path, "wb") as temp_file:
             pickle.dump(
                 extract_odb_pickle_input_dict,
                 temp_file,
@@ -795,9 +868,9 @@ class Odb():
         args_list: List[Union[str, pathlib.Path]] = [
             self.abaqus_executable,
             "python",
-            self._extract_from_odb_script_path,
+            self._extract_script_path,
             target_file,
-            self._extract_from_odb_pickle_path,
+            self._extract_pickle_path,
             self._extract_result_path
             ]
 
@@ -861,6 +934,61 @@ class Odb():
         results_df: pd.DataFrame = pd.concat(results)
 
         return results_df
+
+
+    def collect_state(self) -> None:
+        # Ideally this would not work this way, but
+        # the python2 makes transferring a raw dict the easiest option
+        result: Dict[
+            str,
+            Union[
+                Tuple[int, int],
+                List[str],
+                Dict[str, Tuple[int, int]]
+                ]
+            ] = self._collect_state()
+        # No setters for these, just this method
+        self._frame_range = result["frame_range"]
+        self._frame_keys = result["frame_keys"]
+        self._step_names = result["step_names"]
+        self._frame_ranges_per_step = result["frame_ranges_per_step"]
+        self._nodeset_names = result["nodeset_names"]
+        self._part_names = result["part_names"]
+        self._node_range = result["node_range"]
+        self._node_ranges_per_part = result["node_ranges_per_part"]
+
+
+    @classmethod
+    def collect_state_from_file(
+        cls,
+        path: pathlib.Path
+        ) -> "Dict[str, Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]]":
+        return cls()._collect_state(path)
+
+
+    def _collect_state(
+        self,
+        path: Optional[pathlib.Path] = None
+        ) -> "Dict[str, Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]]":
+        if path is None:
+            if hasattr(self, "odb_path"):
+                path = self.odb_path
+
+            else:
+                raise AttributeError("Either pass in or set odb_path")
+
+        # shell=True is bad practice, but abaqus python won't run without it
+        subprocess.run([
+            self.abaqus_executable,
+            "python",
+            self._collect_state_script_path,
+            path,
+            self._collect_state_result_path
+            ], shell=True)
+
+        result_file: TextIO
+        with open(self._collect_state_result_path, "rb") as result_file:
+            return pickle.load(result_file)
 
 
     def load_hdf(self) -> None:

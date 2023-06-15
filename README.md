@@ -43,10 +43,8 @@ from odbp import Odb
     * 0.5.2: Returning support to Python 3.8+ (type hinting)
     * 0.5.3: Patching conversion bugs
     * 0.5.4: Parametrize number of cpus for testing
+* 0.6.0: Extractor improvements, ODB interface tools (iteration, receiving ODB data), re-implementation of basic 3D plots over time (including melt-pool plots)
 * Upcoming:
-    * 0.6.0: Improve extractor across all file types. Improve Odb object iteration.
-    * 0.7.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline
-    * 0.8.0: Parametrize input values such as nodes, nodesets, frames, steps, parts, and colors (both in the API and CLI).
-    * 0.9.0: Create two-dimensional plotting capabilities and sane defaults.
-    * 0.10.0: Improve PyVista: views, gifs, non-interactive image saving, leaving viewer, etc. Ensure functionality of Abaqus 2019
+    * 0.7.0: Create two-dimensional plotting capabilities and sane defaults. Improve pyvista functinality: views, gifs, non-interactive image saving, leave the viewer.
+    * 0.8.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline. Also improve user input parametrization (nodes, nodesets, frames, steps, parts, colors, image sizes, etc.)
     * 1.0.0: Final bug-fixing, type checking, bounds checking, etc. Hopefully coinciding (or following) a publication.
