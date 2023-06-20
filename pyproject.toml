@@ -2,10 +2,10 @@
 name = "odb-plotter"
 description = "Python3 API for Abaqus .odb Files and related Command Line Visualization Tool. Focused on Additive Manufacturing Thermal Transfer"
 readme = "README.md"
-license = {file = "LICENSE"}
-keywords = ["abaqus", "abq", "fea", "odb", "waam", "wa-ded", "visualization"]
-authors = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
-maintainers = [{name = "Clark Hensley", email = "clarkhensley@duck.com"}]
+license = {file = "LICENSE",}
+keywords = ["abaqus", "abq", "fea", "odb", "waam", "wa-ded", "visualization",]
+authors = [{name = "Clark Hensley", email = "clarkhensley@duck.com",},]
+maintainers = [{name = "Clark Hensley", email = "clarkhensley@duck.com",},]
 dependencies = [
 "platformdirs",
 "h5py",
@@ -14,9 +14,10 @@ dependencies = [
 "tomli_w",
 "pandas",
 "matplotlib",
+"pyvista",
 "pyreadline3; platform_system == 'Windows'",
 ]
-dynamic = ["version"]
+dynamic = ["version",]
 
 [project.urls]
 "Homepage" = "https://www.cmml.me.msstate.edu"
@@ -24,15 +25,23 @@ dynamic = ["version"]
 "Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [project.optional-dependencies]
-plot = ["pyvista"]
-all = ["pyvista"]
+headless = [
+    "platformdirs",
+    "h5py",
+    "numpy",
+    "tomli>=1.1.0; python_version < '3.11'",
+    "tomli_w",
+    "pandas",
+    "matplotlib",
+    "pyreadline3; platform_system == 'Windows'",
+    ]
 
 [tool.setuptools]
-package-data = {odbp = ["data/views.toml", "data/config.toml", "py2_scripts/converter.py", "py2_scripts/extractor.py", "py2_scripts/state_collector.py"]}
+package-data = {odbp = ["data/views.toml", "data/config.toml", "py2_scripts/converter.py", "py2_scripts/extractor.py", "py2_scripts/state_collector.py",],}
 
 [tool.setuptools.dynamic]
-version = {attr = "odbp.__version__"}
+version = {attr = "odbp.__version__",}
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools", "wheel",]
 build-backend = "setuptools.build_meta"
