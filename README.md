@@ -8,17 +8,6 @@ ODB Plotter is being developed by [CMML](https://www.cmml.me.msstate.edu), and a
 pip install odb-plotter
 ```
 
-## ODB Plotter is a Plotter. It is also a Data Science Tool
-## Install with plotting capabilities
-```shell
-pip instlal odb-plotter["plot"]
-```
-
-## OR
-```shell
-pip instlal odb-plotter["all"]
-```
-
 ## Run the cli with python
 ```shell
 python -m odbp
@@ -48,4 +37,4 @@ from odbp import Odb
     * 0.7.0: Improve user settings, parameterization, metadata. Let users select plotting colors, keep metadata of nodesets or spatial, thermal, temporal bounds within the .hdf5.
     * 0.8.0: Improve pyvista functionality: views, gifs, non-interactive image saving, leave the viewer.
     * 0.9.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline.
-    * 1.0.0: Final bug-fixing, type checking, bounds checking, etc. Hopefully coinciding (or following) a publication.
+    * 1.0.0: Final bug-fixing, type checking, bounds checking, etc. Hopefully coinciding with (or following) a publication.
