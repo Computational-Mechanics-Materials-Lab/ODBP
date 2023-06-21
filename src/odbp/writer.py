@@ -66,9 +66,7 @@ def convert_npz_to_hdf(
                 ]
 
     temps_dir: pathlib.Path = npz_dir / pathlib.Path("temps")
-    temp_dict: Dict[str, Dict[str, NDArrayType]] = dict()
-    root: pathlib.Path
-    files: List[pathlib.Path]
+    temp_dict: Dict[pathlib.Path, Dict[str, NDArrayType]] = dict()
     for root, _, files in os.walk(temps_dir):
         root = pathlib.Path(root)
         step_name: str = root.stem
@@ -94,12 +92,13 @@ def convert_npz_to_hdf(
         node_data: NDArrayType
         for step in temp_dict:
             i: int
-            items: Tuple[str, Dict[str, NDArrayType]]
+            items: Tuple[str, NDArrayType]
             for i, items in enumerate(temp_dict[step].items()):
                 file: str
                 node_data: NDArrayType
                 file, node_data = items
                 frame: str = pathlib.Path(file).stem
+                print(frame)
                 target_len: int = len(node_data)
                 hdf5_file.create_dataset(
                         f"nodes/{step}/{frame}",

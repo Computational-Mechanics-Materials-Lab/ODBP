@@ -10,7 +10,7 @@ import platformdirs
 import subprocess
 import pickle
 import pandas as pd
-from typing import Union, Any, TextIO, Tuple, List, Dict
+from typing import Union, Any, TextIO, Tuple, List, Dict, Optional
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from odbp import __version__
@@ -35,7 +35,7 @@ class UserOptions():
         self.results_directory: str = ""
         self.image_title: str = ""
         self.image_label: str = ""
-        self.config_file_path: Union[str, None] = None
+        self.config_file_path: Optional[str] = None
         self.run_immediate: bool = False
 
 
@@ -346,55 +346,7 @@ def generate_cli_settings(args: argparse.Namespace) -> "Tuple[OdbVisualizer, Use
 
 
 def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
-    if not args.odb:
-        print("Error: You must supply the path to a .odb file from which to extract")
-        sys.exit(1)
-
-    state: OdbVisualizer
-    state, _ = generate_cli_settings(args)
-
-    odb_extract_script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "py2_scripts", "extract.py")
-    temp_save_path = os.path.join(os.getcwd(), "temp.pickle")
-
-    # Because of the python3-2 cross-talk, we use strings of "None", unfortunately
-    parts: Union[List[str], None] = None
-    nodesets: Union[List[str], None] = None
-    nodes: Union[Dict[str, List[int]], None] = None
-    if hasattr(state, "parts"):
-        parts = state.parts
-
-    if hasattr(state, "nodesets"):
-        nodesets = state.nodesets
-
-    if hasattr(state, "nodes"):
-        nodes = state.nodes
-
-    # subprocess won't handle the Nones or dicts or lists well, so instead we pickle in the output path, and read in the python2 version
-    # They're all built-ins, so pickle should work
-    temp_file: TextIO
-    input_dict: Dict[str, Any] = {
-        "parts": parts,
-        "nodesets": nodesets,
-        "nodes": nodes,
-    }
-    # TODO Time Sample
-    with open(temp_save_path, "wb") as temp_file:
-        pickle.dump(input_dict, temp_file, protocol=2)
-    odb_extract_args: List[str] = [state.abaqus_program, "python", odb_extract_script_path, state.odb_file_path, temp_save_path]
-    subprocess.run(odb_extract_args, shell=True)
-
-    #odb_to_npz_args: List[str] = [self.abaqus_program, "python", odb_to_npz_script_path, os.path.join(os.getcwd(), self.odb_file_path), str(self.time_sample)]
-    #subprocess.run(odb_to_npz_args, shell=True)
-
-    return_data: pd.DataFrame
-    with open(temp_save_path, "rb") as temp_file:
-        # From the Pickle Spec, decoding numpy arrays from python 2 must use encoding="latin-1"
-        return_data = pd.DataFrame(pickle.load(temp_file, encoding="latin-1"))
-
-    if os.path.exists(temp_save_path):
-        os.remove(temp_save_path)
-
-    return return_data
+    pass
 
 
 def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: "Dict[str, Any]") -> "Tuple[OdbVisualizer, UserOptions]":
@@ -477,7 +429,7 @@ def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_
         # Otherwise, the file must have already been read
 
         # Search for the stored toml values for this hdf
-        config: Union[Dict[str, Any], None] = None
+        config: Optional[Dict[str, Any]] = None
         if user_options.config_file_path is None:
             print(f".toml config file for {state.hdf_file_path} could not be found")
         else:

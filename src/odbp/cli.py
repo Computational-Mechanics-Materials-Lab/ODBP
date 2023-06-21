@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     import tomli as tomllib
 import numpy as np
 import pandas as pd
-from typing import Any, Union, TextIO, List, Tuple, Dict
+from typing import Any, Union, TextIO, List, Tuple, Dict, Optional
 from .odb_visualizer import OdbVisualizer
 from .util import confirm
 from .state import CLIOptions, UserOptions, process_input, print_state, load_views_dict
@@ -136,7 +136,7 @@ def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
         while not odb_path_valid:
             user_input = input("Please enter the path of the odb file: ")
             if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                output: Union[bool, None] = state.select_odb(user_options, user_input)
+                output: Optional[bool] = state.select_odb(user_options, user_input)
                 if isinstance(output, bool):
                     print(f"Error: the file {user_input} could not be found")
 
@@ -183,9 +183,9 @@ def convert(state: OdbVisualizer) -> None:
 
 
 def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
-    meltpoint: Union[float, None] = None
-    low_temp: Union[float, None] = None
-    time_sample: Union[int, None] = None
+    meltpoint: Optional[float] = None
+    low_temp: Optional[float] = None
+    time_sample: Optional[int] = None
 
     if user_options.config_file_path is not None:
         config_file: TextIO

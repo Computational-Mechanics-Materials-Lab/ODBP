@@ -13,14 +13,13 @@ Originally written by CMML Member CJ Nguyen
 import h5py
 import multiprocessing
 import pathlib
-import numpy as np
 import pandas as pd
 from typing import Tuple, List
-from .util import NDArrayType, DataFrameType, H5PYGroupType, H5PYFileType, MultiprocessingPoolType
+from .util import DataFrameType, H5PYFileType, MultiprocessingPoolType
 
 
 def get_odb_data(
-    hdf_path: pathlib.Path
+    hdf_path: pathlib.Path,
     cpus: int
     ) -> DataFrameType:
     """
@@ -36,7 +35,7 @@ def get_odb_data(
             for step in hdf_file["nodes"].keys():
                 frame_name: str
                 # TODO dataclass
-                args_list: List[Tuple(H5PYFileType, str, str)] = [
+                args_list: List[Tuple[H5PYFileType, str, str]] = [
                         (hdf_path, step, frame_name)
                         for frame_name
                         in hdf_file["nodes"][step].keys() 
