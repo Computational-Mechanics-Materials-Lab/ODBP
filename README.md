@@ -43,8 +43,8 @@ from odbp import Odb
     * 0.5.2: Returning support to Python 3.8+ (type hinting)
     * 0.5.3: Patching conversion bugs
     * 0.5.4: Parametrize number of cpus for testing
-* 0.6.0: Extractor improvements, ODB interface tools (iteration, receiving ODB data), re-implementation of basic 3D plots over time (including melt-pool plots)
+* 0.6.0: Extractor improvements, ODB interface tools (iteration, receiving ODB data), re-implementation of basic 3D plots over time (including melt-pool plots). Created two-dimensional plotting capabilities
 * Upcoming:
-    * 0.7.0: Create two-dimensional plotting capabilities and sane defaults. Improve pyvista functinality: views, gifs, non-interactive image saving, leave the viewer.
+    * 0.7.0: Improve pyvista functionality: views, gifs, non-interactive image saving, leave the viewer.
     * 0.8.0: Rewrite CLI to use python's cmd module and pyreadline/GNU readline. Also improve user input parametrization (nodes, nodesets, frames, steps, parts, colors, image sizes, etc.)
     * 1.0.0: Final bug-fixing, type checking, bounds checking, etc. Hopefully coinciding (or following) a publication.

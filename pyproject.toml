@@ -13,7 +13,6 @@ dependencies = [
 "tomli>=1.1.0; python_version < '3.11'",
 "tomli_w",
 "pandas",
-"matplotlib",
 "pyvista",
 "pyreadline3; platform_system == 'Windows'",
 ]
@@ -32,7 +31,6 @@ headless = [
     "tomli>=1.1.0; python_version < '3.11'",
     "tomli_w",
     "pandas",
-    "matplotlib",
     "pyreadline3; platform_system == 'Windows'",
     ]
 

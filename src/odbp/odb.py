@@ -575,6 +575,21 @@ class Odb():
 
         self._hdf_path = value
 
+    
+    @property
+    def result_dir(self) -> pathlib.Path:
+        return self._result_dir
+
+
+    @result_dir.setter
+    def result_dir(self, value: pathlib.Path) -> None:
+        value = pathlib.Path(value)
+
+        if not value.exists():
+            value.mkdir()
+
+        self._result_dir = value
+
 
     @property
     def abaqus_executable(self) -> str:
@@ -1059,6 +1074,66 @@ class Odb():
 
     # 2D Plotting
 
+    # Structure of the dataframe:
+    # Times are repeated
+    # We'll assume, by default, that you want (one of) min, max, mean of duplicated time
+
+    def plot_temp_versus_time(
+        self,
+        mean_max_both: str = "both"
+        ) -> Optional[pathlib.Path]:
+        # TODO What if I want to 2d-plot only 1 nodeset, but I extractor more stuff
+        # or DIDN'T extract the nodeset at all. Same w/ 3D. Metadata?
+
+        if not PYVISTA_AVAILABLE:
+            raise Exception("Plotting cabailities are not included."
+                " Please install pyvista via pip install odb-plotter"
+                ' rather than pip install odb-plotter["headless"]'
+                " Or export the data from Odb.extract() to another tool,"
+                " such as matplotlib or bokeh.")
+
+        data_to_plot: DataFrameType = self.extract()
+        time_data: List[float] = list(data_to_plot.index)
+
+        title: str = self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
+        title += " Temperature versus Time"
+
+        temp_v_time: pv.Chart2D = pv.Chart2D(x_label="Time (seconds)", y_label="Temperature (Kelvin)")
+        temp_v_time.title = title
+
+        if mean_max_both.lower() in ("mean", "both"):
+            temp_v_time.line(
+                time_data,
+                data_to_plot["mean"].values,
+                color="#FF7F00",
+                label="Mean Temperature")
+
+        if mean_max_both.lower() in ("max", "both"):
+            temp_v_time.line(
+                time_data,
+                data_to_plot["max"].values,
+                color="#FF0000",
+                label="Mean Temperature")
+
+        if self.save:
+            save_path: pathlib.Path = self.result_dir / f"{title}.png"
+            # Returns a numpy array of pixels
+            # But we don't need that.
+            _ = temp_v_time.show(
+                interactive=self.interactive,
+                off_screen=(not self.interactive),
+                screenshot=True,
+                filename=self.result_dir / f"{title}.png")
+
+            return save_path
+
+        elif self.interactive:
+            temp_v_time.show(
+                interactive=True,
+                off_screen=False,
+                screenshot=False)
+
+
     # 3D Plotting
     def plot_3d_all_times(
             self,
@@ -1194,7 +1269,7 @@ class Odb():
 
         if self.save:
             final_name: str = f"{combined_label}{self.save_format}"
-            plotter.screenshot(final_name)
+            plotter.screenshot(self.result_dir / final_name)
             return final_name
 
         return
