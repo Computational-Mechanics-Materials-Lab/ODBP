@@ -1087,8 +1087,8 @@ class Odb():
 
         if not PYVISTA_AVAILABLE:
             raise Exception("Plotting cabailities are not included."
-                " Please install pyvista via pip install odb-plotter"
-                ' rather than pip install odb-plotter["headless"]'
+                ' Please install pyvista via pip install odb-plotter["plot"]'
+                ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract() to another tool,"
                 " such as matplotlib or bokeh.")
 
@@ -1144,10 +1144,11 @@ class Odb():
 
         """
         if not PYVISTA_AVAILABLE:
-            raise Exception("3D Plotting capabilities are not included."
-                            'Please pip install odb-plotter'
-                            'rather than odb-plotter["headless"] to use'
-                            "three-dimensional plotting")
+            raise Exception("Plotting cabailities are not included."
+                ' Please install pyvista via pip install odb-plotter["plot"]'
+                ' or odb-plotter["all"] rather than pip install odb-plotter'
+                " Or export the data from Odb.extract() to another tool,"
+                " such as matplotlib or bokeh.")
 
         label = self.hdf_path.stem if label is None else label
 
@@ -1189,10 +1190,11 @@ class Odb():
         """
 
         if not PYVISTA_AVAILABLE:
-            raise Exception("3D Plotting capabilities are not included."
-                            'Please pip install odb-plotter'
-                            'rather than odb-plotter["headless"] to use'
-                            "three-dimensional plotting")
+            raise Exception("Plotting cabailities are not included."
+                ' Please install pyvista via pip install odb-plotter["plot"]'
+                ' or odb-plotter["all"] rather than pip install odb-plotter'
+                " Or export the data from Odb.extract() to another tool,"
+                " such as matplotlib or bokeh.")
 
         dims_columns: set[str] = {"X", "Y", "Z"}
         combined_label: str = f"{label}-{round(time, 2):.2f}"
