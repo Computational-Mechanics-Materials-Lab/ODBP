@@ -66,6 +66,7 @@ class Odb():
         "_part_names",
         "_node_range",
         "_node_ranges_per_part",
+        "_extracted_nodes",
 
         # User-defined components
         # TODO turn these into a subclass member, overload
@@ -214,6 +215,8 @@ class Odb():
         self._colormap: str = "turbo"
         self._save_format: str = ".png"
         self._save: bool = True
+
+        self._extracted_nodes: DataFrameType
 
         # TODO
         self._angle = Union[str, Tuple[float, float, float]]
@@ -880,9 +883,15 @@ class Odb():
 
     def extract(self) -> DataFrameType:
         if hasattr(self, "hdf_path") or hasattr(self, "odb"):
-            return self.extract_from_hdf()
+            result: DataFrameType = self.extract_from_hdf()
+            self._extracted_nodes = result
+            return result
+
         elif hasattr(self, "odb_path"):
-            return self.extract_from_odb()
+            result: DataFrameType = self.extract_from_odb()
+            self._extracted_nodes = result
+            return result
+
         else:
             raise AttributeError("This Odb object does not have")
 
@@ -1092,8 +1101,10 @@ class Odb():
                 " Or export the data from Odb.extract() to another tool,"
                 " such as matplotlib or bokeh.")
 
-        data_to_plot: DataFrameType = self.extract()
-        time_data: List[float] = list(data_to_plot.index)
+        if not hasattr(self, "_extracted_nodes"):
+            _ = self.extract()
+
+        time_data: List[float] = list(self._extracted_nodes.index)
 
         title: str = self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
         title += " Temperature versus Time"
@@ -1104,14 +1115,14 @@ class Odb():
         if mean_max_both.lower() in ("mean", "both"):
             temp_v_time.line(
                 time_data,
-                data_to_plot["mean"].values,
+                self._extracted_nodes["mean"].values,
                 color="#FF7F00",
                 label="Mean Temperature")
 
         if mean_max_both.lower() in ("max", "both"):
             temp_v_time.line(
                 time_data,
-                data_to_plot["max"].values,
+                self._extracted_nodes["max"].values,
                 color="#FF0000",
                 label="Mean Temperature")
 
@@ -1137,6 +1148,7 @@ class Odb():
     # 3D Plotting
     def plot_3d_all_times(
             self,
+            *,
             label: Optional[str] = None,
             target_nodes: Optional[DataFrameType] = None
             ) -> "List[pathlib.Path]":
@@ -1152,30 +1164,17 @@ class Odb():
 
         label = self.hdf_path.stem if label is None else label
 
-        target_nodes = self.odb if target_nodes is None else target_nodes
+        if target_nodes is None:
+            if not hasattr(self, "odb"):
+                self.load_hdf()
 
-        if self.interactive:
-            results: List[pathlib.Path] = list()
-            frame: DataFrameType
-            for frame in self:
-                time: float = frame["Time"].values[0]
-                results.append(self._plot_3d_single(time, label, target_nodes))
+            target_nodes = self.odb
 
-        else:
-            # TODO dataclass
-            single_plot_args: List[Tuple[float, str, str]] = [
-                (frame["Time"].values[0],
-                label,
-                target_nodes,
-                ) for frame in self
-            ]
-
-            pool: MultiprocessingPoolType
-            with multiprocessing.Pool(processes=self.cpus) as pool:
-                results: List[pathlib.Path] = pool.starmap(
-                    self._plot_3d_single,
-                    single_plot_args,
-                    )
+        results: List[pathlib.Path] = list()
+        frame: DataFrameType
+        for frame in self:
+            time: float = frame["Time"].values[0]
+            results.append(self._plot_3d_single(time, label, target_nodes))
 
         return results
 
@@ -1200,7 +1199,8 @@ class Odb():
         combined_label: str = f"{label}-{round(time, 2):.2f}"
 
         plotter: pv.Plotter = pv.Plotter(
-            off_screen=(not self._interactive),
+            interactive=self.interactive,
+            off_screen=(not self.interactive),
             window_size=(1920, 1080),
             lighting="three lights"
             )
