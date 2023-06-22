@@ -114,23 +114,14 @@ class Odb():
 
         self._odb_path: pathlib.Path
         self._odb_source_dir: Optional[pathlib.Path]
-        self._odb_source_dir = pathlib.Path(
-            pathlib.Path(__file__).parent,
-            "odbs",
-            ).absolute()
+        self._odb_source_dir = pathlib.Path.cwd().absolute() / "odbs"
 
         self._hdf_path: pathlib.Path
         self._hdf_source_dir: Optional[pathlib.Path]
-        self._hdf_source_dir = pathlib.Path(
-            pathlib.Path(__file__).parent,
-            "hdfs",
-            ).absolute()
+        self._hdf_source_dir = pathlib.Path.cwd().absolute() / "hdfs"
 
         self._result_dir: Optional[pathlib.Path]
-        self._result_dir = pathlib.Path(
-            pathlib.Path(__file__),
-            "results",
-        ).absolute()
+        self._result_dir = pathlib.Path.cwd().absolute() / "results"
 
         self._abaqus_executable: str = "abaqus"
 
@@ -1124,17 +1115,18 @@ class Odb():
                 time_data,
                 self._extracted_nodes["max"].values,
                 color="#FF0000",
-                label="Mean Temperature")
+                label="Max Temperature")
 
         if self.save:
+            if not self.result_dir.exists():
+                self.result_dir.mkdir()
+
             save_path: pathlib.Path = self.result_dir / f"{title}.png"
-            # Returns a numpy array of pixels
-            # But we don't need that.
-            _ = temp_v_time.show(
+            temp_v_time.show(
                 interactive=self.interactive,
                 off_screen=(not self.interactive),
-                screenshot=True,
-                filename=self.result_dir / f"{title}.png")
+                screenshot=self.result_dir / f"{title}.png"
+                )
 
             return save_path
 
@@ -1170,11 +1162,15 @@ class Odb():
 
             target_nodes = self.odb
 
+        if not self.result_dir.exists():
+            self.result_dir.mkdir()
+
         results: List[pathlib.Path] = list()
         frame: DataFrameType
         for frame in self:
             time: float = frame["Time"].values[0]
-            results.append(self._plot_3d_single(time, label, target_nodes))
+            if self.time_low <= time <= self.time_high:
+                results.append(self._plot_3d_single(time, label, target_nodes))
 
         return results
 
@@ -1198,8 +1194,29 @@ class Odb():
         dims_columns: set[str] = {"X", "Y", "Z"}
         combined_label: str = f"{label}-{round(time, 2):.2f}"
 
+        filtered_target_nodes: DataFrameType = target_nodes[
+            target_nodes["Time"] == time
+            ]
+        filtered_target_nodes = filtered_target_nodes[
+            filtered_target_nodes["X"] >= self.x_low
+            ]
+        filtered_target_nodes = filtered_target_nodes[
+            filtered_target_nodes["X"] <= self.x_high
+            ]
+        filtered_target_nodes = filtered_target_nodes[
+            filtered_target_nodes["Y"] >= self.y_low
+            ]
+        filtered_target_nodes = filtered_target_nodes[
+            filtered_target_nodes["Y"] <= self.y_high
+            ]
+        filtered_target_nodes = filtered_target_nodes[
+            filtered_target_nodes["Z"] >= self.z_low
+            ]
+        filtered_target_nodes = filtered_target_nodes[
+            filtered_target_nodes["Z"] <= self.z_high
+            ]
+
         plotter: pv.Plotter = pv.Plotter(
-            interactive=self.interactive,
             off_screen=(not self.interactive),
             window_size=(1920, 1080),
             lighting="three lights"
@@ -1213,20 +1230,21 @@ class Odb():
         )
 
         points: pv.PolyData = pv.PolyData(
-            target_nodes.drop(
+            filtered_target_nodes.drop(
                 columns=list(
-                    set(target_nodes.columns.values.tolist())
+                    set(filtered_target_nodes.columns.values.tolist())
                     - dims_columns
                     )
                 ).to_numpy()
             )
 
-        points[self.temp_key] = target_nodes[self.temp_key].to_numpy()
+
+        points["Temp"] = filtered_target_nodes["Temp"].to_numpy()
         mesh: pv.PolyData = points.delaunay_3d()
 
         plotter.add_mesh(
             mesh,
-            scalars=self.temp_key,
+            scalars="Temp",
             cmap = pv.LookupTable(
                 cmap=self._colormap,
                 scalar_range=(
