@@ -13,10 +13,17 @@ dependencies = [
 "tomli>=1.1.0; python_version < '3.11'",
 "tomli_w",
 "pandas",
-"pyvista",
 "pyreadline3; platform_system == 'Windows'",
 ]
 dynamic = ["version",]
+
+[project.optional-dependencies]
+plot = [
+    'pyvista',
+]
+all = [
+    'pyvista',
+]
 
 [project.urls]
 "Homepage" = "https://www.cmml.me.msstate.edu"
