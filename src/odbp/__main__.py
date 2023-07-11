@@ -1,4 +1,5 @@
-from .cli import cli
+from .cli import OdbPlotterCLI
 
 if __name__ == "__main__":
-    cli()
+    cli = OdbPlotterCLI()
+    cli.cmdloop()

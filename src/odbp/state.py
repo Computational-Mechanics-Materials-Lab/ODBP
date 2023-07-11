@@ -11,8 +11,7 @@ import subprocess
 import pickle
 import pandas as pd
 from typing import Union, Any, TextIO, Tuple, List, Dict, Optional
-from .odb_visualizer import OdbVisualizer
-from .util import confirm
+from .odb import Odb
 from odbp import __version__
 
 
@@ -158,7 +157,7 @@ class CLIOptions():
     )
 
 
-def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
+def print_state(state: Odb, user_options: UserOptions) -> None:
     lines: List[Dict[str, str]] = [
         {
             ".hdf5 file": f"{state.hdf_file_path if hasattr(state, 'hdf_file_path') else 'not set'}",
@@ -217,7 +216,7 @@ def print_state(state: OdbVisualizer, user_options: UserOptions) -> None:
     print(final_state_output, end="") # No ending newline because we added it above
 
 
-def process_input() -> "Union[Tuple[OdbVisualizer, UserOptions], pd.DataFrame]": # Returns UserOptions or Pandas Dataframe
+def process_input() -> "Union[Tuple[Odb, UserOptions], pd.DataFrame]": # Returns UserOptions or Pandas Dataframe
     """
     The goal is to have a hierarchy of options. If a user passes in an option via a command-line switch, that option is set.
     If an option is not set by a switch, then the toml input file is used.
@@ -281,9 +280,9 @@ def process_input() -> "Union[Tuple[OdbVisualizer, UserOptions], pd.DataFrame]":
         return generate_cli_settings(args)
 
 
-def generate_cli_settings(args: argparse.Namespace) -> "Tuple[OdbVisualizer, UserOptions]":
+def generate_cli_settings(args: argparse.Namespace) -> "Tuple[Odb, UserOptions]":
 
-    state: OdbVisualizer = OdbVisualizer()
+    state: Odb = Odb()
     user_options: UserOptions = UserOptions()
 
     # Stage 1: User platformdirs to read base-line settings
@@ -334,13 +333,13 @@ def generate_cli_settings(args: argparse.Namespace) -> "Tuple[OdbVisualizer, Use
         print(f"Directory {user_options.results_directory} does not exist. Creating it now.")
         os.makedirs(user_options.results_directory)
 
-    if not state.hdf_processed:
+    """if not state.hdf_processed:
         if hasattr(state, "odb_file_path") and hasattr(state, "hdf_file_path"):
             if confirm(f"{state.odb_file_path} can be automatically converted to {state.hdf_file_path} with time sample {state.time_sample}", "Would you like to perfrom this conversion?", "yes"):
                 print(f"Converting {state.odb_file_path} file to .hdf5 file with name: {state.hdf_file_path}")
                 state.odb_to_hdf(state.hdf_file_path)
             else:
-                print("You may perform this conversion later with the \"convert\" command")
+                print("You may perform this conversion later with the \"convert\" command")"""
 
     return (state, user_options)
 
@@ -349,7 +348,7 @@ def extract_from_file(args: argparse.Namespace) -> pd.DataFrame:
     pass
 
 
-def read_setting_dict(state: OdbVisualizer, user_options: UserOptions, settings_dict: "Dict[str, Any]") -> "Tuple[OdbVisualizer, UserOptions]":
+def read_setting_dict(state: Odb, user_options: UserOptions, settings_dict: "Dict[str, Any]") -> "Tuple[Odb, UserOptions]":
     hdf_source_dir: str
     if "hdf_source_directory" in settings_dict:
         hdf_source_dir = os.path.abspath(settings_dict["hdf_source_directory"])
