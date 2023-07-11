@@ -6,6 +6,7 @@ Built-in CLI for ODB Plotter, allowing for interactive system access without wri
 
 import os
 import sys
+import cmd
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -13,10 +14,129 @@ except ModuleNotFoundError:
 import numpy as np
 import pandas as pd
 from typing import Any, Union, TextIO, List, Tuple, Dict, Optional
-from .odb_visualizer import OdbVisualizer
-from .util import confirm
+from .odb import Odb
 from .state import CLIOptions, UserOptions, process_input, print_state, load_views_dict
 from odbp import __version__
+
+
+class OdbPlotterCLI(cmd.Cmd):
+    
+    def __init__(self) -> None:
+        super().__init__()
+        self.prompt: str = "> "
+        self.intro: str = f"ODBPlotter {__version__}"
+        self.state: Odb
+        self.options: UserOptions
+        #self.state, self.options = process_input()
+        self.odb = Odb()
+        self.options = UserOptions()
+
+
+    # Gotta overload this method in order to get desired control flow
+    def cmdloop(self, intro=None):
+        """Repeatedly issue a prompt, accept input, parse an initial prefix
+        off the received input, and dispatch to action methods, passing them
+        the remainder of the line as argument.
+
+        """
+
+        self.preloop()
+        if self.use_rawinput and self.completekey:
+            try:
+                import readline
+                self.old_completer = readline.get_completer()
+                readline.set_completer(self.complete)
+                readline.parse_and_bind(self.completekey+": complete")
+            except ImportError:
+                pass
+        try:
+            if intro is not None:
+                self.intro = intro
+            if self.intro:
+                self.stdout.write(str(self.intro)+"\n")
+            stop = None
+            while not stop:
+                try:
+                    if self.cmdqueue:
+                        line = self.cmdqueue.pop(0)
+                    else:
+                        if self.use_rawinput:
+                            try:
+                                line = input(self.prompt)
+                            except EOFError:
+                                line = 'EOF'
+                        else:
+                            self.stdout.write(self.prompt)
+                            self.stdout.flush()
+                            line = self.stdin.readline()
+                            if not len(line):
+                                line = 'EOF'
+                            else:
+                                line = line.rstrip('\r\n')
+                    line = self.precmd(line)
+                    stop = self.onecmd(line)
+                    stop = self.postcmd(stop, line)
+                except KeyboardInterrupt:
+                    self.stdout.write("Caught a Control-C. Returning to main command line\n")
+                    self.stdout.write('Please use the "quit" or "exit" commands to exit ODBPlotter\n\n')
+
+            self.postloop()
+        finally:
+            if self.use_rawinput and self.completekey:
+                try:
+                    import readline
+                    readline.set_completer(self.old_completer)
+                except ImportError:
+                    pass
+
+
+
+    def confirm(self, message: str, confirmation: str, default: "Optional[str]" = None) -> bool:
+        yes_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("yes", "y")
+        no_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("no", "n")
+        if isinstance(default, str):
+            if default.lower() in yes_vals:
+                yes_vals = ("yes", "y", "")
+                confirmation += " (Y/n)? "
+            elif default.lower() in no_vals:
+                no_vals = ("no", "n", "")
+                confirmation += " (y/N)? "
+
+        else:
+            confirmation += " (y/n)? "
+
+        while True:
+            self.stdout.write(f"{message}\n")
+            user_input: str = input(confirmation).lower()
+            if user_input in yes_vals:
+                return True
+            elif user_input in no_vals:
+                return False
+            else:
+                self.stdout.write("Error: invalid input\n")
+
+
+    # Quit and Dispatches
+    def quit(self) -> None:
+        self.stdout.write("\nExiting")
+        sys.exit(0)
+
+
+    def do_quit(self, arg: str) -> None:
+        """Exit gracefully (same as exit)"""
+        _ = arg
+        self.quit()
+
+    
+    def do_exit(self, arg: str) -> None:
+        """Exit gracefully (same as quit)"""
+        _ = arg
+        self.quit()
+
+    def do_foo(self, arg: str) -> None:
+        """Foo Bar"""
+        _ = arg
+        self.stdout.write("Foo")
 
 
 def cli() -> None:
@@ -24,9 +144,9 @@ def cli() -> None:
     main_loop: bool = True
 
     # TODO Process input toml file and/or cli switches here
-    state: OdbVisualizer
+    state: Odb
     user_options: UserOptions
-    result: Union[Tuple[OdbVisualizer, UserOptions], pd.DataFrame]
+    result: Union[Tuple[Odb, UserOptions], pd.DataFrame]
     result = process_input()
     print(f"ODBPlotter {__version__}")
     if isinstance(result, pd.DataFrame):
@@ -114,13 +234,13 @@ def cli() -> None:
             main_loop = False
 
 
-def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
+def select_files(state: Odb, user_options: UserOptions) -> None:
     odb_options: Tuple[str, str] = ("odb", ".odb")
     hdf_options: Tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
     user_input: str
 
     # select odb
-    while True:
+    """while True:
         user_input = input('Please enter either "hdf" if you plan to open .hdf5 file or "odb" if you plan to open a .odb file: ').strip().lower()
 
         if user_input in odb_options or user_input in hdf_options:
@@ -128,61 +248,61 @@ def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
                 break
 
         else:
-            print("Error: invalid input")
+            print("Error: invalid input")"""
 
     if user_input in odb_options:
         # process odb
         odb_path_valid: bool = False
         while not odb_path_valid:
             user_input = input("Please enter the path of the odb file: ")
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
+            """if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
                 output: Optional[bool] = state.select_odb(user_options, user_input)
                 if isinstance(output, bool):
                     print(f"Error: the file {user_input} could not be found")
 
                 else:
-                    odb_path_valid = True
+                    odb_path_valid = True"""
 
         gen_time_sample: bool = False
-        if hasattr(state, "time_sample"):
+        """if hasattr(state, "time_sample"):
             gen_time_sample = confirm(f"Time Sample is already set as {state.time_sample}.", "Would you like to overwrite it?")
 
         else:
-            gen_time_sample = True
+            gen_time_sample = True"""
 
         if gen_time_sample:
             set_time_sample(state)
 
-        if confirm('You may now convert this .odb file to a .hdf5 file or you may do this later with the "convert" command.', "Would you like to convert now?", "yes"):
-            convert(state)
+        """if confirm('You may now convert this .odb file to a .hdf5 file or you may do this later with the "convert" command.', "Would you like to convert now?", "yes"):
+            convert(state)"""
 
     elif user_input in hdf_options:
         # process hdf
         hdf_path_valid: bool = False
         while not hdf_path_valid:
             user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
+            """if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
                 output: Union[UserOptions, bool] = state.select_hdf(user_options, user_input)
                 if isinstance(output, UserOptions):
                     user_options = output
                     hdf_path_valid = True
 
                 else:
-                    print(f"Error: the file {user_input} could not be found")
+                    print(f"Error: the file {user_input} could not be found")"""
 
         pre_process_data(state, user_options)
         print(f"Target .hdf5 file: {state.hdf_file_path}")
 
 
-def convert(state: OdbVisualizer) -> None:
+def convert(state: Odb) -> None:
     while True:
         user_input: str = input("Please enter the desired name of the generated .hdf5 file: ")
-        if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+        """if confirm(f"You entered {user_input}", "Is this correct", "yes"):
             state.odb_to_hdf(user_input)
-            break
+            break"""
 
 
-def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
+def pre_process_data(state: Odb, user_options: UserOptions):
     meltpoint: Optional[float] = None
     low_temp: Optional[float] = None
     time_sample: Optional[int] = None
@@ -258,7 +378,7 @@ def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
     state.select_colormap()
 
 
-def set_title_and_label(state: OdbVisualizer, user_options: UserOptions) -> None:
+def set_title_and_label(state: Odb, user_options: UserOptions) -> None:
     default_title: str = ""
 
     if hasattr(state, "hdf_file_path"):
@@ -273,18 +393,18 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions) -> None
             if user_input == "":
                 user_input = default_title
 
-            if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+            """if confirm(f"You entered {user_input}", "Is this correct", "yes"):
                 user_options.image_title = user_input
-                break
+                break"""
 
         else:
             user_input = input("Please Enter the Title for you Images: ")
             if user_input == "":
                 print("Error: You must enter a non-empty value")
-            else:
+            """else:
                 if confirm(f"You entered {user_input}", "Is this correct", "yes"):
                     user_options.image_title = user_input
-                    break
+                    break"""
 
     while True:
         user_input: str
@@ -293,9 +413,9 @@ def set_title_and_label(state: OdbVisualizer, user_options: UserOptions) -> None
         if user_input == "":
             user_input = default_label
 
-        if confirm(f"You entered {user_input}", "Is this correct", "yes"):
+        """if confirm(f"You entered {user_input}", "Is this correct", "yes"):
             user_options.image_label = user_input
-            break
+            break"""
 
 
 def set_directories(user_options: UserOptions) -> None:
@@ -303,12 +423,12 @@ def set_directories(user_options: UserOptions) -> None:
     user_input: str
 
     gen_hdf_dir: bool = False
-    if hasattr(user_options, "hdf_source_directory"):
+    """if hasattr(user_options, "hdf_source_directory"):
         gen_hdf_dir = confirm(f".hdf5 source directory is currently set to {user_options.hdf_source_directory}.", "Would you like to overwrite it?")
     else:
-        gen_hdf_dir = True
+        gen_hdf_dir = True"""
 
-    if gen_hdf_dir:
+    """if gen_hdf_dir:
         while True:
             user_input = input("Please enter the directory of your .hdf5 files and associated data: ")
             if os.path.exists(user_input):
@@ -320,18 +440,18 @@ def set_directories(user_options: UserOptions) -> None:
                         user_options.hdf_source_directory = os.path.join(os.getcwd(), user_input)
                     break
             else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")"""
 
     gen_odb_dir: bool = False
-    if hasattr(user_options, "odb_source_directory"):
+    """if hasattr(user_options, "odb_source_directory"):
         gen_odb_dir = confirm(f".odb source directory is currently set to {user_options.odb_source_directory}.", "Would you like to overwrite it?")
     else:
-        gen_odb_dir = True
+        gen_odb_dir = True"""
 
     if gen_odb_dir:
         while True:
             user_input = input("Please enter the directory of your .odb files: ")
-            if os.path.exists(user_input):
+            """if os.path.exists(user_input):
                 if confirm(f"You entered {user_input}", "Is this correct", "yes"):
                     # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
                     if os.path.isabs(user_input):
@@ -340,18 +460,18 @@ def set_directories(user_options: UserOptions) -> None:
                         user_options.odb_source_directory = os.path.join(os.getcwd(), user_input)
                     break
             else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")"""
 
     gen_results_dir: bool = False
-    if hasattr(user_options, "results_directory"):
+    """if hasattr(user_options, "results_directory"):
         gen_results_dir = confirm(f"The results directory is currently set to {user_options.results_directory}.", "Would you like to overwrite it?")
     else:
-        gen_results_dir = True
+        gen_results_dir = True"""
     
     if gen_results_dir:
         while True:
             user_input = input("Please enter the directory where you would like your results to be written: ")
-            if os.path.exists(user_input):
+            """if os.path.exists(user_input):
                 if confirm(f"You entered {user_input}", "Is this correct", "yes"):
                     # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
                     if os.path.isabs(user_input):
@@ -360,10 +480,10 @@ def set_directories(user_options: UserOptions) -> None:
                         user_options.results_directory = os.path.join(os.getcwd(), user_input)
                     break
             else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")"""
 
 
-def set_extrema(state: OdbVisualizer) -> None:
+def set_extrema(state: Odb) -> None:
     x_low: float
     x_high: float
     y_low: float
@@ -385,7 +505,7 @@ def set_extrema(state: OdbVisualizer) -> None:
         y_low, y_high = extrema[("lower Y", "upper Y")]
         z_low, z_high = extrema[("lower Z", "upper Z")]
         print()
-        if confirm(f"SELECTED VALUES:\nX from {x_low} to {x_high}\nY from {y_low} to {y_high}\nZ from {z_low} to {z_high}", "Is this correct", "yes"):
+        """if confirm(f"SELECTED VALUES:\nX from {x_low} to {x_high}\nY from {y_low} to {y_high}\nZ from {z_low} to {z_high}", "Is this correct", "yes"):
             state.set_x_low(x_low)
             state.set_x_high(x_high)
             state.set_y_low(y_low)
@@ -393,51 +513,51 @@ def set_extrema(state: OdbVisualizer) -> None:
             state.set_z_low(z_low)
             state.set_z_high(z_high)
             print(f"Spatial Dimensions Updated to:\nX from {state.x.low} to {state.x.high}\nY from {state.y.low} to {state.y.high}\nZ from {state.z.low} to {state.z.high}")
-            break
+            break"""
 
 
-def set_meltpoint(state: OdbVisualizer) -> None:
+def set_meltpoint(state: Odb) -> None:
     while True:
         try:
             meltpoint = float(input("Enter the meltpoint of the Mesh: "))
 
-            if confirm(f"Meltng Point: {meltpoint}", "Is this correct", "yes"):
+            """if confirm(f"Meltng Point: {meltpoint}", "Is this correct", "yes"):
                 state.set_meltpoint(meltpoint)
                 print(f"Melting Point set to: {state.meltpoint}")
-                break
+                break"""
 
         except ValueError:
             print("Error, Melting Point must be a number")
 
 
-def set_low_temp(state: OdbVisualizer) -> None:
+def set_low_temp(state: Odb) -> None:
     while True:
         try:
             low_temp = float(input("Enter the lower temperature bound of the Mesh: "))
 
-            if confirm(f"Lower Temperature Bound: {low_temp}", "Is this correct", "yes"):
+            """if confirm(f"Lower Temperature Bound: {low_temp}", "Is this correct", "yes"):
                 state.set_low_temp(low_temp)
                 print(f"Lower Temperature Bound set to: {state.low_temp}")
-                break
+                break"""
 
         except ValueError:
             print("Error, Lower Temperature Bound must be a number")
 
 
-def set_time_sample(state: OdbVisualizer) -> None:
+def set_time_sample(state: Odb) -> None:
     while True:
         try:
             time_sample: int = int(input("Enter the Time Sample: "))
 
-            if confirm(f"Time Sample: {time_sample}", "Is this correct", "yes"):
+            """if confirm(f"Time Sample: {time_sample}", "Is this correct", "yes"):
                 state.set_time_sample(time_sample)
-                break
+                break"""
 
         except ValueError:
             print("Error, Time Sample must be an integer greater than or equal than 1")
 
 
-def set_time(state: OdbVisualizer) -> None:
+def set_time(state: Odb) -> None:
     lower_time: Union[int, float] = 0
     upper_time: Union[int, float] = float("inf")
     while True:
@@ -467,11 +587,11 @@ def set_time(state: OdbVisualizer) -> None:
                 except ValueError:
                     print("Error, all selected time values must be positive numbers")
 
-        if confirm(f"You entered {lower_time} as the starting time and {upper_time} as the ending time.", "Is this correct", "yes"):
+        """if confirm(f"You entered {lower_time} as the starting time and {upper_time} as the ending time.", "Is this correct", "yes"):
             state.set_time_low(lower_time)
             state.set_time_high(upper_time)
             print(f"Time Range: from {state.time_low} to {state.time_high if state.time_high != float('inf') else 'infinity'}")
-            break
+            break"""
 
 
 def process_extrema(keys: "Tuple[str, str]") -> "Tuple[float, float]":
@@ -502,12 +622,12 @@ def process_extrema(keys: "Tuple[str, str]") -> "Tuple[float, float]":
     return tuple(results)
 
 
-def load_hdf(state: OdbVisualizer) -> None:
+def load_hdf(state: Odb) -> None:
     state.process_hdf()
 
 
 # TODO Fix
-def set_views(state: OdbVisualizer) -> None:
+def set_views(state: Odb) -> None:
     views_dict: Dict[str, Dict[str, int]] = load_views_dict()
     while True:
         print("Please Select a Preset View for your plots")
@@ -570,8 +690,8 @@ def get_custom_view() -> "Tuple[int, int, int]":
             except ValueError:
                 print("Error: Roll Angle must be an integer")
 
-        if confirm(f"X Rotation: {elev}\nY Rotation: {azim}\nZ Rotation: {roll}", "Is this correct?", "yes"):
-            break
+        """if confirm(f"X Rotation: {elev}\nY Rotation: {azim}\nZ Rotation: {roll}", "Is this correct?", "yes"):
+            break"""
 
     return (elev, azim, roll)
 
@@ -592,31 +712,31 @@ def print_views(views: "Dict[str, Dict[str, int]]") -> None:
     print()
 
 
-def set_abaqus(state: OdbVisualizer) -> None:
+def set_abaqus(state: Odb) -> None:
     while True:
         user_input = input("Please enter the exectuable program to process .odb files: ")
-        if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
+        """if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
             state.set_abaqus(user_input)
-            break
+            break"""
 
 
-def set_nodeset(state: OdbVisualizer) -> None:
+def set_nodeset(state: Odb) -> None:
     while True:
         user_input = input("Please enter the name of the target nodeset: ")
-        if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
+        """if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
             state.set_nodesets(user_input)
-            break
+            break"""
 
 
-def plot_time_range(state: OdbVisualizer, user_options: UserOptions) -> None:
+def plot_time_range(state: Odb, user_options: UserOptions) -> None:
 
     if not state.loaded:
         print('Error, you must load the contents of a .hdf5 file into memory with the "run" or "process" commands in order to plot')
         return
 
-    if user_options.image_label == "" or user_options.image_title == "":
+    """if user_options.image_label == "" or user_options.image_title == "":
         if not confirm("Warning: Either the image label or image title is unset. Consider setting them with the \"title\" or \"label\" commands.", "Do you want to continue", "no"):
-            return
+            return"""
 
     # out_nodes["Time"] has the time values for each node, we only need one
     # Divide length by len(bounded_nodes), go up to that
@@ -629,7 +749,7 @@ def plot_time_range(state: OdbVisualizer, user_options: UserOptions) -> None:
         plot_time_slice(time, state, user_options)
 
 
-def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions) -> None:
+def plot_time_slice(time: float, state: Odb, user_options: UserOptions) -> None:
     formatted_time: str = format(round(time, 2), ".2f")
 
     if state.interactive:

@@ -15,7 +15,7 @@ import multiprocessing
 import pathlib
 import pandas as pd
 from typing import Tuple, List
-from .util import DataFrameType, H5PYFileType, MultiprocessingPoolType
+from .types import DataFrameType, H5PYFileType, MultiprocessingPoolType
 
 
 def get_odb_data(

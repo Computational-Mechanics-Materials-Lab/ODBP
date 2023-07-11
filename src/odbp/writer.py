@@ -22,7 +22,7 @@ import pathlib
 import os
 import numpy as np
 from typing import Dict, List, Tuple
-from .util import NDArrayType, NPZFileType, H5PYFileType
+from .types import NDArrayType, NPZFileType, H5PYFileType
 
 
 def convert_npz_to_hdf(
