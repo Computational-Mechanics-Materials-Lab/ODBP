@@ -11,6 +11,8 @@ Python 3 script:
 """
 Updated by Clark Hensley for CMML
 """
+
+import sys
 import pickle
 import argparse
 import collections
@@ -67,6 +69,13 @@ def main():
 
     try:
         odb = openOdb(odb_path, readOnly=True)
+
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
+
+    try:
         steps = odb.steps
         assembly = odb.rootAssembly
 
@@ -115,10 +124,6 @@ def main():
         if len(target_nodesets) == 0:
             target_nodesets = list(assembly.nodeSets.keys())
 
-    except Exception as e:
-        print("Error found in Abaqus")
-        print(e)
-
     finally:
         odb.close()
 
@@ -129,6 +134,13 @@ def extract(odb_path, save_path, target_nodesets, target_frames, temp_key):
 
     try:
         odb = openOdb(odb_path, readOnly=True)
+
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
+
+    try:
         steps = odb.steps
         assembly = odb.rootAssembly
 
