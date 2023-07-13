@@ -44,6 +44,7 @@ from odbp import Odb
     * 0.6.4: Fixing Python2 Error Reporting
     * 0.6.5: Fixing Python2 Error Reporting in more places
     * 0.6.6: Fixing conversion problems
+    * 0.6.7: Implementing tools for .odbs with coords in only some steps or tools for frame steps with different sizes
 * Upcoming:
     * 0.7.0: Improve user settings, parameterization, metadata. Let users select plotting colors, keep metadata of nodesets or spatial, thermal, temporal bounds within the .hdf5.
     * 0.8.0: Improve pyvista functionality: views, gifs, non-interactive image saving, leave the viewer.

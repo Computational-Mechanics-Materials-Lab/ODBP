@@ -98,7 +98,6 @@ def convert_npz_to_hdf(
                 node_data: NDArrayType
                 file, node_data = items
                 frame: str = pathlib.Path(file).stem
-                print(frame)
                 target_len: int = len(node_data)
                 hdf5_file.create_dataset(
                         f"nodes/{step}/{frame}",
