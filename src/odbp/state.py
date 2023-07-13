@@ -43,18 +43,6 @@ class CLIOptions():
     Struct to store cli options without repeating
     """
     def __init__(self) -> None:
-        self.quit_options: List[str] = ["exit", "quit", "q"]
-        self.quit_help: str = "Exit ODBPlotter"
-        self.quit_options_formatted: str = ", ".join(self.quit_options)
-
-        self.select_options: List[str] = ["select"]
-        self.select_help: str = "Select a .hdf5 file or a .odb file"
-        self.select_options_formatted: str = ", ".join(self.select_options)
-
-        self.convert_options: List[str] = ["convert"]
-        self.convert_help: str = "Convert a selected .odb file to a .hdf5 file"
-        self.convert_options_formatted: str = ", ".join(self.convert_options)
-
         self.extrema_options: List[str] = ["extrema", "range"]
         self.extrema_help: str = "Set the upper and lower x, y, and z bounds for plotting"
         self.extrema_options_formatted: str = ", ".join(self.extrema_options)
@@ -114,47 +102,6 @@ class CLIOptions():
         self.help_options: List[str] = ["help", "use", "usage"]
         self.help_help: str = "Show this menu"
         self.help_options_formatted: str = ", ".join(self.help_options)
-
-        self.longest_len: int = max(
-                len(self.quit_options_formatted),
-                len(self.select_options_formatted),
-                len(self.convert_options_formatted),
-                len(self.extrema_options_formatted),
-                len(self.time_options_formatted),
-                len(self.time_sample_options_formatted),
-                len(self.meltpoint_options_formatted),
-                len(self.low_temp_options_formatted),
-                len(self.title_label_options_formatted),
-                len(self.directory_options_formatted),
-                len(self.process_options_formatted),
-                len(self.angle_options_formatted),
-                len(self.abaqus_options_formatted),
-                len(self.nodeset_options_formatted),
-                )
-
-
-    def print_help(self) -> None:
-        print(
-    f"""ODBPlotter Help:
-{self.help_options_formatted.ljust(self.longest_len)} -- {self.help_help}
-{self.quit_options_formatted.ljust(self.longest_len) } -- {self.quit_help}
-{self.select_options_formatted.ljust(self.longest_len)} -- {self.select_help}
-{self.convert_options_formatted.ljust(self.longest_len)} -- {self.convert_help}
-{self.extrema_options_formatted.ljust(self.longest_len)} -- {self.extrema_help}
-{self.time_options_formatted.ljust(self.longest_len)} -- {self.time_help}
-{self.time_sample_options_formatted.ljust(self.longest_len)} -- {self.time_sample_help}
-{self.meltpoint_options_formatted.ljust(self.longest_len)} -- {self.meltpoint_help}
-{self.low_temp_options_formatted.ljust(self.longest_len)} -- {self.low_temp_help}
-{self.title_label_options_formatted.ljust(self.longest_len)} -- {self.title_label_help}
-{self.directory_options_formatted.ljust(self.longest_len)} -- {self.directory_help}
-{self.process_options_formatted.ljust(self.longest_len)} -- {self.process_help}
-{self.angle_options_formatted.ljust(self.longest_len)} -- {self.angle_help}
-{self.show_all_options_formatted.ljust(self.longest_len)} -- {self.show_all_help}
-{self.plot_options_formatted.ljust(self.longest_len)} -- {self.plot_help}
-{self.abaqus_options_formatted.ljust(self.longest_len)} -- {self.abaqus_help}
-{self.nodeset_options_formatted.ljust(self.longest_len)} -- {self.nodeset_help}
-{self.state_options_formatted.ljust(self.longest_len)} -- {self.state_help}"""
-    )
 
 
 def print_state(state: Odb, user_options: UserOptions) -> None:

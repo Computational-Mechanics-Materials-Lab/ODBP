@@ -77,8 +77,8 @@ class OdbPlotterCLI(cmd.Cmd):
                     stop = self.onecmd(line)
                     stop = self.postcmd(stop, line)
                 except KeyboardInterrupt:
-                    self.stdout.write("Caught a Control-C. Returning to main command line\n")
-                    self.stdout.write('Please use the "quit" or "exit" commands to exit ODBPlotter\n\n')
+                    print("Caught a Control-C. Returning to main command line\n")
+                    print('Please use the "quit", "q", or "exit" commands (or Control-D) to exit ODBPlotter\n\n')
 
             self.postloop()
         finally:
@@ -123,20 +123,186 @@ class OdbPlotterCLI(cmd.Cmd):
 
 
     def do_quit(self, arg: str) -> None:
-        """Exit gracefully (same as exit)"""
+        """Exit gracefully (same as exit or q)"""
         _ = arg
         self.quit()
 
     
     def do_exit(self, arg: str) -> None:
-        """Exit gracefully (same as quit)"""
+        """Exit gracefully (same as quit or q)"""
         _ = arg
         self.quit()
 
-    def do_foo(self, arg: str) -> None:
-        """Foo Bar"""
+
+    def do_q(self, arg: str) -> None:
+        """Exit gracefull (same as quit or exit)"""
         _ = arg
-        self.stdout.write("Foo")
+        self.quit()
+
+
+    # Select and Dispatches
+    def select(self) -> None:
+        
+        #def select_files(state: Odb, user_options: UserOptions) -> None:
+        odb_options: Tuple[str, str] = ("odb", ".odb")
+        hdf_options: Tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
+        user_input: str
+
+        # select odb
+        while True:
+            user_input = input('Please enter either "hdf" if you plan to open .hdf5 file or "odb" if you plan to open a .odb file: ').strip().lower()
+
+            if user_input in odb_options or user_input in hdf_options:
+                if(self.confirm(f"You entered {user_input}", "Is this correct", "yes")):
+                    break
+
+            else:
+                print("Error: invalid input")
+
+        if user_input in odb_options:
+            # process odb
+            odb_path_valid: bool = False
+            while not odb_path_valid:
+                user_input = input("Please enter the path of the odb file: ")
+                if(self.confirm(f"You entered {user_input}", "Is this correct", "yes")):
+                    output: Optional[bool] = self.odb.select_odb(self.options, user_input)
+                if isinstance(output, bool):
+                    print(f"Error: the file {user_input} could not be found")
+
+                else:
+                    odb_path_valid = True
+
+            gen_time_sample: bool = False
+            # TODO fix with slots
+            if hasattr(self.odb, "time_sample"):
+                gen_time_sample = self.confirm(f"Time Sample is already set as {self.odb.time_sample}.", "Would you like to overwrite it?")
+
+            else:
+                gen_time_sample = True
+
+            if gen_time_sample:
+                # TODO
+                set_time_sample(self.odb)
+
+            if self.confirm('You may now convert this .odb file to a .hdf5 file or you may do this later with the "convert" command.', "Would you like to convert now?", "yes"):
+                self.convert()
+
+        elif user_input in hdf_options:
+            # process hdf
+            hdf_path_valid: bool = False
+            while not hdf_path_valid:
+                user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
+                if(self.confirm(f"You entered {user_input}", "Is this correct", "yes")):
+                    output: Union[UserOptions, bool] = self.odb.select_hdf(user_options, user_input)
+
+                # TODO try/except
+                if isinstance(output, UserOptions):
+                    user_options = output
+                    hdf_path_valid = True
+
+                else:
+                    print(f"Error: the file {user_input} could not be found")
+
+            pre_process_data(self.odb, user_options)
+            print(f"Target .hdf5 file: {self.odb.hdf_file_path}")
+
+
+
+
+    def do_select(self, arg: str) -> None:
+        """Select the .odb or .hdf5 files to convert or read from"""
+        _ = arg
+        self.select()
+
+
+    def convert(self) -> None:
+        if not hasattr(self, "odb_path"):
+            while True:
+                target_odb: str = input("No .odb file is selected. Please enter the target .odb file: ")
+                if self.confirm(f"You entered {target_odb}", "Is this correct", "yes"):
+                    self.odb.odb_path = target_odb
+                    break
+
+        else:
+            print(f"{self.odb.odb_path} is set as current .odb file")
+
+        if not hasattr(self, "hdf_path"):
+            while True:
+                target_hdf: str = input("No .hdf5 file is selected. Please enter the new name for the target .hdf5 file: ")
+                if self.confirm(f"You entered {target_hdf}", "Is this correct", "yes"):
+                    if not target_hdf.endswith(".hdf5"):
+                        target_hdf += ".hdf5"
+                    self.odb.hdf_path = target_hdf                    
+                    break
+
+        else:
+            print(f"{self.odb.hdf_path} is set as the target .hdf5 file")
+
+        self.odb.convert()
+
+
+    def do_convert(self, arg: str) -> None:
+        """Convert a .odb file to a .hdf5 file"""
+        _ = arg
+        self.convert()
+
+
+    # Extrema and dispatchers
+    def do_extrema():
+
+
+    def do_range():
+
+
+    def do_ranges():
+
+
+    def do_x(self, arg: str) -> None:
+        """Set x-range (same as xs)"""
+        _ = arg
+        self.x()
+
+
+    def do_xs(self, arg: str) -> None:
+        """Set x-range (same as x)"""
+        _ = arg
+        self.x()
+
+
+    def do_y(self, arg: str) -> None:
+        """Set y-range (same as ys)"""
+        _ = arg
+        self.y()
+
+    
+    def do_ys(self, arg: str) -> None:
+        """Set y-range (same as y)"""
+        _ = arg
+        self.y()
+
+
+    def do_z(self, arg: str) -> None:
+        """Set z-range (same as zs)"""
+        _ = arg
+        self.z()
+
+
+    def do_zs(self, arg: str) -> None:
+        """Set z-range (same as z)"""
+        _ = arg
+        self.z()
+
+
+    def do_time():
+
+
+    def do_times():
+
+
+    def do_temp():
+
+
+    def do_temps():
 
 
 def cli() -> None:
@@ -166,17 +332,7 @@ def cli() -> None:
         try:
             user_input:str = input("\n> ").strip().lower()
 
-            if user_input in cli_options.quit_options:
-                print("\nExiting")
-                main_loop = False
-
-            elif user_input in cli_options.select_options:
-                select_files(state, user_options)
-
-            elif user_input in cli_options.convert_options:
-                convert(state)
-
-            elif user_input in cli_options.extrema_options:
+            if user_input in cli_options.extrema_options:
                 set_extrema(state)
 
             elif user_input in cli_options.time_options:
@@ -232,74 +388,6 @@ def cli() -> None:
         except EOFError:
             print("\nExiting")
             main_loop = False
-
-
-def select_files(state: Odb, user_options: UserOptions) -> None:
-    odb_options: Tuple[str, str] = ("odb", ".odb")
-    hdf_options: Tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
-    user_input: str
-
-    # select odb
-    """while True:
-        user_input = input('Please enter either "hdf" if you plan to open .hdf5 file or "odb" if you plan to open a .odb file: ').strip().lower()
-
-        if user_input in odb_options or user_input in hdf_options:
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                break
-
-        else:
-            print("Error: invalid input")"""
-
-    if user_input in odb_options:
-        # process odb
-        odb_path_valid: bool = False
-        while not odb_path_valid:
-            user_input = input("Please enter the path of the odb file: ")
-            """if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                output: Optional[bool] = state.select_odb(user_options, user_input)
-                if isinstance(output, bool):
-                    print(f"Error: the file {user_input} could not be found")
-
-                else:
-                    odb_path_valid = True"""
-
-        gen_time_sample: bool = False
-        """if hasattr(state, "time_sample"):
-            gen_time_sample = confirm(f"Time Sample is already set as {state.time_sample}.", "Would you like to overwrite it?")
-
-        else:
-            gen_time_sample = True"""
-
-        if gen_time_sample:
-            set_time_sample(state)
-
-        """if confirm('You may now convert this .odb file to a .hdf5 file or you may do this later with the "convert" command.', "Would you like to convert now?", "yes"):
-            convert(state)"""
-
-    elif user_input in hdf_options:
-        # process hdf
-        hdf_path_valid: bool = False
-        while not hdf_path_valid:
-            user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
-            """if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                output: Union[UserOptions, bool] = state.select_hdf(user_options, user_input)
-                if isinstance(output, UserOptions):
-                    user_options = output
-                    hdf_path_valid = True
-
-                else:
-                    print(f"Error: the file {user_input} could not be found")"""
-
-        pre_process_data(state, user_options)
-        print(f"Target .hdf5 file: {state.hdf_file_path}")
-
-
-def convert(state: Odb) -> None:
-    while True:
-        user_input: str = input("Please enter the desired name of the generated .hdf5 file: ")
-        """if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-            state.odb_to_hdf(user_input)
-            break"""
 
 
 def pre_process_data(state: Odb, user_options: UserOptions):
