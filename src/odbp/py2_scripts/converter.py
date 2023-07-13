@@ -154,8 +154,8 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_pa
 
         if len(target_frames) == 0:
             for step_data in steps.values():
-                for frame in step_data.frames:
-                    target_frames.append(frame.frameId) 
+                for i, _ in enumerate(step_data.frames):
+                    target_frames.append(i) 
 
         target_nodesets = set()
         if user_nodes is not None:
@@ -321,7 +321,6 @@ def read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key):
                     for axis in coord:
                         xyz.append(axis)
                     results_list.append(xyz)
-
                 np.savez_compressed(coord_file, np.array(results_list))
 
             except KeyError:

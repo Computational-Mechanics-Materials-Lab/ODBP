@@ -15,6 +15,7 @@ import shutil
 import pathlib
 import pickle
 import multiprocessing
+import sys
 
 import numpy as np
 import pandas as pd
@@ -846,8 +847,14 @@ class Odb():
 
         result_file: TextIO
         result_dir: pathlib.Path
-        with open(self._convert_result_path, "rb") as result_file:
-            result_dir = pathlib.Path(pickle.load(result_file))
+        
+        try:
+            with open(self._convert_result_path, "rb") as result_file:
+                result_dir = pathlib.Path(pickle.load(result_file))
+
+        except FileNotFoundError:
+            print(f"File {self._convert_result_path} was not found. See previous Python 2 errors")
+            sys.exit(-1)
 
         pathlib.Path.unlink(self._convert_result_path)
 
@@ -928,11 +935,16 @@ class Odb():
         subprocess.run(args_list, shell=True)
 
         temp_file: TextIO
-        with open(self._extract_result_path, "rb") as temp_file:
-            # From the Pickle spec, decoding python 2 numpy arrays must use
-            # "latin-1" encoding
-            results: List[Dict[str, float]]
-            results = pickle.load(temp_file, encoding="latin-1")
+        try:
+            with open(self._extract_result_path, "rb") as temp_file:
+                # From the Pickle spec, decoding python 2 numpy arrays must use
+                # "latin-1" encoding
+                results: List[Dict[str, float]]
+                results = pickle.load(temp_file, encoding="latin-1")
+
+        except FileNotFoundError:
+            print(f"File {self._extract_result_path} was not found. See previous Python 2 errors")
+            sys.exit(-1)
 
         results = sorted(results, key=lambda d: d["time"])
 
@@ -1037,8 +1049,13 @@ class Odb():
             ], shell=True)
 
         result_file: TextIO
-        with open(self._collect_state_result_path, "rb") as result_file:
-            return pickle.load(result_file)
+        try:
+            with open(self._collect_state_result_path, "rb") as result_file:
+                return pickle.load(result_file)
+
+        except FileNotFoundError:
+            print(f"File {self._collect_state_result_path} was not found. See previous Python 2 errors")
+            sys.exit(-1)
 
 
     def load_hdf(self) -> None:
