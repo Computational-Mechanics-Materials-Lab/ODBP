@@ -16,7 +16,7 @@ Originally authored by CMML member CJ Nguyen, based before on extraction
 script written by CMML members Will Furr and Matt Dantin
 """
 
-
+import sys
 import os
 import pickle
 import numpy as np
@@ -125,6 +125,12 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_pa
     try:
         odb = openOdb(odb_path, readOnly=True)
 
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
+
+    try:
         steps = odb.steps
 
         base_times = [
@@ -191,79 +197,98 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_pa
 
 
 def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, target_frames, nodeset, temp_key, num_cpus):
-    odb = openOdb(odb_path, readOnly=True)
-    steps = odb.steps
+    try:
+        odb = openOdb(odb_path, readOnly=True)
 
-    curr_step_dir = os.path.join(temps_dir, step_key)
-    if not os.path.exists(curr_step_dir):
-        os.mkdir(curr_step_dir)
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
 
-    max_frame = max(target_frames)
+    try:
+        steps = odb.steps
 
-    max_pad = len(str(max_frame))
+        curr_step_dir = os.path.join(temps_dir, step_key)
+        if not os.path.exists(curr_step_dir):
+            os.mkdir(curr_step_dir)
 
-    manager = multiprocessing.Manager()
-    frame_times = manager.list()
-    if len(steps[step_key].frames) > 0:
-        idx_list = [i for i in range(len(steps[step_key].frames))]
-        idx_list_len = len(idx_list)
-        # TODO: what if the length isn't divisible by the number of processors (is it now?)
-        final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, max(int(idx_list_len / num_cpus), 1))]
-        odb.close()
+        max_frame = max(target_frames)
 
-        temp_procs = list()
-        for idx_list in final_idx_list:
-            p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, max_pad, target_frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key))
-            p.start()
-            temp_procs.append(p)
+        max_pad = len(str(max_frame))
 
-        for p in temp_procs:
-            p.join()
+        manager = multiprocessing.Manager()
+        frame_times = manager.list()
+        if len(steps[step_key].frames) > 0:
+            idx_list = [i for i in range(len(steps[step_key].frames))]
+            idx_list_len = len(idx_list)
+            # TODO: what if the length isn't divisible by the number of processors (is it now?)
+            final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, max(int(idx_list_len / num_cpus), 1))]
 
-        np.savez_compressed(
-            "{}.npz".format(
-                os.path.join(
-                    time_dir,
-                    step_key
-                    )
-                ),
-            np.sort(
-                np.array(
-                    frame_times
+            temp_procs = list()
+            for idx_list in final_idx_list:
+                p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, idx_list, max_pad, target_frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key))
+                p.start()
+                temp_procs.append(p)
+
+            for p in temp_procs:
+                p.join()
+
+            np.savez_compressed(
+                "{}.npz".format(
+                    os.path.join(
+                        time_dir,
+                        step_key
+                        )
+                    ),
+                np.sort(
+                    np.array(
+                        frame_times
+                        )
                     )
                 )
-            )
+
+    finally:
+        odb.close()
 
 
 def read_single_frame_temp(odb_path, idx_list, max_pad, target_frames, step_key, curr_step_dir, frame_times, base_time, nodeset, temp_key):
 
-    odb = openOdb(odb_path, readOnly=True)
-    steps = odb.steps
-    assembly = odb.rootAssembly
+    try:
+        odb = openOdb(odb_path, readOnly=True)
 
-    for idx in idx_list:
-        if idx not in target_frames:
-            continue
-        
-        frame = steps[step_key].frames[idx]
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
 
-        field = frame.fieldOutputs[temp_key].getSubset(region=assembly.nodeSets[nodeset])
-        frame_times.append(float(format(round(frame.frameValue + base_time, 5), ".2f")))
-        node_temps = list()
-        for item in field.values:
-            temp = item.data
-            node_temps.append(temp)
+    try:
+        steps = odb.steps
+        assembly = odb.rootAssembly
 
-        num = str(idx + 1).zfill(max_pad)
-        np.savez_compressed(
-                os.path.join(
-                    curr_step_dir,
-                    "frame_{}".format(num)
-                    ),
-                np.array(node_temps)
-                )
+        for idx in idx_list:
+            if idx not in target_frames:
+                continue
+            
+            frame = steps[step_key].frames[idx]
 
-    odb.close()
+            field = frame.fieldOutputs[temp_key].getSubset(region=assembly.nodeSets[nodeset])
+            frame_times.append(float(format(round(frame.frameValue + base_time, 5), ".2f")))
+            node_temps = list()
+            for item in field.values:
+                temp = item.data
+                node_temps.append(temp)
+
+            num = str(idx + 1).zfill(max_pad)
+            np.savez_compressed(
+                    os.path.join(
+                        curr_step_dir,
+                        "frame_{}".format(num)
+                        ),
+                    np.array(node_temps)
+                    )
+
+    finally:
+        odb.close()
 
 
 def read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key):
@@ -271,30 +296,39 @@ def read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key):
     # Only extract coordinates from the first given nodeset/step
     if not os.path.exists(coord_file):
 
-        odb = openOdb(odb_path, readOnly=True)
-        assembly = odb.rootAssembly
-        steps = odb.steps
+        try:
+            odb = openOdb(odb_path, readOnly=True)
 
-        frame = steps[step_key].frames[0]
+        except Exception as e:
+            print("Abaqus Error:")
+            print(e)
+            sys.exit(1)
 
         try:
-            coords = frame.fieldOutputs[coord_key].getSubset(region=assembly.nodeSets[nodeset])
+            assembly = odb.rootAssembly
+            steps = odb.steps
 
-            results_list = list()
-            for item in coords.values:
-                node = item.nodeLabel
-                coord = item.data
-                xyz = [node]
-                for axis in coord:
-                    xyz.append(axis)
-                results_list.append(xyz)
+            frame = steps[step_key].frames[0]
 
-            np.savez_compressed(coord_file, np.array(results_list))
+            try:
+                coords = frame.fieldOutputs[coord_key].getSubset(region=assembly.nodeSets[nodeset])
 
-        except KeyError:
-            pass
+                results_list = list()
+                for item in coords.values:
+                    node = item.nodeLabel
+                    coord = item.data
+                    xyz = [node]
+                    for axis in coord:
+                        xyz.append(axis)
+                    results_list.append(xyz)
 
-        odb.close()
+                np.savez_compressed(coord_file, np.array(results_list))
+
+            except KeyError:
+                pass
+
+        finally:
+            odb.close()
 
     
 if __name__ == "__main__":

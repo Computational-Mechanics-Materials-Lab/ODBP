@@ -16,6 +16,7 @@ Originally authored by CMML member CJ Nguyen, based before on extraction
 script written by CMML members Will Furr and Matt Dantin
 """
 
+import sys
 import argparse
 import pickle
 from odbAccess import openOdb
@@ -36,6 +37,13 @@ def collect_state(odb_path):
     result = dict()
     try:
         odb = openOdb(odb_path, readOnly=True)
+
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
+
+    try:
 
         # What are our targets:
         # Frames
