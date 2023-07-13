@@ -115,6 +115,10 @@ def main():
         if len(target_nodesets) == 0:
             target_nodesets = list(assembly.nodeSets.keys())
 
+    except Exception as e:
+        print("Error found in Abaqus")
+        print(e)
+
     finally:
         odb.close()
 
