@@ -849,7 +849,7 @@ class Odb():
         with open(self._convert_result_path, "rb") as result_file:
             result_dir = pathlib.Path(pickle.load(result_file))
 
-        pathlib.Path.unlink(self._npz_result_path)
+        pathlib.Path.unlink(self._convert_result_path)
 
         convert_npz_to_hdf(hdf_path, result_dir)
 
