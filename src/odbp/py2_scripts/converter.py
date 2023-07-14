@@ -87,8 +87,9 @@ def main():
     coord_key = str(input_dict.get("coord_key", "COORD"))
     temp_key = str(input_dict.get("temp_key", "NT11"))
     num_cpus = int(input_dict.get("cpus"))
+    time_step = int(input_dict.get("time_step", 1))
 
-    result_name = convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_parts, user_steps, coord_key, temp_key, num_cpus)
+    result_name = convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_parts, user_steps, coord_key, temp_key, num_cpus, time_step)
     try:
         result_file = open(result_path, "wb")
         pickle.dump(result_name, result_file)
@@ -96,7 +97,7 @@ def main():
         result_file.close()
 
 
-def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_parts, user_steps, coord_key, temp_key, num_cpus):
+def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_parts, user_steps, coord_key, temp_key, num_cpus, time_step):
     """
     Based on the 4 lists given, convert the .odb data to .npz files
     odb_path: str path to the .odb file
@@ -154,8 +155,10 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_frames, user_pa
 
         if len(target_frames) == 0:
             for step_data in steps.values():
-                for i, _ in enumerate(step_data.frames):
+                for frame in step_data.frames:
                     target_frames.append(i) 
+
+        target_frames = target_frames[::time_step]
 
         target_nodesets = set()
         if user_nodes is not None:
@@ -219,7 +222,9 @@ def read_step_data(odb_path, temps_dir, time_dir, step_key, base_time, target_fr
         manager = multiprocessing.Manager()
         frame_times = manager.list()
         if len(steps[step_key].frames) > 0:
-            idx_list = [i for i in range(len(steps[step_key].frames))]
+            idx_list = list()
+            for frame in steps[step_key].frames:
+                idx_list.append(frame.frameId)
             idx_list_len = len(idx_list)
             # TODO: what if the length isn't divisible by the number of processors (is it now?)
             final_idx_list = [idx_list[i: i + int(idx_list_len / num_cpus)] for i in range(0, idx_list_len, max(int(idx_list_len / num_cpus), 1))]

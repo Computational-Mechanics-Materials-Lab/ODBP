@@ -11,21 +11,22 @@ from .magic import ensure_magic, HDF_MAGIC_NUM, ODB_MAGIC_NUM
 
 class OdbSettings():
     __slots__ = (
-        "_x_low",
-        "_x_high",
-        "_y_low",
-        "_y_high",
-        "_z_low",
-        "_z_high",
-        "_temp_low",
-        "_temp_high",
-        "_time_low",
-        "_time_high",
-        "_odb_path",
-        "_odb_source_dir",
-        "_hdf_path",
-        "_hdf_source_dir",
-        "_result_dir",
+        "_x_low", # Done
+        "_x_high", # Done
+        "_y_low", # Done
+        "_y_high", # Done
+        "_z_low", # Done
+        "_z_high", # Done
+        "_temp_low", # Done
+        "_temp_high", # Done
+        "_time_low", # Done
+        "_time_high", # Done
+        "_time_step", # Done
+        "_odb_path", # Done
+        "_odb_source_dir", # ???
+        "_hdf_path", # Done
+        "_hdf_source_dir", # ???
+        "_result_dir", # ???
         "_abaqus_executable",
         "_cpus",
         "_nodesets",
@@ -74,6 +75,7 @@ class OdbSettings():
 
         self._temp_low: float
         self._temp_high: float
+        self._time_step: int = 1
 
         self._time_low: float
         self._time_high: float
@@ -328,6 +330,25 @@ class OdbSettings():
                 " ({self.time_low})")
 
         self._time_high = value
+
+
+    @property
+    def time_step(self) -> int:
+        return self._time_step
+
+    
+    @time_step.setter
+    def time_step(self, value: int) -> None:
+        if not isinstance(value, int):
+            try:
+                value = int(value)
+                if value < 1:
+                    raise ValueError
+
+            except ValueError:
+                raise ValueError("time_step must be an integer greater than or equal to 1")
+
+        self._time_step = value
 
 
     @property

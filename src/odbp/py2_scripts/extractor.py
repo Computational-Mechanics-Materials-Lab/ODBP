@@ -97,6 +97,9 @@ def main():
                 for frame in step_data.frames:
                     target_frames.append(frame.frameId) 
 
+        time_step = int(input_dict.get("time_step"), 1)
+        target_frames = target_frames[::time_step]
+
         target_nodesets = set()
         if user_nodes is not None:
             if isinstance(user_nodes, collections.Mapping):

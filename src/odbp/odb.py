@@ -280,6 +280,7 @@ class Odb(OdbSettings):
                 "nodes": self.nodes,
                 "nodesets": self.nodesets,
                 "frames": self.frames,
+                "time_step": self.time_step,
                 "parts": self.parts,
                 "steps": self.steps,
                 "coord_key": self._coord_key,
@@ -311,8 +312,7 @@ class Odb(OdbSettings):
                 result_dir = pathlib.Path(pickle.load(result_file))
 
         except FileNotFoundError:
-            print(f"File {self._convert_result_path} was not found. See previous Python 2 errors")
-            sys.exit(-1)
+            raise FileNotFoundError(f"File {self._convert_result_path} was not found. See previous Python 2 errors")
 
         pathlib.Path.unlink(self._convert_result_path)
 
@@ -366,6 +366,7 @@ class Odb(OdbSettings):
                 "nodes": self.nodes,
                 "nodesets": self.nodesets,
                 "frames": self.frames,
+                "time_step": self.time_step,
                 "parts": self.parts,
                 "steps": self.steps,
                 "temp_key": self.temp_key,
@@ -402,8 +403,7 @@ class Odb(OdbSettings):
                 results = pickle.load(temp_file, encoding="latin-1")
 
         except FileNotFoundError:
-            print(f"File {self._extract_result_path} was not found. See previous Python 2 errors")
-            sys.exit(-1)
+            raise FileNotFoundError(f"File {self._extract_result_path} was not found. See previous Python 2 errors")
 
         results = sorted(results, key=lambda d: d["time"])
 
@@ -513,8 +513,7 @@ class Odb(OdbSettings):
                 return pickle.load(result_file)
 
         except FileNotFoundError:
-            print(f"File {self._collect_state_result_path} was not found. See previous Python 2 errors")
-            sys.exit(-1)
+            raise FileNotFoundError(f"File {self._collect_state_result_path} was not found. See previous Python 2 errors")
 
 
     def load_hdf(self) -> None:
@@ -627,7 +626,8 @@ class Odb(OdbSettings):
             raise Exception("Plotting cabailities are not included."
                 ' Please install pyvista via pip install odb-plotter["plot"]'
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
-                " Or export the data from Odb.extract() to another tool,"
+                " Or export the data from Odb.extract()",
+                " or Odb.convert() to another tool,"
                 " such as matplotlib or bokeh.")
 
         label = self.hdf_path.stem if label is None else label

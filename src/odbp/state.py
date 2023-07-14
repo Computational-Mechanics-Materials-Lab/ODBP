@@ -14,95 +14,24 @@ from typing import Union, Any, TextIO, Tuple, List, Dict, Optional
 from .odb import Odb
 from odbp import __version__
 
-
-class UserOptions():
-    """
-    Struct to store user's input
-    """
-    def __init__(self) -> None:
         """
-        Default values for user Options:
-        hdf_source_directory: user's present working directory
-        odb_source_directory: user's present working direcotry
-        results_directory: user's present working directory
-        image_title: name of the .hdf5 file + ".png"
-        image_label: name of the .hdf5 file
-        run_immediate: False
+        angle
+        abaqus/abq/abqpy
+        cpus/cores
+        nodesets
+        frames
+        nodes
+        parts
+        steps
+        coord_key
+        temp_key
+        colormap
+        save
+        formate/save_format
+
+        plot/show
+        state/status/settings
         """
-        self.hdf_source_directory: str = "" 
-        self.odb_source_directory: str = "" 
-        self.results_directory: str = ""
-        self.image_title: str = ""
-        self.image_label: str = ""
-        self.config_file_path: Optional[str] = None
-        self.run_immediate: bool = False
-
-
-class CLIOptions():
-    """
-    Struct to store cli options without repeating
-    """
-    def __init__(self) -> None:
-        self.extrema_options: List[str] = ["extrema", "range"]
-        self.extrema_help: str = "Set the upper and lower x, y, and z bounds for plotting"
-        self.extrema_options_formatted: str = ", ".join(self.extrema_options)
-
-        self.time_options: List[str] = ["time"]
-        self.time_help: str = "Set the upper and lower time bounds"
-        self.time_options_formatted: str = ", ".join(self.time_options)
-
-        self.time_sample_options: List[str] = ["sample"]
-        self.time_sample_help: str = "Set the Time Sample for the hdf5 file"
-        self.time_sample_options_formatted: str = ", ".join(self.time_sample_options)
-
-        self.meltpoint_options: List[str] = ["meltpoint", "melt", "point"]
-        self.meltpoint_help: str = "Set the Melting Point for the hdf5 file"
-        self.meltpoint_options_formatted: str = ", ".join(self.meltpoint_options)
-
-        self.low_temp_options: List[str] = ["low", "low-temp"]
-        self.low_temp_help: str = "Set the Lower Temperate Bound for the hdf5 file"
-        self.low_temp_options_formatted: str = ", ".join(self.low_temp_options)
-
-        self.title_label_options: List[str] = ["title", "label"]
-        self.title_label_help: str = "Set the title and label of the output plots"
-        self.title_label_options_formatted: str = ", ".join(self.title_label_options)
-
-        self.directory_options: List[str] = ["dir", "dirs", "directory", "directories"]
-        self.directory_help: str = "Set the source and output directories"
-        self.directory_options_formatted: str = ", ".join(self.directory_options)
-
-        self.process_options: List[str] = ["process", "run", "load"]
-        self.process_help: str = "Actually load the selected data from the file set in select"
-        self.process_options_formatted: str = ", ".join(self.process_options)
-
-        self.angle_options: List[str] = ["angle",]
-        self.angle_help: str = "Update the viewing angle"
-        self.angle_options_formatted: str = ", ".join(self.angle_options)
-
-        self.show_all_options: List[str] = ["show-all", "plot-all"]
-        self.show_all_help: str = "Toggle if each time step will be shown in the PyVista interactive viewer"
-        self.show_all_options_formatted: str = ", ".join(self.show_all_options)
-
-        self.plot_options: List[str] = ["plot", "show"]
-        self.plot_help: str = "Plot each selected timestep"
-        self.plot_options_formatted: str = ", ".join(self.plot_options)
-        
-        self.state_options: List[str] = ["state", "status", "settings"]
-        self.state_help: str = "Show the current state of the settings of the plotter"
-        self.state_options_formatted: str = ", ".join(self.state_options)
-
-        self.abaqus_options: List[str] = ["abaqus", "abq", "abqpy"]
-        self.abaqus_help: str = "Select the Abaqus executable program to use to process .odb file"
-        self.abaqus_options_formatted: str = ", ".join(self.abaqus_options)
-
-        self.nodeset_options: List[str] = ["node", "nodes", "nodeset", "nodesets"]
-        self.nodeset_help: str = "Select the target nodeset (i.e., the named nodeset that contains all the data)"
-        self.nodeset_options_formatted: str = ", ".join(self.nodeset_options)
-
-        self.help_options: List[str] = ["help", "use", "usage"]
-        self.help_help: str = "Show this menu"
-        self.help_options_formatted: str = ", ".join(self.help_options)
-
 
 def print_state(state: Odb, user_options: UserOptions) -> None:
     lines: List[Dict[str, str]] = [
