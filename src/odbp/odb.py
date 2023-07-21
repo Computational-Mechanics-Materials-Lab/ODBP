@@ -14,7 +14,6 @@ import subprocess
 import shutil
 import pathlib
 import pickle
-import sys
 
 import numpy as np
 import pandas as pd
@@ -55,20 +54,23 @@ class Odb(OdbSettings):
         "_extract_script_path",
         "_extract_pickle_path",
         "_extract_result_path",
-        "_collect_state_script_path",
-        "_collect_state_result_path",
+        "_get_odb_info_script_path",
+        "_get_odb_info_result_path",
         "_iterator_ind",
         "_times",
         "_frame_keys",
+        "_frame_keys_per_step",
         "_frame_range",
         "_step_names",
-        "_frame_ranges_per_step",
+        "_step_lens",
         "_nodeset_names",
         "_part_names",
         "_node_range",
         "_node_ranges_per_part",
         "_extracted_nodes",
+        "_hdf_status",
         )
+
 
 
     def __init__(self) -> None:
@@ -80,6 +82,7 @@ class Odb(OdbSettings):
         self._odb_handler: Union[OdbLoader, OdbUnloader] = OdbLoader()
         self._odb: DataFrameType 
 
+        # TODO can be simpler
         # Hardcoded paths for Python 3 - 2 communication
         self._convert_script_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
@@ -113,21 +116,22 @@ class Odb(OdbSettings):
             "extract_results.pickle"
         )
 
-        self._collect_state_script_path: pathlib.Path = pathlib.Path(
+        self._get_odb_info_script_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
             "py2_scripts",
-            "state_collector.py"
+            "odb_info_getter.py"
         ).absolute()
 
-        self._collect_state_result_path: pathlib.Path = pathlib.Path(
+        self._get_odb_info_result_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
-            "collect_state_result.pickle"
+            "odb_info_result.pickle"
         ).absolute()
 
         self._frame_keys: List[str]
+        self._frame_keys_per_step: Dict[str, List[str]]
         self._frame_range: Tuple[int, int]
         self._step_names: List[str]
-        self._frame_ranges_per_step: Dict[str, Tuple[int, int]]
+        self._step_lens: Dict[str, int]
         self._nodeset_names: List[str]
         self._part_names: List[str]
         self._node_range: Tuple[int, int]
@@ -137,6 +141,8 @@ class Odb(OdbSettings):
 
         self._iterator_ind: int = 0
         self._times: NDArrayType
+
+        self.hdf_status: Dict[str, str]
 
 
     def __iter__(self) -> Iterator[DataFrameType]:
@@ -193,8 +199,13 @@ class Odb(OdbSettings):
 
 
     @property
-    def frame_ranges_per_step(self) -> "Dict[str, Tuple[int, int]]":
-        return self._frame_ranges_per_step
+    def step_lens(self) -> "Dict[str, int]":
+        return self._step_lens
+
+
+    @property
+    def frame_keys_per_step(self) -> "Dict[str, List[str]]":
+        return self._frame_keys_per_step
 
 
     @property
@@ -215,6 +226,10 @@ class Odb(OdbSettings):
     @property
     def node_ranges_per_part(self) -> "Dict[str, Tuple[int, int]]":
         return self._node_ranges_per_part
+
+    @property
+    def hdf_status(self) -> "Dict[str, str]":
+        return self._hdf_status
 
 
     def convert(
@@ -279,12 +294,11 @@ class Odb(OdbSettings):
                 "cpus": self.cpus,
                 "nodes": self.nodes,
                 "nodesets": self.nodesets,
-                "frames": self.frames,
                 "time_step": self.time_step,
                 "parts": self.parts,
                 "steps": self.steps,
-                "coord_key": self._coord_key,
-                "temp_key": self._temp_key
+                "coord_key": self.coord_key,
+                "target_outputs": self.target_outputs,
             }
 
         pickle_file: BinaryIO
@@ -301,6 +315,7 @@ class Odb(OdbSettings):
             self._convert_result_path
         ]
 
+        # TODO
         # shell=True is BAD PRACTICE, but abaqus python won't run without it
         subprocess.run(odb_convert_args, shell=True)
 
@@ -316,7 +331,23 @@ class Odb(OdbSettings):
 
         pathlib.Path.unlink(self._convert_result_path)
 
-        convert_npz_to_hdf(hdf_path, result_dir)
+        temp_low = self.temp_low if hasattr(self, "temp_low") else None
+        temp_high = self.temp_high if hasattr(self, "temp_high") else None
+
+        convert_npz_to_hdf(
+            hdf_path,
+            result_dir,
+            temp_low,
+            temp_high,
+            self.time_step,
+            self.nodesets,
+            self.nodes,
+            self.parts,
+            self.steps,
+            self.coord_key,
+            self.target_outputs,
+            odb_path
+            )
 
         if result_dir.exists():
             shutil.rmtree(result_dir)
@@ -349,7 +380,7 @@ class Odb(OdbSettings):
             return result
 
         else:
-            raise AttributeError("This Odb object does not have")
+            raise AttributeError("This Odb object does not have a .odb file or a .hdf5 file from which to extract")
 
 
     def extract_from_odb(
@@ -363,14 +394,14 @@ class Odb(OdbSettings):
         extract_odb_pickle_input_dict: Dict[
             str, Optional[Union[List[str], List[int]]]
             ] = {
+                "cpus": self.cpus,
                 "nodes": self.nodes,
                 "nodesets": self.nodesets,
-                "frames": self.frames,
                 "time_step": self.time_step,
                 "parts": self.parts,
                 "steps": self.steps,
-                "temp_key": self.temp_key,
-                "cpus": self.cpus
+                "coord_key": self.coord_key,
+                "target_outputs": self.target_outputs,
             }
             
         temp_file: BinaryIO
@@ -391,6 +422,7 @@ class Odb(OdbSettings):
             self._extract_result_path
             ]
 
+        # TODO
         # shell=True is bad practice, but abaqus python will not run without it.
         subprocess.run(args_list, shell=True)
 
@@ -443,21 +475,30 @@ class Odb(OdbSettings):
         frame: DataFrameType
         for frame in self:
             time: float = frame["Time"].values[0]
-            temp_df: DataFrameType = frame[frame["Temp"] != 300]
-            temp_df = temp_df[temp_df["Temp"] != 0]
-            temp_df = temp_df[temp_df["Temp"] != np.nan]
-            temp_vals: NDArrayType = temp_df["Temp"].values
-            min: float = np.min(temp_vals) if len(temp_vals) > 0 else np.nan
-            max: float = np.max(temp_vals) if len(temp_vals) > 0 else np.nan
-            mean: float = np.mean(temp_vals).values[0] if len(temp_vals) > 0 else np.nan
-            results.append(pd.DataFrame.from_dict({time: {"max": max, "min": min, "mean": mean}}, orient="index"))
+            output: str
+            frame_dict: Dict[int, Dict[str, float]] = {time: {}}
+            for output in self.target_outputs:
+                output_data: DataFrameType = frame[output]
+                if output in ("NT11",):
+                    output_data: DataFrameType = frame[frame[output] != 300]
+                    output_data= output_data[output_data[output] != 0]
+                output_data = output_data[output_data[output] != np.nan]
+                output_vals: NDArrayType = output_data[output].values
+                min_val: float = np.min(output_vals) if len(output_vals) > 0 else np.nan
+                max_val: float = np.max(output_vals) if len(output_vals) > 0 else np.nan
+                mean_val: float = np.mean(output_vals).values[0] if len(output_vals) > 0 else np.nan
+                frame_dict[time][f"{output}_min"] = min_val
+                frame_dict[time][f"{output}_max"] = max_val
+                frame_dict[time][f"{output}_mean"] = mean_val
+
+            results.append(pd.DataFrame.from_dict(frame_dict, orient="index"))
 
         results_df: pd.DataFrame = pd.concat(results)
 
         return results_df
 
 
-    def collect_state(self) -> None:
+    def get_odb_info(self) -> None:
         # Ideally this would not work this way, but
         # the python2 makes transferring a raw dict the easiest option
         result: Dict[
@@ -467,12 +508,13 @@ class Odb(OdbSettings):
                 List[str],
                 Dict[str, Tuple[int, int]]
                 ]
-            ] = self._collect_state()
+            ] = self._get_odb_info()
         # No setters for these, just this method
         self._frame_range = result["frame_range"]
         self._frame_keys = result["frame_keys"]
+        self._frame_keys_per_step = result["frame_keys_per_step"]
         self._step_names = result["step_names"]
-        self._frame_ranges_per_step = result["frame_ranges_per_step"]
+        self._step_lens =result["step_lens"]
         self._nodeset_names = result["nodeset_names"]
         self._part_names = result["part_names"]
         self._node_range = result["node_range"]
@@ -480,14 +522,14 @@ class Odb(OdbSettings):
 
 
     @classmethod
-    def collect_state_from_file(
+    def get_odb_info_from_file(
         cls,
         path: pathlib.Path
         ) -> "Dict[str, Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]]":
-        return cls()._collect_state(path)
+        return cls()._get_odb_info(path)
 
 
-    def _collect_state(
+    def _get_odb_info(
         self,
         path: Optional[pathlib.Path] = None
         ) -> "Dict[str, Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]]":
@@ -498,22 +540,23 @@ class Odb(OdbSettings):
             else:
                 raise AttributeError("Either pass in or set odb_path")
 
+        # TODO
         # shell=True is bad practice, but abaqus python won't run without it
         subprocess.run([
             self.abaqus_executable,
             "python",
-            self._collect_state_script_path,
+            self._get_odb_info_script_path,
             path,
-            self._collect_state_result_path
+            self._get_odb_info_result_path
             ], shell=True)
 
         result_file: TextIO
         try:
-            with open(self._collect_state_result_path, "rb") as result_file:
+            with open(self._get_odb_info_result_path, "rb") as result_file:
                 return pickle.load(result_file)
 
         except FileNotFoundError:
-            raise FileNotFoundError(f"File {self._collect_state_result_path} was not found. See previous Python 2 errors")
+            raise FileNotFoundError(f"File {self._get_odb_info_result_path} was not found. See previous Python 2 errors")
 
 
     def load_hdf(self) -> None:
@@ -524,7 +567,7 @@ class Odb(OdbSettings):
 
         try:
             # Only case where this should be set, bypass the setter
-            self._odb = self._odb_handler.load_hdf(self.hdf_path, self.cpus)
+            self._hdf_status, self._odb = self._odb_handler.load_hdf(self.hdf_path, self.cpus)
             self._odb_handler = OdbUnloader()
             self._times = np.sort(self["Time"].unique())
 
@@ -582,14 +625,14 @@ class Odb(OdbSettings):
             temp_v_time.line(
                 time_data,
                 self._extracted_nodes["mean"].values,
-                color="#FF7F00",
+                color="#FF7F00", # TODO param
                 label="Mean Temperature")
 
         if mean_max_both.lower() in ("max", "both"):
             temp_v_time.line(
                 time_data,
                 self._extracted_nodes["max"].values,
-                color="#FF0000",
+                color="#FF0000", # TODO param
                 label="Max Temperature")
 
         if self.save:
@@ -701,8 +744,8 @@ class Odb(OdbSettings):
         plotter.add_text(
             combined_label,
             position="upper_edge",
-            color="#000000",
-            font="courier"
+            color=self.font_color,
+            font=self.font
         )
 
         points: pv.PolyData = pv.PolyData(
@@ -736,8 +779,8 @@ class Odb(OdbSettings):
             ),
             scalar_bar_args={
                 "title": "Nodal Temperature (Kelvin)",
-                "font_family": "courier",
-                "color": "#000000",
+                "font_family": self.font,
+                "color": self.font_color,
                 "fmt": "%.2f",
                 "position_y": 0
             }
@@ -746,19 +789,39 @@ class Odb(OdbSettings):
         plotter.show_bounds(
             location="outer",
             ticks="both",
-            font_size=14.0,
-            font_family="courier",
-            color="#000000",
+            font_size=self.font_size,
+            font_family=self.font,
+            color=self.font_color,
             axes_ranges=points.bounds
             )
 
-        plotter.set_background(color="#FFFFFF")
+        plotter.set_background(color=self.background_color)
 
-        # TODO
-        #plotter.camera.elevation = 0
-        #plotter.camera.azimuth = 270
-        #plotter.camera.roll = 300
-        #plotter.camera_set = True
+        negative: bool = any(self.view.startswith(n) for n in self._negative_view_prefixes)
+
+        if self.view in self._sorted_views["isometric"]:
+            plotter.view_isometric(negative=negative)
+        
+        elif self.view in self._sorted_views["xy"]:
+            plotter.view_xy(negative=negative)
+
+        elif self.view in self._sorted_views["xz"]:
+            plotter.view_xz(negative=negative)
+
+        elif self.view in self._sorted_views["yx"]:
+            plotter.view_yx(negative=negative)
+
+        elif self.view in self._sorted_views["yz"]:
+            plotter.view_yz(negative=negative)
+
+        elif self.view in self._sorted_views["zx"]:
+            plotter.view_zx(negative=negative)
+
+        elif self.view in self._sorted_views["zy"]:
+            plotter.view_zy(negative=negative)
+
+        else:
+            raise AssertionError("Invalid View")
 
         plotter.show()
 
@@ -770,9 +833,12 @@ class Odb(OdbSettings):
         return
 
 
+    def get_odb_state(self) -> str:
+        return self.get_odb_settings_state()
+
 class OdbLoader:
 
-    def load_hdf(self, hdf_path: pathlib.Path, cpus: int) -> DataFrameType:
+    def load_hdf(self, hdf_path: pathlib.Path, cpus: int) -> "Tuple[Dict[str, str], DataFrameType]":
         return get_odb_data(hdf_path, cpus)
 
 

@@ -9,12 +9,13 @@ import multiprocessing
 import numpy as np
 import pandas as pd
 from typing import Union, List, Optional, Dict
+from itertools import chain
 
 # Python 3.6+ version
 NullableIntList = Optional[List[int]]
 NullableStrList = Optional[List[str]]
 NodeType = Union[
-    Dict[str, List[int]], List[List[int]], List[int]
+    Dict[str, chain], List[chain], chain
 ]
 NullableNodeType = Optional[NodeType]
 

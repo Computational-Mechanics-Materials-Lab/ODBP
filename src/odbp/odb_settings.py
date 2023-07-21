@@ -3,43 +3,55 @@
 import pathlib
 import multiprocessing
 
-from typing import Optional, Union, Tuple, List
+from typing import Optional, BinaryIO, Dict, List, Any
 
-from .types import NullableIntList, NullableStrList, NullableNodeType,\
-    NodeType
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+from .types import NullableStrList, NullableNodeType, NodeType
 from .magic import ensure_magic, HDF_MAGIC_NUM, ODB_MAGIC_NUM
 
 class OdbSettings():
     __slots__ = (
-        "_x_low", # Done
-        "_x_high", # Done
-        "_y_low", # Done
-        "_y_high", # Done
-        "_z_low", # Done
-        "_z_high", # Done
-        "_temp_low", # Done
-        "_temp_high", # Done
-        "_time_low", # Done
-        "_time_high", # Done
-        "_time_step", # Done
-        "_odb_path", # Done
-        "_odb_source_dir", # ???
-        "_hdf_path", # Done
-        "_hdf_source_dir", # ???
-        "_result_dir", # ???
-        "_abaqus_executable",
-        "_cpus",
-        "_nodesets",
-        "_frames",
-        "_nodes",
-        "_parts",
-        "_steps",
+        "_x_low", 
+        "_x_high", 
+        "_y_low", 
+        "_y_high", 
+        "_z_low", 
+        "_z_high", 
+        "_temp_low", 
+        "_temp_high", 
+        "_time_low", 
+        "_time_high", 
+        "_time_step", 
+        "_odb_path", 
+        "_odb_source_dir", # TODO
+        "_hdf_path", 
+        "_hdf_source_dir", # TODO
+        "_result_dir", # TODO
+        "_abaqus_executable", 
+        "_cpus", 
+        "_nodesets", 
+        "_nodes", 
+        "_parts", 
+        "_steps", 
         "_coord_key",
-        "_temp_key",
-        "_angle",
-        "_colormap",
-        "_save",
-        "_save_format",
+        "_target_outputs",
+        "_views", 
+        "_negative_view_prefixes", 
+        "_sorted_views", 
+        "_view", 
+        "_colormap", 
+        "_save", 
+        "_save_format", 
+        "_font", 
+        "_font_color",
+        "_font_size",
+        "_background_color",
+        "_below_range_color",
+        "_above_range_color",
     )
 
     def __init__(self):
@@ -59,12 +71,11 @@ class OdbSettings():
 
         self._nodes: NullableNodeType = None
         self._nodesets: NullableStrList = None
-        self._frames: NullableIntList = None
         self._parts: NullableStrList = None
         self._steps: NullableStrList = None
 
         self._coord_key: str = "COORD"
-        self._temp_key: str = "NT11"
+        self._target_outputs: NullableStrList = None
 
         self._x_low: float
         self._x_high: float
@@ -85,9 +96,33 @@ class OdbSettings():
         self._colormap: str = "turbo"
         self._save_format: str = ".png"
         self._save: bool = True
+        self._font: str = "courier"
+        self._font_size: float = 14.0
+        # Any because we can't rely on pyvista.colorlike
+        self._font_color: Any = "#000000"
+        self._background_color: Any = "#FFFFFF"
+        self._below_range_color: Any = None
+        self._above_range_color: Any = "#C0C0C0"
 
-        # TODO
-        self._angle = Union[str, Tuple[float, float, float]]
+        self.views: List[str] = list()
+        tf: BinaryIO
+        with open((pathlib.Path(__file__).parent / "data") / "views.toml", "rb") as tf:
+            temp_views: Dict[str, List[str]] = tomllib.load(tf)
+
+        self._sorted_views: Dict[str, List[str]] = dict()
+        self._negative_view_prefixes: List[str] = temp_views.pop("negative")
+        key: str
+        view: str
+        for key, view in temp_views.items():
+            n: str
+            self._sorted_views[key] = list()
+            for n in self._negative_view_prefixes:
+                self.views.append(view)
+                self.views.append(f"{n}{view}")
+                self._sorted_views[key].append(view)
+                self._sorted_views[key].append(f"{n}{view}")
+
+        self._view: str = "isometric"
 
 
     @property
@@ -516,16 +551,6 @@ class OdbSettings():
 
 
     @property
-    def frames(self) -> NullableIntList:
-        return self._frames
-
-
-    @frames.setter
-    def frames(self, value: "List[int]") -> None:
-        self._frames = value
-
-
-    @property
     def coord_key(self) -> str:
         return self._coord_key
 
@@ -536,13 +561,13 @@ class OdbSettings():
 
 
     @property
-    def temp_key(self) -> str:
-        return self._temp_key
+    def target_outputs(self) -> NullableStrList:
+        return self._target_outputs
 
 
-    @temp_key.setter
-    def temp_key(self, value: str) -> None:
-        self._temp_key = value
+    @target_outputs.setter
+    def target_outputs(self, value: "List[str]") -> None:
+        self._target_outputs = value
 
 
     @property
@@ -576,3 +601,161 @@ class OdbSettings():
     @save.setter
     def save(self, value: bool) -> None:
         self._save = value
+
+
+    @property
+    def font(self) -> str:
+        return self._font
+
+    
+    @font.setter
+    def font(self, value: str) -> None:
+        self._font = value
+
+
+    @property
+    def font_color(self) -> Any:
+        return self._font_color
+
+
+    @font_color.setter
+    def font_color(self, value: Any) -> None:
+        self._font_color = value
+
+
+    @property
+    def font_size(self) -> float:
+        return self._font_size
+
+
+    @font_size.setter
+    def font_size(self, value: float) -> None:
+        self.font_size = value
+
+
+    @property
+    def background_color(self) -> Any:
+        return self._background_color
+
+
+    @background_color.setter
+    def background_color(self, value: Any) -> None:
+        self._background_color = value
+
+    
+    @property
+    def below_range_color(self) -> Any:
+        return self._below_range_color
+
+
+    @below_range_color.setter
+    def below_range_color(self, value: Any) -> None:
+        self._below_range_color = value
+
+    
+    @property
+    def above_range_color(self) -> Any:
+        return self._above_range_color
+
+
+    @above_range_color.setter
+    def above_range_color(self, value: Any) -> None:
+        self._above_range_color = value
+
+    
+    @property
+    def view(self) -> str:
+        return self._view
+
+
+    @view.setter
+    def view(self, value: str) -> None:
+        value = value.lower()
+        assert value in self.views()
+        self._view = value
+
+
+    def get_odb_settings_state(self) -> str:
+        result: str = "Current state of the ODB Object:"
+
+        # Files
+        result += "\n\nFiles:"
+        hdf_file: str = str(self.hdf_path) if hasattr(self, "hdf_path") else "Not Set"
+        odb_file: str = str(self.odb_path) if hasattr(self, "odb_path") else "Not Set"
+        result += f"\n\n\t.hdf5 file: {hdf_file}"
+        result += f"\n\t.odb file: {odb_file}"
+        hdf_source_dir: str = str(self.hdf_source_dir) if hasattr(self, "hdf_source_dir") else "Not Set"
+        odb_source_dir: str = str(self.odb_source_dir) if hasattr(self, "odb_source_dir") else "Not Set"
+        result_dir: str = str(self.result_dir) if hasattr(self, "result_dir") else "Not Set"
+        result += f"\n\n\tSource Directory for .hdf5 files {hdf_source_dir}"
+        result += f"\n\tSource Directory for .odb files {odb_source_dir}"
+        result += f"\n\tDirectory for resulting images {result_dir}"
+
+        # Ranges
+        result += "\n\nRanges:\n\n\tSpatial Ranges:"
+
+        x_low: str = str(self.x_low) if hasattr(self, "x_low") else "Not Set"
+        x_high: str = str(self.x_high) if hasattr(self, "x_high") else "Not Set"
+        result += f"\n\t\tX Range: {x_low} to {x_high}"
+
+        y_low: str = str(self.y_low) if hasattr(self, "y_low") else "Not Set"
+        y_high: str = str(self.y_high) if hasattr(self, "y_high") else "Not Set"
+        result += f"\n\t\tY Range: {y_low} to {y_high}"
+
+        z_low: str = str(self.z_low) if hasattr(self, "z_low") else "Not Set"
+        z_high: str = str(self.z_high) if hasattr(self, "z_high") else "Not Set"
+        result += f"\n\t\tZ Range: {z_low} to {z_high}"
+
+        result += "\n\n\tTemporal Range:"
+        time_low: str = str(self.time_low) if hasattr(self, "time_low") else "Not Set"
+        time_high: str = str(self.time_high) if hasattr(self, "time_high") else "Not Set"
+        result += f"\n\t\tTime Range: {time_low} to {time_high}"
+
+        result += "\n\n\tThermal Range:"
+        temp_low: str = str(self.temp_low) if hasattr(self, "temp_low") else "Not Set"
+        temp_high: str = str(self.temp_high) if hasattr(self, "temp_high") else "Not Set"
+        result += f"\n\t\tTemperature Range: {temp_low} to {temp_high}"
+
+        result += "\n\nProcessing:"
+        abaqus_executable: str = self.abaqus_executable if hasattr(self, "abaqus_executable") else "Not Set"
+        result += f"\n\n\tAbaqus Executable: {abaqus_executable}"
+        cpus: str = str(self.cpus) if hasattr(self, "cpus") else "Not Set"
+        result += f"\n\tNumber of CPU Cores to Use: {cpus}"
+
+        result += "\n\nSelected Values:"
+        nodesets: str = str(self.nodesets) if hasattr(self, "nodesets") and self.nodesets is not None else "Not Set"
+        parts: str = str(self.parts) if hasattr(self, "parts") and self.parts is not None else "Not Set"
+        steps: str = str(self.steps) if hasattr(self, "steps") and self.steps is not None else "Not Set"
+        nodes: str = str(self.parse_chain(self.nodes)) if hasattr(self, "nodes") and self.nodes is not None else "All Nodes"
+        coord_key: str = str(self.coord_key) if hasattr(self, "coord_key") else "Not Set"
+        target_outputs: str = str(self.target_outputs) if hasattr(self, "target_outputs") and self.target_outputs is not None else "All Outputs"
+        result += f"\n\tSelected Nodesets: {nodesets}"
+        result += f"\n\tSelected Parts: {parts}"
+        result += f"\n\tSelected Steps: {steps}"
+        result += f"\n\tSelected Nodes: {nodes}"
+        time_step: str = str(self.time_step) if hasattr(self, "time_step") else "Not Set"
+        result += f"\n\tSample every nth frame where n is: {time_step}"
+        result += f"\n\n\tCoordinate Key: {coord_key}"
+        result += f"\n\tTemperature Key: {target_outputs}"
+
+        view: str = str(self.view) if hasattr(self, "view") else "Not Set"
+        colormap: str = str(self.colormap) if hasattr(self, "colormap") else "Not Set"
+        save_format: str = str(self.save_format) if hasattr(self, "save_format") else "Not Set"
+        font: str = str(self.font) if hasattr(self, "font") else "Not Set"
+        font_color: str = str(self.font_color) if hasattr(self, "font_color") else "Not Set"
+        font_size: str = str(self.font_size) if hasattr(self, "font_size") else "Not Set"
+        background_color: str = str(self.background_color) if hasattr(self, "background_color") else "Not Set"
+        below_range_color: str = str(self.below_range_color) if hasattr(self, "below_range_color") else "Not Set"
+        above_range_color: str = str(self.above_range_color) if hasattr(self, "above_range_color") else "Not Set"
+
+        result += "\n\nPlotting Options:"
+        result += f"\n\tViewing Angle: {view}"
+        result += f"\n\tColormap: {colormap}"
+        result += f"\n\tWill images be saved? {'Yes' if self.save else 'No'}"
+        result += f"\n\tImage format as which images will be saved: {save_format}"
+        result += f"\n\tFont family/size/color: {font}/{font_size}/{font_color}"
+        result += f"\n\tImage Background Color: {background_color}"
+        result += f"\n\tColor for values below given range: {below_range_color}"
+        result += f"\n\tColor for values above given range: {above_range_color}"
+
+        return result

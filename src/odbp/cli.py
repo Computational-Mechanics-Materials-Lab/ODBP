@@ -4,17 +4,21 @@
 Built-in CLI for ODB Plotter, allowing for interactive system access without writing scripts
 """
 
+import os
 import sys
 import cmd
 import pathlib
+import re
 try:
     import tomllib
 except ModuleNotFoundError:
     import tomli as tomllib
 import numpy as np
 import pandas as pd
-from typing import Any, Union, TextIO, List, Tuple, Dict, Optional
+from typing import Any, Union, TextIO, List, Tuple, Dict, Optional, Iterator
+from itertools import chain
 from .odb import Odb
+from .types import DataFrameType
 from .state import process_input, print_state, load_views_dict
 from odbp import __version__
 
@@ -26,14 +30,12 @@ class OdbPlotterCLIOptions():
     __slots__ = (
         "filename", # Done
         "title", # Done
-        "config_file_path", # TODO!!!
-        "run_immediate",
+        "run_immediate", # TODO
     )
 
     def __init__(self) -> None:
         self.filename: str = ""
         self.title: str = ""
-        self.config_file_path: Optional[str] = None
         self.run_immediate: bool = False
 
 
@@ -96,7 +98,15 @@ class OdbPlotterCLI(cmd.Cmd):
                     stop = self.postcmd(stop, line)
                 except KeyboardInterrupt:
                     self.stdout.write("Caught a Control-C. Returning to main command line")
-                    self.stdout.write('Please use the "quit", "q", or "exit" commands (or Control-D) to exit ODBPlotter\n')
+
+                    if os.name == "posix":
+                        eof_str: str = "(or Control-D)"
+                    elif os.name == "nt":
+                        eof_str: str = "(or Control-Z+Return)"
+                    else:
+                        eof_str: str = ""
+
+                    self.stdout.write(f'Please use the "quit", "q", or "exit" commands {eof_str} to exit ODBPlotter\n')
 
                 except EOFError:
                     self._quit()
@@ -126,19 +136,19 @@ class OdbPlotterCLI(cmd.Cmd):
             confirmation += " (y/n)? "
 
         while True:
-            self.stdout.write(f"{message}\n")
+            print(f"{message}\n")
             user_input: str = input(confirmation).lower()
             if user_input in yes_vals:
                 return True
             elif user_input in no_vals:
                 return False
             else:
-                self.stdout.write("Error: invalid input\n")
+                print("Error: invalid input\n")
 
 
     # Quit and Dispatches
     def _quit(self) -> None:
-        self.stdout.write("\nExiting")
+        print("\nExiting")
         sys.exit(0)
 
 
@@ -187,12 +197,13 @@ class OdbPlotterCLI(cmd.Cmd):
                     # TODO
                     # handle time step
                     #
+                    # NO, no more time step, but we should ensure the user is ready, possibly with a print state.
 
                 if self._confirm("You many now convert this .odb file to a .hdf5 file." "Would you like to perform this conversion now?", "yes"):
                     self._convert()
 
                 else:
-                    self.stdout.write('You may perform this conversion later with the "convert" command')
+                    print('You may perform this conversion later with the "convert" command')
 
             except (FileNotFoundError, ValueError):
                 pass
@@ -225,13 +236,13 @@ class OdbPlotterCLI(cmd.Cmd):
                     break
 
         else:
-            self.stdout.write(f"{self.odb.odb_path} is set as current .odb file")
+            print(f"{self.odb.odb_path} is set as current .odb file")
 
         if not hasattr(self, "hdf_path"):
             self._hdf()
 
         else:
-            self.stdout.write(f"{self.odb.hdf_path} is set as the target .hdf5 file")
+            print(f"{self.odb.hdf_path} is set as the target .hdf5 file")
 
         self.odb.convert()
 
@@ -342,7 +353,7 @@ class OdbPlotterCLI(cmd.Cmd):
                     return float(val)
 
             except ValueError:
-                self.stdout.write("Error, all selected coordinates and time steps must be numbers")
+                print("Error, all selected coordinates and time steps must be numbers")
 
 
     def _x(self) -> None:
@@ -414,11 +425,17 @@ class OdbPlotterCLI(cmd.Cmd):
 
 
     def do_step(self, arg: str) -> None:
-        """Set the time step (jump between frames extracted)"""
+        """Set the time step (jump between frames extracted) (same as time_step)"""
         _ = arg
         self._step()
 
-    
+
+    def do_time_step(self, arg: str) -> None:
+        """Set the tiem step (jump between frames extracted) (same as step)"""
+        _ = arg
+        self._step()
+
+
     def _step(self) -> None:
         while True:
             try:
@@ -431,7 +448,7 @@ class OdbPlotterCLI(cmd.Cmd):
                 return
 
             except ValueError:
-                self.stdout.write("Time step must be an integer greater than or equal to 1")
+                print("Time step must be an integer greater than or equal to 1")
 
 
     def do_filename(self, arg: str) -> None:
@@ -492,14 +509,6 @@ class OdbPlotterCLI(cmd.Cmd):
                 return
 
 
-    # TODO ???
-    #def do_dirs(self, arg: str) -> None:
-    #    """Set the """
-    #self.directory_options: List[str] = ["dir", "dirs", "directory", "directories"]
-    #self.directory_help: str = "Set the source and output directories"
-    #self.directory_options_formatted: str = ", ".join(self.directory_options)
-
-
     def do_load(self, arg: str) -> None:
         """Load selected .hdf5 file (same as run and process)"""
         _ = arg
@@ -538,290 +547,742 @@ class OdbPlotterCLI(cmd.Cmd):
         self.odb.unload_hdf()
 
 
-def cli() -> None:
+    def do_abaqus(self, arg: str) -> None:
+        """Select the Abaqus Executable (same as abq and abqpy)"""
+        _ = arg
+        self._abaqus()
 
-    main_loop: bool = True
 
-    # TODO Process input toml file and/or cli switches here
-    state: Odb
-    user_options: UserOptions
-    result: Union[Tuple[Odb, UserOptions], pd.DataFrame]
-    result = process_input()
-    print(f"ODBPlotter {__version__}")
-    if isinstance(result, pd.DataFrame):
-        sys.exit(print(result))
+    def do_abq(self, arg: str) -> None:
+        """Select the Abaqus Executable (same as abaqus and abqpy)"""
+        _ = arg
+        self._abaqus()
 
-    else:
-        state, user_options = result
 
-    cli_options: CLIOptions = CLIOptions()
+    def do_abqpy(self, arg: str) -> None:
+        """Select the Abaqus Executable (same as abaqus and abq)"""
+        _ = arg
+        self._abaqus()
 
-    if user_options.run_immediate:
-        # TODO
-        load_hdf(state)
-        plot_time_range(state, user_options)
 
-    while main_loop:
+    def _abaqus(self) -> None:
+        while True:
+            abaqus_executable: str = input("Please enter the desired Abaqus Executable: ")
+            if self._confirm(f"You entered {abaqus_executable}", "Is this correct?", "yes"):
+                self.odb.abaqus_executable = abaqus_executable
+                return
+
+        
+    def do_cpu(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpus, core, and cores)"""
+        _ = arg
+        self._cpus()
+
+
+    def do_cpus(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpu, core, and cores)"""
+        _ = arg
+        self._cpus()
+
+
+    def do_core(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpu, cpus, and cores)"""
+        _ = arg
+        self._cpus()
+
+
+    def do_cores(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpu, cpus, and core)"""
+        _ = arg
+        self._cpus()
+
+
+    def _cpus(self) -> None:
+        while True:
+            try:
+                cpus: int = int(input("Please enter the number of CPU cores to use: "))
+                if cpus < 1:
+                    raise ValueError
+
+                if self._confirm(f"You entered {cpus}", "Is this correct?", "yes"):
+                    self.odb.cpus = cpus
+                    return
+
+            except ValueError:
+                print("Error. Number of CPU cores must be an Integer greater than 0")
+
+
+    def do_color(self, arg: str) -> None:
+        """Set the colormap to use (same as colors, colormap, cmap)"""
+        _ = arg
+        self._colormap()
+
+
+    def do_colors(self, arg: str) -> None:
+        """Set the colormap to use (same as color, colormap, cmap)"""
+        _ = arg
+        self._colormap()
+
+
+    def do_colormap(self, arg: str) -> None:
+        """Set the colormap to use (same as color, colors, cmap)"""
+        _ = arg
+        self._colormap()
+
+
+    def do_cmap(self, arg: str) -> None:
+        """Set the colormap to use (same as color, colors, colormap)"""
+        _ = arg
+        self._colormap()
+
+
+    def _colormap(self) -> None:
+        while True:
+            colormap: str = input("Please enter the desired colormap: ")
+            if self._confirm(f"You entered {colormap}.", "Is this correct?", "yes"):
+                self.odb.colormap = colormap
+                return
+
+
+    def do_save(self, arg: str) -> None:
+        """Toggle whether images should be saved"""
+        _ = arg
+        self.odb.save = not self.odb.save
+
+        if self.odb.save:
+            sys.stdout.write(f"Images will now be saved in {self.odb.result_dir}")
+            sys.stdout.write('Please use the "file", "name", or "filename" commands to format under which names these files are saved')
+        
+        else:
+            sys.stdout.write("Images will now be shown but not saved.")
+
+
+    def do_format(self, arg: str) -> None:
+        """Select the format for saving images (same as save_format)"""
+        _ = arg
+        self._save_format()
+
+
+    def do_save_format(self, arg: str) -> None:
+        """Select the format for saving images (same as format)"""
+        _ = arg
+        self._save_format()
+
+
+    def _save_format(self):
+        while True:
+            save_format: str = input("Please enter the format (.png, .jpeg, etc) as which to save images: ")
+            save_format = save_format.lower()
+            if not save_format.startswith("."):
+                save_format = "." + save_format
+
+            if self._confirm(f"You entered {save_format}.", "Is this correct?", "yes"):
+                self.odb.save_format = save_format
+                return
+
+
+    def do_font(self, arg: str) -> None:
+        """Set the font of the images"""
+        _ = arg
+        while True:
+            font: str = input("Please enter the desired font: ")
+            if self._confirm(f"You entered {font}.", "Is this correct?", "yes"):
+                self.odb.font = font
+                return
+
+
+    def do_font_color(self, arg: str) -> None:
+        """Set the color for fonts on images"""
+        _ = arg
+        while True:
+            font_color: str = input("Please enter the desired font color: ")
+            if self._confirm(f"You entered {font_color}.", "Is this correct?", "yes"):
+                self.odb.font_color = font_color
+                return
+
+
+    def do_font_size(self, arg: str) -> None:
+        """Set the size for fonts on iamges"""
+        _ = arg
+        while True:
+            try:
+                font_size: float = float(input("Please enter the desired font size: "))
+                if font_size <= 0.0:
+                    raise ValueError
+
+                if self._confirm(f"You entered {font_size}.", "Is this correct?", "yes"):
+                    self.odb.font_size = font_size
+                    return
+            
+            except ValueError:
+                print("Error. Font size must be a positive number")
+
+
+    def do_background_color(self, arg: str) -> None:
+        """Set the background color for images"""
+        _ = arg
+        while True:
+            background_color = input("Please enter the desired background color: ")
+            if self._confirm(f"You entered {background_color}", "Is this correct?", "yes"):
+                self.odb.background_color = background_color
+                return
+
+
+    def do_below_color(self, arg: str) -> None:
+        """Set the color for elements below the set range (same as below_range and below_range_color)"""
+        _ = arg
+        self._below_color()
+
+
+    def do_below_range(self, arg: str) -> None:
+        """Set the color for elements below the set range (same as below_color and below_range_color)"""
+        _ = arg
+        self._below_color()
+
+
+    def do_below_range_color(self, arg: str) -> None:
+        """Set the color for elements below the set range (same as below_color and below_range)"""
+        _ = arg
+        self._below_color()
+
+
+    def _below_color(self) -> None:
+        self.odb.below_range_color = self._set_nullable_color("below")
+
+
+    def do_above_color(self, arg: str) -> None:
+        """Set the color for elements above the set range (same as above_range and above_range_color)"""
+        _ = arg
+        self._above_color()
+
+
+    def do_above_range(self, arg: str) -> None:
+        """Set the color for elements above the set range (same as above_color and above_range_color)"""
+        _ = arg
+        self._above_color()
+
+
+    def do_above_range_color(self, arg: str) -> None:
+        """Set the color for elements above the set range (same as above_color and above_range)"""
+        _ = arg
+        self._above_color()
+
+
+    def _above_color(self) -> None:
+        self.odb.above_range_color = self._set_nullable_color("above")
+
+
+    def _set_nullable_color(self, color_type: str) -> str:
+        while True:
+            color: str = input(f"Please enter the desired {color_type} color: ")
+            if self._confirm(f"You entered {color}.", "Is this correct?", "yes"):
+                return color
+
+
+    def _parse_range(self, range_str: str, extrema: List[int, int]) -> None:
+        final_list: List[Iterator[int]] = list()
+
+        selected_vals: List[str] = list(
+            filter(
+                lambda x: len(x) > 0 and not x.isspace(),
+                re.split(r"[\[\]\(\)\{\}]", range_str)
+            )
+        )
+
+        val: str
         try:
-            user_input:str = input("\n> ").strip().lower()
+            for val in selected_vals:
+                split_vals = list(map(int, val.split(":")))
+                
+                if len(split_vals) == 1:
+                    if split_vals[0].isspace():
+                        pass # No-op in this case
+                    else:
+                        final_list.append(range(split_vals[0], split_vals[0] + 1))
 
-            if user_input in cli_options.directory_options:
-                set_directories(user_options)
+                elif len(split_vals) == 2:
+                    if all(len(x) == 0 for x in split_vals):
+                        return chain(range(extrema[0], extrema[1] + 1))
 
-            elif user_input in cli_options.angle_options:
-                set_views(state)
+                    else:
+                        if len(split_vals[0]) == 0:
+                            final_list.append(range(0, split_vals[1] + 1))
+                        elif len(split_vals[1] == 0):
+                            final_list.append(range(split_vals[0], extrema[1] + 1))
+                        else:
+                            final_list.append(range(split_vals[0], split_vals[1]))
 
-            elif user_input in cli_options.show_all_options:
-                state.interactive = not state.interactive
-                print(f"Plots will now {'BE' if state.interactive else 'NOT BE'} shown")
+                elif len(split_vals) == 3:
+                    if all(len(x) == 0 for x in split_vals):
+                        return chain(range(extrema[0], extrema[1] + 1))
 
-            elif user_input in cli_options.abaqus_options:
-                set_abaqus(state)
+                    else:
+                        if len(split_vals[0]) == 0:
+                            if len(split_vals[1]) == 0:
+                                if split_vals[2] == 1 or split_vals[2] == -1:
+                                    return chain(range(extrema[0], extrema[1] + 1))
+                                else:
+                                    final_list.append(range(extrema[0], extrema[1] + 1, split_vals[2]))
 
-            elif user_input in cli_options.nodeset_options:
-                set_nodeset(state)
+                            else:
+                                final_list.append(range(extrema[0], split_vals[1], split_vals[2]))
 
-            elif user_input in cli_options.state_options:
-                print_state(state, user_options)
+                        elif len(split_vals[1] == 0):
+                            final_list.append(range(split_vals[0], extrema[1] + 1, split_vals[2]))
 
-def pre_process_data(state: Odb, user_options: UserOptions):
-    meltpoint: Optional[float] = None
-    low_temp: Optional[float] = None
-    time_sample: Optional[int] = None
+                        else:
+                            final_list.append(range(split_vals[0], split_vals[1], split_vals[2]))
 
-    if user_options.config_file_path is not None:
-        config_file: TextIO
-        with open(user_options.config_file_path, "rb") as config_file:
-            config: Dict[str, Any] = tomllib.load(config_file)
+            return chain(*final_list)
 
-        if "hdf_file_path" in config:
-            if config["hdf_file_path"] != state.hdf_file_path:
-                print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
+        except ValueError:
+            raise ValueError("Error! Values for ranges must be entered like Python slices ([#:#:#]) or single numbers (#)")
 
-        if "meltpoint" in config:
-            meltpoint = config["meltpoint"]
 
-        if "low_temp" in config:
-            low_temp = config["low_temp"]
+    def do_nodes(self, arg: str) -> None:
+        """Set a list of nodes from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
+        _ = arg
+        if not hasattr(self.odb, "_node_range"):
+            try:
+                self.odb.get_odb_info()
+            
+            except AttributeError:
+                sys.stdout.write('You can only use the "nodes" command once a .odb file has been selected')
+                return
 
-        if "time_sample" in config:
-            time_sample = config["time_sample"]
+        max_val: int
+        min_val: int
+        min_val, max_val = self.odb._node_range
+        while True:
+            nodes_str: str = input(f"Please enter the node or range(s) of nodes you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
 
-        # Manage meltpoint
-        if meltpoint is not None:
-            print(f"Setting Melting Point to stored value of {meltpoint}")
-            state.set_meltpoint(meltpoint)
+            try:
+                nodes: chain = self._parse_range(nodes_str, self.odb._node_range)
 
-        elif hasattr(state, "meltpoint"):
-            print(f"Setting Default Melting Point to given value of {state.meltpoint}")
+            except ValueError as e:
+                print(*e.args)
+            
+            if self._confirm(f"You entered {nodes_str}", "Is this correct?", "yes"):
+                self.odb.nodes = nodes
+                return
+
+
+    # frames
+    def do_frames(self, arg: str) -> None:
+        """Set a list of frames from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
+        _ = arg
+        if not hasattr(self.odb, "_frame_range"):
+            try:
+                self.odb.get_odb_info()
+            
+            except AttributeError:
+                print('You can only use the "frames" command once a .odb file has been selected')
+                return
+
+        max_val: int
+        min_val: int
+        min_val, max_val = self.odb._frame_range
+        while True:
+            frames_str: input(f"Please enter the frame or range(s) of frames you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
+
+            try:
+                frames: chain = self._parse_range(frames_str, self.odb._frame_range)
+
+            except ValueError as e:
+                print(*e.args)
+            
+            if self._confirm(f"You entered {frames_str}", "Is this correct?", "yes"):
+                self.odb.frames = frames
+                return
+
+
+    # steps
+    def do_steps(self, arg: str) -> None:
+        """Add to the list of steps from which to extract or which to convert (use clear_steps to empty this list)"""
+        _ = arg
+        if not hasattr(self.odb, "_step_names"):
+            try:
+                self.odb.get_odb_info()
+
+            except AttributeError:
+                print("Warning: .odb file with list of steps is not given to compare against")
+
         
-        else: # Neither the stored value nor the given value exist
-            print("No Melting Point found. You must set it:")
-            set_meltpoint(state)
+        step: str = ""
+        print('Enter names of steps. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        if hasattr(self.odb, "_step_names"):
+            print(f"Valid step names are: {self.odb._step_names}")
+        while step.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected steps: {self.odb.steps}")
+                add_step: bool = True
 
-        # Manage lower temperature bound
-        if low_temp is not None:
-            print(f"Setting Melting Point to stored value of {low_temp}")
-            state.set_low_temp(low_temp)
+                step = input("Enter the name of a step to add: ")
 
-        elif hasattr(state, "low_temp"):
-            print(f"Setting Default Melting Point to given value of {state.low_temp}")
+                if hasattr(self.odb, "_step_names"):
+                    if step not in self.odb._step_names:
+                        add_step = False
+
+                if add_step:
+                    if self.odb.steps is None:
+                        self.odb.steps = list()
+                    self.odb.steps.append(step)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_steps(self, arg: str) -> None:
+        """Clear out current list of steps (add some with steps)"""
+        _ = arg
+
+        print(f"Previous list of steps: {self.odb.steps}")
+        self.odb.steps = None
+
+        print("Step list has been cleared.")
+
+    # parts
+    def do_parts(self, arg: str) -> None:
+        """Add to the list of parts from which to extract or which to convert (use clear_parts to empty this list)"""
+        _ = arg
+        if not hasattr(self.odb, "_part_names"):
+            try:
+                self.odb.get_odb_info()
+
+            except AttributeError:
+                print("Warning: .odb file with list of parts is not given to compare against")
+
         
-        else: # Neither the stored value nor the given value exist
-            print("No Lower Temperature Bound found. You must set it:")
-            set_low_temp(state)
+        part: str = ""
+        print('Enter names of parts. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        if hasattr(self.odb, "_part_names"):
+            print(f"Valid part names are: {self.odb._part_names}")
+        while part.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected parts: {self.odb.parts}")
+                add_part: bool = True
 
-        # Manage time sample
-        if time_sample is not None:
-            print(f"Setting Time Sample to stored value of {time_sample}")
-            state.set_time_sample(time_sample)
+                part = input("Enter the name of a step to add: ")
 
-        elif hasattr(state, "time_sample"):
-            print(f"Setting Default Time Sample to given value of {state.time_sample}")
+                if hasattr(self.odb, "_part_names"):
+                    if part not in self.odb._part_names:
+                        add_part = False
 
-        else: # Neither the stored value nor the given value exist
-            print("No Time Sample found. You must set it:")
-            set_time_sample(state)
+                if add_part:
+                    if self.odb.parts is None:
+                        self.odb.parts = list()
+                    self.odb.parts.append(part)
 
-    if not all(hasattr(state, "meltpoint"), hasattr(state, "low_temp"), hasattr(state, "time_sample")):
+            except KeyboardInterrupt:
+                break
 
-        if meltpoint is None:
-            set_meltpoint(state)
+                        
+    def do_clear_parts(self, arg: str) -> None:
+        """Clear out current list of parts (add some with parts)"""
+        _ = arg
 
-        if low_temp is None:
-            set_low_temp(state)
+        print(f"Previous list of parts: {self.odb.parts}")
+        self.odb.parts = None
 
-        if time_sample is None:
-            set_time_sample(state)
-
-        if isinstance(user_options.config_file_path, str):
-            state.dump_config_to_toml(user_options.config_file_path)
-
-    state.select_colormap()
+        print("Part list has been cleared.")
 
 
-def set_directories(user_options: UserOptions) -> None:
-    print(f"For setting all of these data directories, Please enter either absolute paths, or paths relative to your present working directory: {os.getcwd()}")
-    user_input: str
+    # nodesets
+    def do_nodesets(self, arg: str) -> None:
+        """Add to the list of nodesets from which to extract or which to convert (use clear_nodesets to empty this list)"""
+        _ = arg
+        if not hasattr(self.odb, "_nodeset_names"):
+            try:
+                self.odb.get_odb_info()
 
-    gen_hdf_dir: bool = False
-    """if hasattr(user_options, "hdf_source_directory"):
-        gen_hdf_dir = _confirm(f".hdf5 source directory is currently set to {user_options.hdf_source_directory}.", "Would you like to overwrite it?")
-    else:
-        gen_hdf_dir = True"""
+            except AttributeError:
+                print("Warning: .odb file with list of nodesets is not given to compare against")
 
-    """if gen_hdf_dir:
+        
+        nodeset: str = ""
+        print('Enter names of nodesets. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        if hasattr(self.odb, "_nodeset_names"):
+            print(f"Valid nodeset names are: {self.odb._nodeset_names}")
+        while nodeset.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected nodesets: {self.odb.nodesets}")
+                add_nodeset: bool = True
+
+                nodeset = input("Enter the name of a nodeset to add: ")
+
+                if hasattr(self.odb, "_nodeset_names"):
+                    if nodeset not in self.odb._nodeset_names:
+                        add_nodeset = False
+
+                if add_nodeset:
+                    if self.odb.nodesets is None:
+                        self.odb.nodesets = list()
+                    self.odb.nodesets.append(nodeset)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_nodesets(self, arg: str) -> None:
+        """Clear out current list of nodesets (add some with nodesets)"""
+        _ = arg
+
+        print(f"Previous list of nodesets: {self.odb.nodesets}")
+        self.odb.nodesets = None
+
+        print("Nodeset list has been cleared.")
+
+
+    # angle angles view views
+    def do_view(self, arg: str) -> None:
+        """Set the viewing angle (same as views, angle, angles)"""
+        _ = arg
+        self._view()
+
+
+    def do_views(self, arg: str) -> None:
+        """Set the viewing angle (same as view, angle, angles)"""
+        _ = arg
+        self._view()
+
+
+    def do_angle(self, arg: str) -> None:
+        """Set the viewing angle (same as view, views, angles)"""
+        _ = arg
+        self._view()
+
+
+    def do_angles(self, arg: str) -> None:
+        """Set the viewing angle (same as view, views, angle)"""
+        _ = arg
+        self._view()
+
+
+    def _view(self) -> None:
         while True:
-            user_input = input("Please enter the directory of your .hdf5 files and associated data: ")
-            if os.path.exists(user_input):
-                if _confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
-                    if os.path.isabs(user_input):
-                        user_options.hdf_source_directory = user_input
-                    else:
-                        user_options.hdf_source_directory = os.path.join(os.getcwd(), user_input)
-                    break
+            print(f"Valid views are {self.odb._views}")
+            view: str = input("Enter desired view: ")
+
+            if view not in self.odb._views:
+                print("Error. Invalid View")
             else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")"""
+                if self._confirm(f"You Entered {view}.", "Is this correct?", "yes"):
+                    self.odb.view = view
+                    return
 
-    gen_odb_dir: bool = False
-    """if hasattr(user_options, "odb_source_directory"):
-        gen_odb_dir = _confirm(f".odb source directory is currently set to {user_options.odb_source_directory}.", "Would you like to overwrite it?")
-    else:
-        gen_odb_dir = True"""
+    # print state setting settings status
+    def do_print(self, arg: str) -> None:
+        """Output current state (same as state, setting, settings, status)"""
+        _ = arg
+        self._state()
 
-    if gen_odb_dir:
+
+    def do_state(self, arg: str) -> None:
+        """Output current state (same as print, setting, settings, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_setting(self, arg: str) -> None:
+        """Output current state (same as print, state, settings, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_settings(self, arg: str) -> None:
+        """Output current state (same as print, state, setting, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_status(self, arg: str) -> None:
+        """Output current state (same as print, state, setting, settings)"""
+        _ = arg
+        self._state()
+
+
+    def _state(self) -> None:
+        result: str = self.odb.get_odb_settings_state()
+        result += f"\n\nFilename under which images are saved: {self.options.filename}"
+        result += f"\nTitle placed on images: {self.options.title}"
+        result += "\n\nODB Data Loaded: "
+        if hasattr(self.odb, "odb"):
+            result += "True"
+        else:
+            result += "False"
+
+        print(result)
+
+
+    def do_coord(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coords, coordinate, coordinates)"""
+        _ = arg
+        self._coord()
+
+
+    def do_coords(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coord, coordinate, coordinates)"""
+        _ = arg
+        self._coord()
+
+
+    def do_coordinate(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coord, coords, coordinates)"""
+        _ = arg
+        self._coord()
+
+
+    def do_coordinates(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coord, coords, coordinate)"""
+        _ = arg
+        self._coord()
+
+
+    def _coord(self) -> None:
         while True:
-            user_input = input("Please enter the directory of your .odb files: ")
-            """if os.path.exists(user_input):
-                if _confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
-                    if os.path.isabs(user_input):
-                        user_options.odb_source_directory = user_input
-                    else:
-                        user_options.odb_source_directory = os.path.join(os.getcwd(), user_input)
-                    break
+            if hasattr(self.odb, "_frame_keys"):
+                print(f"Valid potential keys: {self.odb._frame_keys}")
+
+            coord_key: str = input("Please enter the desired coordinate key: ")
+            if self.confirm(f"You entered {coord_key}.", "Is this correct?", "yes"):
+                self.odb.coord_key = coord_key
+                return
+
+
+    def do_target_outputs(self, arg: str) -> None:
+        """Add to the list of target output keys"""
+        _ = arg
+        if hasattr(self.odb, "_frame_keys"):
+            print(f"Valid potential keys: {self.odb._frame_keys}")
+        
+        target_output: str = ""
+        print('Enter desired keys. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        while target_output.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected target outputs: {self.odb.target_outputs}")
+
+                target_output = input("Enter the key to add: ")
+
+                if self.odb.target_outputs is None:
+                    self.odb.target_outputs = list()
+                self.odb.target_outputs.append(target_output)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_target_outputs(self, arg: str) -> None:
+        """Clear out current list of target outputs (add some with target_outputs)"""
+        _ = arg
+
+        print(f"Previous list of target outputs: {self.odb.target_outputs}")
+        self.odb.nodesets = None
+
+        print("Target outputs list has been cleared.")
+
+
+    def do_get_hdf_status(self, arg: str) -> None:
+        """Get the metadata about the loaded .hdf5"""
+        _ = arg
+        if hasattr(self.odb, "hdf_status"):
+            if hasattr(self.odb, "hdf_path"):
+                print(f"Metadata for {self.odb.hdf_path}:")
             else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")"""
-
-    gen_results_dir: bool = False
-    """if hasattr(user_options, "results_directory"):
-        gen_results_dir = _nconfirm(f"The results directory is currently set to {user_options.results_directory}.", "Would you like to overwrite it?")
-    else:
-        gen_results_dir = True"""
-    
-    if gen_results_dir:
-        while True:
-            user_input = input("Please enter the directory where you would like your results to be written: ")
-            """if os.path.exists(user_input):
-                if _confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
-                    if os.path.isabs(user_input):
-                        user_options.results_directory = user_input
-                    else:
-                        user_options.results_directory = os.path.join(os.getcwd(), user_input)
-                    break
-            else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")"""
-
-
-# TODO Fix
-def set_views(state: Odb) -> None:
-    views_dict: Dict[str, Dict[str, int]] = load_views_dict()
-    while True:
-        print("Please Select a Preset View for your plots")
-        print('To view all default presets, please enter "list"')
-        print('Or, to specify your own view angle, please enter "custom"')
-        user_input: str = input("> ").strip().lower()
-        if user_input == "list":
-            print_views(views_dict)
-        elif user_input == "custom":
-            elev: int
-            azim: int
-            roll: int
-            elev, azim, roll = get_custom_view()
-
-            state.elev = elev
-            state.azim = azim
-            state.roll = roll
-            return
+                print("Metadata for Currently Loaded .hdf5 file:")
+            k: str
+            v: str
+            for k, v in self.odb.hdf_status.items():
+                print(f"\t{k}:{v}")
 
         else:
-            try:
-                if user_input.isnumeric():
-                    chosen_ind: int = int(user_input) - 1
-                    state.elev = views_dict[list(views_dict.keys())[chosen_ind]]["elev"]
-                    state.azim = views_dict[list(views_dict.keys())[chosen_ind]]["azim"]
-                    state.roll = views_dict[list(views_dict.keys())[chosen_ind]]["roll"]
-                    return
+            print("No .hdf5 file is current loaded.")
 
+
+    # TODO Other types/scripts
+    def do_extract(self, arg: str) -> None:
+        """Get extracted minimum, mean, and maximum values from a .odb or a .hdf5"""
+        _ = arg
+        while True:
+            target: str = input('Please enter the file to which you\'d like to save the extracted .csv (or enter \"show\" to print these values).'
+                "If you do not enter an absolute path, the file will be saved in the results directory if it is set")
+            if self._confirm(f"You entered{target}.", "Is this correct?", "yes"):
+                results_df: DataFrameType = self.extract()
+                if target == "show":
+                    print(results_df)
+                
                 else:
-                    state.elev = views_dict[user_input]["elev"]
-                    state.azim = views_dict[user_input]["azim"]
-                    state.roll = views_dict[user_input]["roll"]
-                    return
+                    target_path: pathlib.Path = pathlib.Path(target_path)
+                    if not target_path.absolute() and hasattr(self.odb, "result_dir"):
+                        results_df.to_csv(self.odb.result_dir / target_path)
 
-            except:
-                print('Error: input must be "list," "custom," or the index or name of a named view as seen from the "list" command.')
-
-
-def get_custom_view() -> "Tuple[int, int, int]":
-    elev: int
-    azim: int
-    roll: int
-    while True:
-        while True:
-            try:
-                elev = int(input("Elevation Angle in Degrees: "))
-                break
-            except ValueError:
-                print("Error: Elevation Angle must be an integer")
-        while True:
-            try:
-                azim = int(input("Azimuth Angle in Degrees: "))
-                break
-            except ValueError:
-                print("Error: Azimuth Angle must be an integer")
-        while True:
-            try:
-                roll = int(input("Roll Angle in Degrees: "))
-                break
-            except ValueError:
-                print("Error: Roll Angle must be an integer")
-
-        """if _confirm(f"X Rotation: {elev}\nY Rotation: {azim}\nZ Rotation: {roll}", "Is this correct?", "yes"):
-            break"""
-
-    return (elev, azim, roll)
+                    else:
+                        results_df.to_csv(target_path)
 
 
-def print_views(views: "Dict[str, Dict[str, int]]") -> None:
-    print("Index | Name | Rotation Values")
-    v: Tuple[str, Dict[str, int]]
-    view: str
-    vals: Dict[str, int]
-    key: str
-    val: int
-    for i, v in enumerate(views.items()):
-        view, vals = v
-        print(f"{i + 1}: `{view}")
-        for key, val in vals.items():
-            print(f"\t{key}: {val}")
-        print()
-    print()
+    def do_get_odb_info(self, arg: str) -> None:
+        """Get data about a .odb file before extraction or conversion"""
+        _ = arg
+
+        if hasattr(self.odb, "odb_path"):
+            self.odb.get_odb_info()
+            print(f"Data for {self.odb.odb_path}")
+            print(f"Frame Range: {self.odb.frame_range}")
+            print(f"Frame Keys: {self.odb.frame_keys}")
+            print(f"Frame Keys Per Step: {self.odb.frame_keys_per_step}")
+            print(f"Step Names: {self.odb.step_names}")
+            print(f"Step Lengths: {self.odb.step_lens}")
+            print(f"Nodeset Names: {self.odb.nodeset_names}")
+            print(f"Part Names: {self.odb.part_names}")
+            print(f"Node Range: {self.odb.node_range}")
+            print(f"Node Ranges Per Part: {self.odb.node_ranges_per_part}")
+
+        else:
+            while True:
+                try:
+                    odb_path_str: str = input("Please enter the path of the file from which you would like to extract: ")
+                    if self._confirm(f"You entered {odb_path_str}.", "Is this correct?", "yes"):
+                        odb_path: pathlib.Path = pathlib.Path(odb_path_str)
+                        final_path: pathlib.Path
+                        if odb_path.exists():
+                            final_path = odb_path
+
+                        elif hasattr(self.odb, "odb_source_dir") and (self.odb.odb_source_dir / odb_path).exists():
+                            final_path = (self.odb.odb_source_dir / odb_path)
+
+                        elif (pathlib.Path.cwd() / odb_path).exists():
+                            final_path = (pathlib.Path.cwd() / odb_path)
+
+                        else:
+                            raise ValueError
+
+                        result: Dict[str, Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]]
+                        result = self.odb.get_odb_info_from_file(final_path)
+
+                        k: str
+                        v: Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]
+                        print(f"Data for {final_path}")
+                        for k, v in result.items():
+                            print(f"\t{k}: {v}")
+
+                        return
+
+                except ValueError:
+                    print(f"Error: File {odb_path} could not be found")
 
 
-def set_abaqus(state: Odb) -> None:
-    while True:
-        user_input = input("Please enter the exectuable program to process .odb files: ")
-        """if _confirm(f"You entered {user_input}", "Is this correct?", "yes"):
-            state.set_abaqus(user_input)
-            break"""
+    # TODO
+    # TODO
+    # TODO
+    # dir dirs directory directories
 
+    # plot
+    #   plot 3d (keys)
+    #   plot 2d (keys)
 
-def set_nodeset(state: Odb) -> None:
-    while True:
-        user_input = input("Please enter the name of the target nodeset: ")
-        """if _confirm(f"You entered {user_input}", "Is this correct?", "yes"):
-            state.set_nodesets(user_input)
-            break"""
+    # run immediately
+
+    # process input

@@ -14,83 +14,9 @@ from typing import Union, Any, TextIO, Tuple, List, Dict, Optional
 from .odb import Odb
 from odbp import __version__
 
-        """
-        angle
-        abaqus/abq/abqpy
-        cpus/cores
-        nodesets
-        frames
-        nodes
-        parts
-        steps
-        coord_key
-        temp_key
-        colormap
-        save
-        formate/save_format
-
-        plot/show
-        state/status/settings
-        """
-
-def print_state(state: Odb, user_options: UserOptions) -> None:
-    lines: List[Dict[str, str]] = [
-        {
-            ".hdf5 file": f"{state.hdf_file_path if hasattr(state, 'hdf_file_path') else 'not set'}",
-            ".odb file": f"{state.odb_file_path if hasattr(state, 'odb_file_path') else 'not set'}",
-        },
-        {
-            "Source directory of .hdf5 files": f"{user_options.hdf_source_directory}",
-            "Source directory of .odb files": f"{user_options.odb_source_directory}",
-            "Directory to store results": f"{user_options.results_directory}",
-        },
-        {
-            "X Range": f"{state.x.low if hasattr(state.x, 'low') else 'not set'} to {state.x.high if hasattr(state.x, 'high') else 'not set'}",
-            "Y Range": f"{state.y.low if hasattr(state.y, 'low') else 'not set'} to {state.y.high if hasattr(state.y, 'high') else 'not set'}",
-            "Z Range": f"{state.z.low if hasattr(state.z, 'low') else 'not set'} to {state.z.high if hasattr(state.z, 'high') else 'not set'}",
-            "Time Range": f"{state.time_low if hasattr(state, 'time_low') else 'not set'} to {state.time_high if hasattr(state, 'time_high') else 'not set'}",
-            "Temperature Range": f"{state.low_temp if hasattr(state, 'low_temp') else 'not set'} to {state.meltpoint if hasattr(state, 'meltpoint') else 'not set'}",
-        },
-        {
-            "Time Sample of the Mesh": f"{state.time_sample if hasattr(state, 'time_sample') else 'not set'}",
-        },
-        {
-            "Is each time-step being shown in the PyVista interactive Viewer": f"{'Yes' if state.interactive else 'No'}",
-            "View Angle": f"{state.angle if hasattr(state, 'angle') else 'not set'}",
-            "Rotation around the X Axis": f"{state.elev if hasattr(state, 'elev') else 'not set'}",
-            "Rotation around the Y Axis": f"{state.azim if hasattr(state, 'azim') else 'not set'}",
-            "Rotation around the Z Axis": f"{state.roll if hasattr(state, 'roll') else 'not set'}",
-        },
-        {
-            "Image Title": f"{user_options.image_title if hasattr(user_options, 'image_title') else 'not set'}",
-            "Image Label": f"{user_options.image_label if hasattr(user_options, 'image_label') else 'not set'}",
-        },
-        {
-            "Target Parts": ",".join(state.parts) if hasattr(state, "parts") else "None Set",
-            "Target Nodeset": (state.nodesets[0] if len(state.nodesets) == 1 else "Error: Only specify multiple nodesets in extract mode") if hasattr(state, "nodesets") else "None Set"
-        },
-        {
-            "Data loaded into memory": f"{'Yes' if state.loaded else 'No'}",
-            "Abaqus Program": f"{state.abaqus_program if hasattr(state, 'abaqus_program') else 'not set'}",
-        },
-    ]
-
-    key: str
-    val: str
-    sub_dict: Dict[str, str]
-    max_len = 0
-    for sub_dict in lines:
-        for key in sub_dict.keys():
-            max_len = max(max_len, len(key))
-
-    final_state_output: str = ""
-    for sub_dict in lines:
-        for key, val in sub_dict.items():
-            final_state_output += key.ljust(max_len) + ": " + val + "\n"
-        final_state_output += "\n" 
-
-    print(final_state_output, end="") # No ending newline because we added it above
-
+"""
+plot/show
+"""
 
 def process_input() -> "Union[Tuple[Odb, UserOptions], pd.DataFrame]": # Returns UserOptions or Pandas Dataframe
     """
