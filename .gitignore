@@ -10,3 +10,5 @@ src/odbp/__pycache__/*
 *.txt
 
 *.zip
+
+.vscode

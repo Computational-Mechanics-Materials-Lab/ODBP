@@ -47,8 +47,6 @@ def main():
     else:
         user_nodesets = None
 
-    user_frames = input_dict.get("frames")
-
     unicode_parts = input_dict.get("parts")
     if unicode_parts is not None:
         user_parts = list()
@@ -65,7 +63,7 @@ def main():
     else:
         user_steps = None
 
-    temp_key = str(input_dict.get("temp_key", "NT11"))
+    target_outputs = str(input_dict.get("target_outputs", ["NT11"]))
 
     try:
         odb = openOdb(odb_path, readOnly=True)
@@ -79,23 +77,26 @@ def main():
         steps = odb.steps
         assembly = odb.rootAssembly
 
-        target_frames = set()
+        target_frames = dict()
         if user_steps is not None:
             for step in user_steps:
                 step_data = steps[step]
+                target_frames[step] - set()
                 for frame in step_data.frames:
-                    target_frames.add(frame.frameId)
+                    target_frames[step].add(frame.frameId)
 
-        if user_frames is not None:
-            for frame in user_frames:
-                target_frames.add(frame.frameId)
+            for step in target_frames():
+                target_frames[step] = sorted(list(target_frames[step]))
 
-        target_frames = sorted(list(target_frames))
-
-        if len(target_frames) == 0:
-            for step_data in steps.values():
+        else:
+            for step, step_data in steps.items():
+                target_frames[step] = list()
                 for frame in step_data.frames:
-                    target_frames.append(frame.frameId) 
+                    target_frames[step].append(frame.frameId)
+
+        time_step = int(input_dict.get("time_step"), 1)
+        for step in target_frames:
+            target_frames[step] = target_frames[step][::time_step]
 
         target_nodesets = set()
         if user_nodes is not None:
@@ -127,10 +128,10 @@ def main():
     finally:
         odb.close()
 
-    extract(odb_path, save_path, target_nodesets, target_frames, temp_key)
+    extract(odb_path, save_path, target_nodesets, target_frames, target_outputs)
 
 
-def extract(odb_path, save_path, target_nodesets, target_frames, temp_key):
+def extract(odb_path, save_path, target_nodesets, target_frames, target_outputs):
 
     try:
         odb = openOdb(odb_path, readOnly=True)
@@ -144,29 +145,32 @@ def extract(odb_path, save_path, target_nodesets, target_frames, temp_key):
         steps = odb.steps
         assembly = odb.rootAssembly
 
-        final_record = list()
-        for step in steps.keys():
-            step_start_time = steps[step].totalTime
-            for frame in steps[step].frames:
-                if frame.frameId not in target_frames:
-                    continue
-                frame_time = step_start_time + frame.frameValue
-                selected_temp_results = frame.fieldOutputs[temp_key]
-                for nodeset in target_nodesets:
+        final_record = dict()
+        for output in target_outputs:
+            final_record[output] = list()
+            for step in steps.keys():
+                step_start_time = steps[step].totalTime
+                for frame in steps[step].frames:
+                    if frame.frameId not in target_frames[step]:
+                        continue
+                    frame_time = step_start_time + frame.frameValue
+                    selected_output_results = frame.fieldOutputs[output]
+                    for nodeset in target_nodesets:
 
-                    region = assembly.nodeSets[nodeset]
-                    temp_subset = selected_temp_results.getSubset(region=region)
-                    temp = np.copy(temp_subset.bulkDataBlocks[0].data).astype("float64")
-                    temp[temp == 0] = np.nan
-                    temp[temp == 300] = np.nan
-                    temp = temp[~np.isnan(temp)]
+                        region = assembly.nodeSets[nodeset]
+                        output_subset = selected_output_results.getSubset(region=region)
+                        output_vals = np.copy(output_subset.bulkDataBlocks[0].data).astype("float64")
+                        if output in ("NT11",):
+                            output_vals[output_vals == 0] = np.nan
+                            output_vals[output_vals == 300] = np.nan
+                        output_vals = output_vals[~np.isnan(output_vals)]
 
-                    final_record.append({
-                        "time": frame_time,
-                        "max": np.max(temp) if len(temp) > 0 else np.nan,
-                        "mean": np.mean(temp) if len(temp) > 0 else np.nan,
-                        "min": np.min(temp) if len(temp) > 0 else np.nan,
-                    })
+                        final_record[output].append({
+                            "time": frame_time,
+                            "max": np.max(output_vals) if len(output_vals) > 0 else np.nan,
+                            "mean": np.mean(output_vals) if len(output_vals) > 0 else np.nan,
+                            "min": np.min(output_vals) if len(output_vals) > 0 else np.nan,
+                        })
 
     finally:
         odb.close()

@@ -26,14 +26,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(input_args, nargs="*")
     odb_path, result_path = vars(parser.parse_args())[input_args]
-    results = collect_state(odb_path)
+    results = get_odb_info(odb_path)
     try:
         result_file = open(result_path, "wb")
         pickle.dump(results, result_file)
     finally:
         result_file.close()
 
-def collect_state(odb_path):
+def get_odb_info(odb_path):
     result = dict()
     try:
         odb = openOdb(odb_path, readOnly=True)
@@ -52,21 +52,21 @@ def collect_state(odb_path):
         # Parts --> Nodesets
         # # Nodes --> Nodesets
         steps = odb.steps
-        steps_to_lens = dict()
-        steps_to_frames = dict()
+        step_lens = dict()
         all_frames = list()
         all_parts = list()
         frame_keys = list()
+        frame_keys_per_step = dict()
+        frame_range = 0
         for step_key, step_data in steps.items():
-            steps_to_lens[step_key] = len(step_data.frames)
+            step_lens[step_key] = len(step_data.frames)
+            frame_range += step_lens[step_key]
+            frame_keys_per_step[step_key] = list(step_data.frames[0].fieldOutputs.keys())
 
-        frame_keys = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
-
-        prev = 0
-        for s, l in steps_to_lens.items():
-            all_frames.append((prev, l + prev))
-            steps_to_frames[s] = (prev, l + prev)
-            prev += l + 1
+        for v in frame_keys_per_step.values():
+            for k in v:
+                if k not in frame_keys:
+                    frame_keys.append(k)
 
         assembly = odb.rootAssembly
         nodesets = assembly.nodeSets.keys()
@@ -82,13 +82,11 @@ def collect_state(odb_path):
                 all_nodes.append(node.label)
 
         #Temporal
-        result["frame_range"] = (all_frames[0][0], all_frames[-1][-1])
         result["frame_keys"] = frame_keys
-        result["step_names"] = list(steps_to_frames.keys())
-        frame_ranges_per_steps = dict()
-        for s, f in steps_to_frames.items():
-            frame_ranges_per_steps[s] = f
-        result["frame_ranges_per_steps"] = frame_ranges_per_steps 
+        result["frame_keys_per_step"] = frame_keys_per_step
+        result["frame_range"] = frame_range
+        result["step_names"] = list(step_lens.keys())
+        result["step_lens"] = step_lens
         
         #Spatial
         result["nodeset_names"] = nodesets

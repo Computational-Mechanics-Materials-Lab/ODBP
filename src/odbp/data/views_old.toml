@@ -1,52 +1,60 @@
+# Done
 ["Top Face: back"]
 elev = 90
 azim = 0
-roll = 0
+roll = 270
 
+# Done
 ["Top Face: right"]
-elev = 90
-azim = 0
-roll = -90
-
-["Top Face: left"]
-elev = 90
-azim = 0
-roll = 90
-
-["Top Face: front"]
-elev = 90
-azim = 0
-roll = 180
-
-["Bottom Face: back"]
-elev = -90
-azim = 0
-roll = 180
-
-["Bottom Face: right"]
-elev = -90
-azim = 0
-roll = 90
-
-["Bottom Face: left"]
-elev = -90
-azim = 0
-roll = -90
-
-["Bottom Face: front"]
-elev = -90
-azim = 0
+elev = 60
+azim = 60
 roll = 0
+
+# Done
+["Top Face: left"]
+elev = 60
+azim = 60
+roll = 180
+
+# Done
+["Top Face: front"]
+elev = 60
+azim = 60
+roll = 90
+
+# Done
+["Bottom Face: back"]
+elev = 240
+azim = 60
+roll = 90
+
+# Done
+["Bottom Face: right"]
+elev = 240
+azim = 60
+roll = 0
+
+# Done
+["Bottom Face: left"]
+elev = 240
+azim = 60
+roll = 180
+
+# Done
+["Bottom Face: front"]
+elev = 240
+azim = 60
+roll = 270
 
 ["Left Face: front"]
-elev = 0
-azim = 90
-roll = -90
+elev = 330
+azim = 270
+roll = 135
 
 ["Left Face: top"]
-elev = 0
-azim = 90
-roll = 0
+elev = 330
+azim = 270
+roll = 30
 
 ["Left Face: back"]
 elev = 0
@@ -243,10 +251,11 @@ elev = 45
 azim = -45
 roll = -120
 
+# Done
 ["Top-Right-Front Vertex: top"]
-elev = 45
-azim = -45
-roll = 0
+elev = 0
+azim = 0
+roll = 240
 
 ["Top-Right-Front Vertex: front"]
 elev = 45

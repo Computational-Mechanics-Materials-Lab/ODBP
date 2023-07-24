@@ -12,32 +12,36 @@
 
 # Path (relative or absolute) to .hdf5 files
 # Default "." (present working directory)
-hdf_source_directory = "."
+hdf_source_dir = "."
 
 # Path (relative or absolute) to .odb files
 # Default "." (present working directory)
-odb_source_directory = "."
+odb_source_dir = "."
 
 # Path (relative or absolute) to the results directory
 # Default "results"
 # If this directory does not exist, it will be created
-results_directory = "results"
+result_dir = "results"
 
 # path to the .hdf5 file
 # Not set by default. Enter a value and uncomment to pass a default value
-# hdf =
+# hdf_path =
 
 # path to the .odb file
 # Not set by default. Enter a value and uncomment to pass a default value
-# odb =
+# odb_path =
 
 #####
-# parts, nodesets, and nodes cannot be easily set via the cli, and must be set
+# steps, parts, nodesets, and nodes cannot be easily set via the cli, and must be set
 # interactively or using this config file or another .toml input file
 
-# Parts from which to extract
-# By default, we can use the Abaqus default of "PART-1-1", but you can add whatever you'd like here
-parts = [ "PART-1-1", ]
+# Steps which to extract or convert.
+# Not set by default, which uses all available.
+# steps = []
+
+# Parts from which to extrat or convert
+# Not set by default, to use all available.
+# parts = []
 
 # Nodesets from which to extract
 # Not set by default, which will use all present nodesets
@@ -57,35 +61,35 @@ parts = [ "PART-1-1", ]
 
 # lower x-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# low_x =
+# x_low =
 
 # upper x-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# high_x =
+# x_high =
 
 # lower y-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# low_y =
+# y_low =
 
 # upper y-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# high_y =
+# y_high =
 
 # lower z-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# low_z =
+# z_low =
 
 # upper z-axis extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# high_z =
+# z_high =
 
 # lower time extreme
 # Defaulted to 0, as it can't be lower than this
-low_time = 0
+time_low = 0
 
 # upper time extreme
 # Defaulted to inf, as this will extract all times starting from time_low
-high_time = +inf
+time_high = +inf
 
 #####
 
@@ -96,78 +100,102 @@ high_time = +inf
 
 # lower temperature extreme
 # Not set by default. Enter a value and uncomment to pass a default value
-# low_temp =
+# temp_low =
 
 # upper temperature extreme/melting point
 # Not set by default. Enter a value and uncomment to pass a default value
-# meltpoint =
-
-#####
-
-#####
-
-# A default time sample of 1 works, but should almost always be overwritten
-# Otherwise, you should rely on the corresponding config file with the .hdf5
+# temp_high =
 
 #####
 
 # time sampling interval (N for "extract every Nth frame")
 # Default value of 1, but expect this to almost always be overwritten
-time_sample = 1
+time_step = 1
 
 #####
+
+# Number of cpu cores to use for this process
+# Unset by default, which uses all available cores
+# cpus =
 
 # which program to run the abaqus python commands with
 # Defaults to "abaqus" but, for example, if you have both abaqus 2019 and 2022
 # installed, and use abaqus 2019, you would set this to "abq2019"
-abaqus_program = "abaqus"
+abaqus_executable = "abaqus"
 
-# Do you want to open the interative 3D viewer?
-# If not, PNG Images will be generated and saved automatically
-# Default true
-interactive = true
+# Which value in the .odb or .hdf5 refers to coordinates
+# Defaults to "COORD"
+coord_key = "COORD"
+
+# List of outputs which should be converted
+# Not set by default, which will convert all outputs
+# target_outputs = []
 
 # Which colormap to use for the plots
 # Default "turbo"
-colormap_name = "turbo"
+colormap = "turbo"
 
-# The title to save the images under
+# Should images be saved to hard drive
+# Default true
+save = true
+
+# In what format should images be saved?
+# Default ".png"
+save_format = ".png"
+
+# The filename to save the images under
 # Whatever you put will automatically have .png appended
 # By leaving this unset, you will automatically get 
-# <name of the .hdf5 file>.png
+# <name of the .hdf5 file>
+# filename =
+
+# The title to display on the generated iamges
+# By leaving blank, this will be the filename, without
+# the ".png"
 # title =
 
-# The label to display on the generated iamges
-# By leaving blank, this will be the title, without
-# the ".png"
-# label =
+# The font to use on the plots
+# Defaults to "courier"
+font = "courier"
 
-# Whether or not to run automatically when started
-# This will crash if not all necessary parameters are given
-# Default false
-run = false
+# The color for fonts
+# Defaults to "#000000"
+font_color = "#000000"
+
+# The size of fonts
+# Defaults to 14.0
+font_size = 14.0
+
+# Background color for images
+# Defaults to "#FFFFFF"
+background_color = "#FFFFFF"
+
+# Above-range color for colormaps
+# Defaults to "#C0C0C0"
+above_range_color = "#C0C0C0"
+
+# Below-range color for colormaps
+# Not set by default
+# below_range_color = 
 
 # These are the viewing angles at which you can show the plot
 # These named values are set internally
-# Or, you can specify a 3-tuple value for a custom view
 # Possible values can be seen in the interactive plotter
 # They're also listed here for your convenience
-# Top
-# Bottom
-# Front
-# Back
-# Left
-# Right
-# Isometric Front-Right
-# Isometric Front-Left
-# Isometric Back-Right
-# Isometric Back-Left
+# "isometric"
+# "negative isometric"
+# "xy"
+# "negative xy"
+# "xz"
+# "negative xz"
+# "yx"
+# "negative yx"
+# "yz"
+# "negative yz"
+# "zx"
+# "negative zx"
+# "zy"
+# "negative zy"
 
-# Default is Isometric Front-Right
-view = "Isometric Front-Right"
-
-# A custom example
-#[view]
-#    elev = 90
-#    azim = 45
-#    roll = -45
+# Default is isometric
+view = "isometric"

@@ -6,648 +6,1311 @@ Built-in CLI for ODB Plotter, allowing for interactive system access without wri
 
 import os
 import sys
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
+import cmd
+import pathlib
+#import re
 import numpy as np
-import pandas as pd
-from typing import Any, Union, TextIO, List, Tuple, Dict, Optional
-from .odb_visualizer import OdbVisualizer
-from .util import confirm
-from .state import CLIOptions, UserOptions, process_input, print_state, load_views_dict
+from typing import Union, List, Tuple, Dict, Optional #, Iterator
+#from itertools import chain
+from .odb import Odb
+from .types import DataFrameType
+from .process_input import process_input
 from odbp import __version__
 
 
-def cli() -> None:
-
-    main_loop: bool = True
-
-    # TODO Process input toml file and/or cli switches here
-    state: OdbVisualizer
-    user_options: UserOptions
-    result: Union[Tuple[OdbVisualizer, UserOptions], pd.DataFrame]
-    result = process_input()
-    print(f"ODBPlotter {__version__}")
-    if isinstance(result, pd.DataFrame):
-        sys.exit(print(result))
-
-    else:
-        state, user_options = result
-
-    cli_options: CLIOptions = CLIOptions()
-
-    if user_options.run_immediate:
-        # TODO
-        load_hdf(state)
-        plot_time_range(state, user_options)
-
-    while main_loop:
-        try:
-            user_input:str = input("\n> ").strip().lower()
-
-            if user_input in cli_options.quit_options:
-                print("\nExiting")
-                main_loop = False
-
-            elif user_input in cli_options.select_options:
-                select_files(state, user_options)
-
-            elif user_input in cli_options.convert_options:
-                convert(state)
-
-            elif user_input in cli_options.extrema_options:
-                set_extrema(state)
-
-            elif user_input in cli_options.time_options:
-                set_time(state)
-
-            elif user_input in cli_options.time_sample_options:
-                set_time_sample(state)
-
-            elif user_input in cli_options.meltpoint_options:
-                set_meltpoint(state)
-
-            elif user_input in cli_options.low_temp_options:
-                set_low_temp(state)
-
-            elif user_input in cli_options.title_label_options:
-                set_title_and_label(state, user_options)
-
-            elif user_input in cli_options.directory_options:
-                set_directories(user_options)
-
-            elif user_input in cli_options.process_options:
-                load_hdf(state)
-
-            elif user_input in cli_options.angle_options:
-                set_views(state)
-
-            elif user_input in cli_options.show_all_options:
-                state.interactive = not state.interactive
-                print(f"Plots will now {'BE' if state.interactive else 'NOT BE'} shown")
-
-            elif user_input in cli_options.plot_options:
-                plot_time_range(state, user_options)
-
-            elif user_input in cli_options.abaqus_options:
-                set_abaqus(state)
-
-            elif user_input in cli_options.nodeset_options:
-                set_nodeset(state)
-
-            elif user_input in cli_options.state_options:
-                print_state(state, user_options)
-
-            elif user_input in cli_options.help_options:
-                cli_options.print_help()
-
-            else:
-                print('Invalid option. Use "help" to see available options')
-
-        except KeyboardInterrupt:
-            print("\nKeyboard Interrupt Received, returning to main menu")
-            print('(From this menu, use the "exit" command to exit, or Control-D/EOF)')
-
-        except EOFError:
-            print("\nExiting")
-            main_loop = False
-
-
-def select_files(state: OdbVisualizer, user_options: UserOptions) -> None:
-    odb_options: Tuple[str, str] = ("odb", ".odb")
-    hdf_options: Tuple[str, str, str, str, str ,str] = (".hdf", "hdf", ".hdf5", "hdf5", "hdfs", ".hdfs")
-    user_input: str
-
-    # select odb
-    while True:
-        user_input = input('Please enter either "hdf" if you plan to open .hdf5 file or "odb" if you plan to open a .odb file: ').strip().lower()
-
-        if user_input in odb_options or user_input in hdf_options:
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                break
-
-        else:
-            print("Error: invalid input")
-
-    if user_input in odb_options:
-        # process odb
-        odb_path_valid: bool = False
-        while not odb_path_valid:
-            user_input = input("Please enter the path of the odb file: ")
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                output: Optional[bool] = state.select_odb(user_options, user_input)
-                if isinstance(output, bool):
-                    print(f"Error: the file {user_input} could not be found")
-
-                else:
-                    odb_path_valid = True
-
-        gen_time_sample: bool = False
-        if hasattr(state, "time_sample"):
-            gen_time_sample = confirm(f"Time Sample is already set as {state.time_sample}.", "Would you like to overwrite it?")
-
-        else:
-            gen_time_sample = True
-
-        if gen_time_sample:
-            set_time_sample(state)
-
-        if confirm('You may now convert this .odb file to a .hdf5 file or you may do this later with the "convert" command.', "Would you like to convert now?", "yes"):
-            convert(state)
-
-    elif user_input in hdf_options:
-        # process hdf
-        hdf_path_valid: bool = False
-        while not hdf_path_valid:
-            user_input = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
-            if(confirm(f"You entered {user_input}", "Is this correct", "yes")):
-                output: Union[UserOptions, bool] = state.select_hdf(user_options, user_input)
-                if isinstance(output, UserOptions):
-                    user_options = output
-                    hdf_path_valid = True
-
-                else:
-                    print(f"Error: the file {user_input} could not be found")
-
-        pre_process_data(state, user_options)
-        print(f"Target .hdf5 file: {state.hdf_file_path}")
-
-
-def convert(state: OdbVisualizer) -> None:
-    while True:
-        user_input: str = input("Please enter the desired name of the generated .hdf5 file: ")
-        if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-            state.odb_to_hdf(user_input)
-            break
-
-
-def pre_process_data(state: OdbVisualizer, user_options: UserOptions):
-    meltpoint: Optional[float] = None
-    low_temp: Optional[float] = None
-    time_sample: Optional[int] = None
-
-    if user_options.config_file_path is not None:
-        config_file: TextIO
-        with open(user_options.config_file_path, "rb") as config_file:
-            config: Dict[str, Any] = tomllib.load(config_file)
-
-        if "hdf_file_path" in config:
-            if config["hdf_file_path"] != state.hdf_file_path:
-                print("INFO: File name provided and File Name in the config do not match. This could be an issue, or it might be fine")
-
-        if "meltpoint" in config:
-            meltpoint = config["meltpoint"]
-
-        if "low_temp" in config:
-            low_temp = config["low_temp"]
-
-        if "time_sample" in config:
-            time_sample = config["time_sample"]
-
-        # Manage meltpoint
-        if meltpoint is not None:
-            print(f"Setting Melting Point to stored value of {meltpoint}")
-            state.set_meltpoint(meltpoint)
-
-        elif hasattr(state, "meltpoint"):
-            print(f"Setting Default Melting Point to given value of {state.meltpoint}")
-        
-        else: # Neither the stored value nor the given value exist
-            print("No Melting Point found. You must set it:")
-            set_meltpoint(state)
-
-        # Manage lower temperature bound
-        if low_temp is not None:
-            print(f"Setting Melting Point to stored value of {low_temp}")
-            state.set_low_temp(low_temp)
-
-        elif hasattr(state, "low_temp"):
-            print(f"Setting Default Melting Point to given value of {state.low_temp}")
-        
-        else: # Neither the stored value nor the given value exist
-            print("No Lower Temperature Bound found. You must set it:")
-            set_low_temp(state)
-
-        # Manage time sample
-        if time_sample is not None:
-            print(f"Setting Time Sample to stored value of {time_sample}")
-            state.set_time_sample(time_sample)
-
-        elif hasattr(state, "time_sample"):
-            print(f"Setting Default Time Sample to given value of {state.time_sample}")
-
-        else: # Neither the stored value nor the given value exist
-            print("No Time Sample found. You must set it:")
-            set_time_sample(state)
-
-    if not all(hasattr(state, "meltpoint"), hasattr(state, "low_temp"), hasattr(state, "time_sample")):
-
-        if meltpoint is None:
-            set_meltpoint(state)
-
-        if low_temp is None:
-            set_low_temp(state)
-
-        if time_sample is None:
-            set_time_sample(state)
-
-        if isinstance(user_options.config_file_path, str):
-            state.dump_config_to_toml(user_options.config_file_path)
-
-    state.select_colormap()
-
-
-def set_title_and_label(state: OdbVisualizer, user_options: UserOptions) -> None:
-    default_title: str = ""
-
-    if hasattr(state, "hdf_file_path"):
-        default_title = state.hdf_file_path.split(os.sep)[-1].split(".")[0]
-    elif hasattr(state, "odb_file_path"):
-        default_title = state.odb_file_path.split(os.sep)[-1].split(".")[0]
-
-    while True:
-        user_input: str
-        if isinstance(default_title, str):
-            user_input = input(f"Please Enter the Title for your Images (Leave blank for the Default value: {default_title}): ")
-            if user_input == "":
-                user_input = default_title
-
-            if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                user_options.image_title = user_input
-                break
-
-        else:
-            user_input = input("Please Enter the Title for you Images: ")
-            if user_input == "":
-                print("Error: You must enter a non-empty value")
-            else:
-                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    user_options.image_title = user_input
-                    break
-
-    while True:
-        user_input: str
-        default_label = user_options.image_title
-        user_input = input(f"Please Enter the Label for your Images (Leave blank for the Default value: {default_label}): ")
-        if user_input == "":
-            user_input = default_label
-
-        if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-            user_options.image_label = user_input
-            break
-
-
-def set_directories(user_options: UserOptions) -> None:
-    print(f"For setting all of these data directories, Please enter either absolute paths, or paths relative to your present working directory: {os.getcwd()}")
-    user_input: str
-
-    gen_hdf_dir: bool = False
-    if hasattr(user_options, "hdf_source_directory"):
-        gen_hdf_dir = confirm(f".hdf5 source directory is currently set to {user_options.hdf_source_directory}.", "Would you like to overwrite it?")
-    else:
-        gen_hdf_dir = True
-
-    if gen_hdf_dir:
-        while True:
-            user_input = input("Please enter the directory of your .hdf5 files and associated data: ")
-            if os.path.exists(user_input):
-                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
-                    if os.path.isabs(user_input):
-                        user_options.hdf_source_directory = user_input
-                    else:
-                        user_options.hdf_source_directory = os.path.join(os.getcwd(), user_input)
-                    break
-            else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
-
-    gen_odb_dir: bool = False
-    if hasattr(user_options, "odb_source_directory"):
-        gen_odb_dir = confirm(f".odb source directory is currently set to {user_options.odb_source_directory}.", "Would you like to overwrite it?")
-    else:
-        gen_odb_dir = True
-
-    if gen_odb_dir:
-        while True:
-            user_input = input("Please enter the directory of your .odb files: ")
-            if os.path.exists(user_input):
-                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
-                    if os.path.isabs(user_input):
-                        user_options.odb_source_directory = user_input
-                    else:
-                        user_options.odb_source_directory = os.path.join(os.getcwd(), user_input)
-                    break
-            else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
-
-    gen_results_dir: bool = False
-    if hasattr(user_options, "results_directory"):
-        gen_results_dir = confirm(f"The results directory is currently set to {user_options.results_directory}.", "Would you like to overwrite it?")
-    else:
-        gen_results_dir = True
+class OdbPlotterCLI(cmd.Cmd):
     
-    if gen_results_dir:
-        while True:
-            user_input = input("Please enter the directory where you would like your results to be written: ")
-            if os.path.exists(user_input):
-                if confirm(f"You entered {user_input}", "Is this correct", "yes"):
-                    # os.path.isabs can be finnicky cross-platform, but, for this purpose, shoudld be fully correct
-                    if os.path.isabs(user_input):
-                        user_options.results_directory = user_input
-                    else:
-                        user_options.results_directory = os.path.join(os.getcwd(), user_input)
-                    break
-            else:
-                print(f"Error: That directory does not exist. Please enter the absolute path to a directory or the path relative to your present working directory: {os.getcwd()}")
+    def __init__(self) -> None:
+        super().__init__()
+        self.prompt: str = "> "
+        self.intro: str = f"ODBPlotter {__version__}"
+        self.odb: Odb
+        self.odb = process_input()
 
 
-def set_extrema(state: OdbVisualizer) -> None:
-    x_low: float
-    x_high: float
-    y_low: float
-    y_high: float
-    z_low: float
-    z_high: float
-    while True:
-        # Get the desired coordinates and time steps to plot
-        extrema: Dict[Tuple[str, str], Tuple[float, float]] = {
-                ("lower X", "upper X"): tuple(),
-                ("lower Y", "upper Y"): tuple(),
-                ("lower Z", "upper Z"): tuple(),
-                }
-        extremum: Tuple[str, str]
-        for extremum in extrema.keys():
-            extrema[extremum] = process_extrema(extremum)
+    # Gotta overload this method in order to get desired control flow
+    def cmdloop(self, intro=None):
+        """Repeatedly issue a prompt, accept input, parse an initial prefix
+        off the received input, and dispatch to action methods, passing them
+        the remainder of the line as argument.
 
-        x_low, x_high = extrema[("lower X", "upper X")]
-        y_low, y_high = extrema[("lower Y", "upper Y")]
-        z_low, z_high = extrema[("lower Z", "upper Z")]
-        print()
-        if confirm(f"SELECTED VALUES:\nX from {x_low} to {x_high}\nY from {y_low} to {y_high}\nZ from {z_low} to {z_high}", "Is this correct", "yes"):
-            state.set_x_low(x_low)
-            state.set_x_high(x_high)
-            state.set_y_low(y_low)
-            state.set_y_high(y_high)
-            state.set_z_low(z_low)
-            state.set_z_high(z_high)
-            print(f"Spatial Dimensions Updated to:\nX from {state.x.low} to {state.x.high}\nY from {state.y.low} to {state.y.high}\nZ from {state.z.low} to {state.z.high}")
-            break
+        """
 
-
-def set_meltpoint(state: OdbVisualizer) -> None:
-    while True:
+        self.preloop()
+        if self.use_rawinput and self.completekey:
+            try:
+                import readline
+                self.old_completer = readline.get_completer()
+                readline.set_completer(self.complete)
+                readline.parse_and_bind(self.completekey+": complete")
+            except ImportError:
+                pass
         try:
-            meltpoint = float(input("Enter the meltpoint of the Mesh: "))
-
-            if confirm(f"Meltng Point: {meltpoint}", "Is this correct", "yes"):
-                state.set_meltpoint(meltpoint)
-                print(f"Melting Point set to: {state.meltpoint}")
-                break
-
-        except ValueError:
-            print("Error, Melting Point must be a number")
-
-
-def set_low_temp(state: OdbVisualizer) -> None:
-    while True:
-        try:
-            low_temp = float(input("Enter the lower temperature bound of the Mesh: "))
-
-            if confirm(f"Lower Temperature Bound: {low_temp}", "Is this correct", "yes"):
-                state.set_low_temp(low_temp)
-                print(f"Lower Temperature Bound set to: {state.low_temp}")
-                break
-
-        except ValueError:
-            print("Error, Lower Temperature Bound must be a number")
-
-
-def set_time_sample(state: OdbVisualizer) -> None:
-    while True:
-        try:
-            time_sample: int = int(input("Enter the Time Sample: "))
-
-            if confirm(f"Time Sample: {time_sample}", "Is this correct", "yes"):
-                state.set_time_sample(time_sample)
-                break
-
-        except ValueError:
-            print("Error, Time Sample must be an integer greater than or equal than 1")
-
-
-def set_time(state: OdbVisualizer) -> None:
-    lower_time: Union[int, float] = 0
-    upper_time: Union[int, float] = float("inf")
-    while True:
-        values: List[Tuple[str, Union[int, float], str]] = [("lower time", 0, "0"), ("upper time", float("inf"), "infinity")]
-        i: int
-        v: Tuple[str, Union[int, float], str]
-        for i, v in enumerate(values): 
-            key: str
-            default: Union[int, float]
-            default_text: str
-            key, default, default_text = v
-            while True:
+            if intro is not None:
+                self.intro = intro
+            if self.intro:
+                self.stdout.write(str(self.intro)+"\n")
+            stop = None
+            while not stop:
                 try:
-                    user_input: str = input(f"Enter the {key} value you would like to plot (Leave blank for {default_text}): ")
-                    result: Union[int, float]
-                    if user_input == "":
-                        result = default
+                    if self.cmdqueue:
+                        line = self.cmdqueue.pop(0)
                     else:
-                        result = float(user_input)
-                    
-                    if i == 0:
-                        lower_time = result
+                        if self.use_rawinput:
+                            try:
+                                line = input(self.prompt)
+                            except EOFError:
+                                line = 'EOF'
+                        else:
+                            self.stdout.write(self.prompt)
+                            self.stdout.flush()
+                            line = self.stdin.readline()
+                            if not len(line):
+                                line = 'EOF'
+                            else:
+                                line = line.rstrip('\r\n')
+                    line = self.precmd(line)
+                    stop = self.onecmd(line)
+                    stop = self.postcmd(stop, line)
+                except KeyboardInterrupt:
+                    self.stdout.write("Caught a Control-C. Returning to main command line")
+
+                    if os.name == "posix":
+                        eof_str: str = "(or Control-D)"
+                    elif os.name == "nt":
+                        eof_str: str = "(or Control-Z+Return)"
                     else:
-                        upper_time = result
-                    break
+                        eof_str: str = ""
 
-                except ValueError:
-                    print("Error, all selected time values must be positive numbers")
+                    self.stdout.write(f'Please use the "quit", "q", or "exit" commands {eof_str} to exit ODBPlotter\n')
 
-        if confirm(f"You entered {lower_time} as the starting time and {upper_time} as the ending time.", "Is this correct", "yes"):
-            state.set_time_low(lower_time)
-            state.set_time_high(upper_time)
-            print(f"Time Range: from {state.time_low} to {state.time_high if state.time_high != float('inf') else 'infinity'}")
-            break
+                except EOFError:
+                    self._quit()
+
+            self.postloop()
+        finally:
+            if self.use_rawinput and self.completekey:
+                try:
+                    import readline
+                    readline.set_completer(self.old_completer)
+                except ImportError:
+                    pass
 
 
-def process_extrema(keys: "Tuple[str, str]") -> "Tuple[float, float]":
-    results: List[float] = list()
-    i: int
-    key: str
-    inf_addon: str
-    inf_val: float
-    for i, key in enumerate(keys):
-        if i % 2 == 1:
-            inf_addon = ""
-            inf_val = np.inf
+    def _confirm(self, message: str, confirmation: str, default: "Optional[str]" = None) -> bool:
+        yes_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("yes", "y")
+        no_vals: Union[Tuple[str, str], Tuple[str, str, str]] = ("no", "n")
+        if isinstance(default, str):
+            if default.lower() in yes_vals:
+                yes_vals = ("yes", "y", "")
+                confirmation += " (Y/n)? "
+            elif default.lower() in no_vals:
+                no_vals = ("no", "n", "")
+                confirmation += " (y/N)? "
+
         else:
-            inf_addon = "negative "
-            inf_val = -1 * np.inf
+            confirmation += " (y/n)? "
+
+        while True:
+            print(f"{message}\n")
+            user_input: str = input(confirmation).lower()
+            if user_input in yes_vals:
+                return True
+            elif user_input in no_vals:
+                return False
+            else:
+                print("Error: invalid input\n")
+
+
+    # Quit and Dispatches
+    def _quit(self) -> None:
+        print("\nExiting")
+        sys.exit(0)
+
+
+    def do_quit(self, arg: str) -> None:
+        """Exit gracefully (same as exit or q)"""
+        _ = arg
+        self._quit()
+
+    
+    def do_exit(self, arg: str) -> None:
+        """Exit gracefully (same as quit or q)"""
+        _ = arg
+        self._quit()
+
+
+    def do_q(self, arg: str) -> None:
+        """Exit gracefully (same as quit or exit)"""
+        _ = arg
+        self._quit()
+
+
+    def _hdf(self) -> None: 
         while True:
             try:
-                user_input: str = input(f"Enter the {key} value you would like to plot (Leave blank for {inf_addon}infinity): ")
-                if user_input == "":
-                    results.append(inf_val)
+                hdf_str: str = input("Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: ")
+                if not hdf_str.endswith(".hdf5"):
+                    hdf_str += ".hdf5"
+                hdf_path: pathlib.Path = pathlib.Path(hdf_str)
+                if(self._confirm(f"You entered {hdf_path}", "Is this correct", "yes")):
+                    self.odb.hdf_path = hdf_path
+                    return
+
+            except ValueError:
+                pass
+
+
+    def _odb(self) -> None:
+        while True:
+            try:
+                odb_path = input("Please enter the path of the odb file: ")
+                if self._confirm(f"You entered {odb_path}", "Is thsi correct?", "yes"):
+                    self.odb.odb_path = odb_path
+
+                    # TODO
+                    # handle time step
+                    #
+                    # NO, no more time step, but we should ensure the user is ready, possibly with a print state.
+
+                if self._confirm("You many now convert this .odb file to a .hdf5 file." "Would you like to perform this conversion now?", "yes"):
+                    self._convert()
+
                 else:
-                    results.append(float(user_input))
-                break
+                    print('You may perform this conversion later with the "convert" command')
+
+            except (FileNotFoundError, ValueError):
+                pass
+
+
+    def do_odb(self, arg: str) -> None:
+        """Select the .odb files to convert or extract from (same as odb)"""
+        _ = arg
+        self._odb()
+
+
+    def do_hdf(self, arg: str) -> None:
+        """Select the .hdf5 file to load (same as hdf5)"""
+        _ = arg
+        self._hdf()
+
+
+    def do_hdf5(self, arg: str) -> None:
+        """Select the .hdf5 file to load (same as hdf)"""
+        _ = arg
+        self._hdf()
+
+
+    def _convert(self) -> None:
+        if not hasattr(self, "odb_path"):
+            while True:
+                target_odb: str = input("No .odb file is selected. Please enter the target .odb file: ")
+                if self._confirm(f"You entered {target_odb}", "Is this correct", "yes"):
+                    self.odb.odb_path = target_odb
+                    break
+
+        else:
+            print(f"{self.odb.odb_path} is set as current .odb file")
+
+        if not hasattr(self, "hdf_path"):
+            self._hdf()
+
+        else:
+            print(f"{self.odb.hdf_path} is set as the target .hdf5 file")
+
+        self.odb.convert()
+
+
+    def do_convert(self, arg: str) -> None:
+        """Convert a .odb file to a .hdf5 file"""
+        _ = arg
+        self._convert()
+
+
+    # Extrema and dispatchers
+    def do_extrema(self, arg: str) -> None:
+        """Set all spatial, temporal, and thermal extrema (same as range or ranges)"""
+        _ = arg
+        self._extrema()
+
+
+    def do_range(self, arg: str) -> None:
+        """Set all spatial, temporal, and thermal extrema (same as extrema or ranges)"""
+        _ = arg
+        self._extrema()
+
+
+    def do_ranges(self, arg: str) -> None:
+        """Set all spatial, temporal, and thermal extrema (same as extrema or range)"""
+        _ = arg
+        self._extrema()
+
+
+    def do_x(self, arg: str) -> None:
+        """Set x-range (same as xs)"""
+        _ = arg
+        self._x()
+
+
+    def do_xs(self, arg: str) -> None:
+        """Set x-range (same as x)"""
+        _ = arg
+        self._x()
+
+
+    def do_y(self, arg: str) -> None:
+        """Set y-range (same as ys)"""
+        _ = arg
+        self._y()
+
+    
+    def do_ys(self, arg: str) -> None:
+        """Set y-range (same as y)"""
+        _ = arg
+        self._y()
+
+
+    def do_z(self, arg: str) -> None:
+        """Set z-range (same as zs)"""
+        _ = arg
+        self._z()
+
+
+    def do_zs(self, arg: str) -> None:
+        """Set z-range (same as z)"""
+        _ = arg
+        self._z()
+
+
+    def do_time(self, arg: str) -> None:
+        """Set time range (same as times)"""
+        _ = arg
+        self._time()
+
+
+    def do_times(self, arg: str) -> None:
+        """Set time range (same as time)"""
+        _ = arg
+        self._time()
+
+
+    def do_temp(self, arg: str) -> None:
+        """Set thermal range (same as temps)"""
+        _ = arg
+        self._temp()
+
+
+    def do_temps(self, arg: str) -> None:
+        """Set thermal range (same as temp)"""
+        _ = arg
+        self._temp()
+
+
+    def _get_value(
+        self,
+        val_name: str,
+        default_name: Union[str, None] = None,
+        default: Union[float, None] = None
+        ) -> float:
+        while True:
+            input_str: str = f"Enter the {val_name} you would like to use: "
+            if default_name is not None and default is not None:
+                input_str = input_str.replace(":", f" (Leave blank for {default_name}) ")
+            try:
+                val: str = input(input_str)
+                if val == "":
+                    if default_name is not None and default is not None:
+                        return default
+                    else:
+                        raise ValueError
+                else:
+                    return float(val)
 
             except ValueError:
                 print("Error, all selected coordinates and time steps must be numbers")
 
-    return tuple(results)
+
+    def _x(self) -> None:
+        
+        while True:
+            x_low: float = self._get_value("lower x", "negative infinity", -1*np.inf)
+            x_high: float = self._get_value("upper x", "infinity", np.inf)
+
+            if self._confirm(f"You entered the lower x value as {x_low} and the upper x value as {x_high}.", "Is this correct?", "yes"):
+                self.odb.x_low = x_low
+                self.odb.x_high = x_high
+                return
 
 
-def load_hdf(state: OdbVisualizer) -> None:
-    state.process_hdf()
+    def _y(self) -> None:
+        
+        while True:
+            y_low: float = self._get_value("lower y", "negative infinity", -1*np.inf)
+            y_high: float = self._get_value("upper y", "infinity", np.inf)
+
+            if self._confirm(f"You entered the lower y value as {y_low} and the upper y value as {y_high}.", "Is this correct?", "yes"):
+                self.odb.y_low = y_low
+                self.odb.y_high = y_high
+                return
 
 
-# TODO Fix
-def set_views(state: OdbVisualizer) -> None:
-    views_dict: Dict[str, Dict[str, int]] = load_views_dict()
-    while True:
-        print("Please Select a Preset View for your plots")
-        print('To view all default presets, please enter "list"')
-        print('Or, to specify your own view angle, please enter "custom"')
-        user_input: str = input("> ").strip().lower()
-        if user_input == "list":
-            print_views(views_dict)
-        elif user_input == "custom":
-            elev: int
-            azim: int
-            roll: int
-            elev, azim, roll = get_custom_view()
+    def _z(self) -> None:
+        
+        while True:
+            z_low: float = self._get_value("lower z", "negative infinity", -1*np.inf)
+            z_high: float = self._get_value("upper z", "infinity", np.inf)
 
-            state.elev = elev
-            state.azim = azim
-            state.roll = roll
-            return
+            if self._confirm(f"You entered the lower z value as {z_low} and the upper z value as {z_high}.", "Is this correct?", "yes"):
+                self.odb.z_low = z_low
+                self.odb.z_high = z_high
+                return
+
+
+    def _time(self) -> None:
+
+        while True:
+            time_low: float = self._get_value("start time", "zero", 0.0)
+            time_high: float = self._get_value("end time", "infinity", np.inf)
+
+            if self._confirm(f"You entered the start time value as {time_low} and the stop time value as {time_high}.", "Is this correct?", "yes"):
+                self.odb.time_low = time_low
+                self.odb.time_high = time_high
+                return
+
+
+    def _temp(self) -> None:
+
+        while True:
+            temp_low: float = self._get_value("lower temperature", "zero", 0.0)
+            temp_high: float = self._get_value("upper temperature", "infinity", np.inf)
+
+            if self._confirm(f"You entered the lower temperature value as {temp_low} and the upper temperature value as {temp_high}.", "Is this correct?", "yes"):
+                self.odb.temp_low = temp_low
+                self.odb.temp_high = temp_high
+                return
+
+
+    def _extrema(self) -> None:
+        self._x()
+        self._y()
+        self._z()
+        self._time()
+        self._temp()
+
+
+    def do_step(self, arg: str) -> None:
+        """Set the time step (jump between frames extracted) (same as time_step)"""
+        _ = arg
+        self._step()
+
+
+    def do_time_step(self, arg: str) -> None:
+        """Set the tiem step (jump between frames extracted) (same as step)"""
+        _ = arg
+        self._step()
+
+
+    def _step(self) -> None:
+        while True:
+            try:
+                step_str: str = input("Enter the time step value: ")
+                step: int = int(step_str)
+                if step < 1:
+                    raise ValueError
+                
+                self.odb.time_step = step
+                return
+
+            except ValueError:
+                print("Time step must be an integer greater than or equal to 1")
+
+
+    def do_filename(self, arg: str) -> None:
+        """Set the filename to save images as (same as file and name)"""
+        _ = arg
+        self._filename()
+
+
+    def do_file(self, arg: str) -> None:
+        """Set the filename to save images as (same as filename and name)"""
+        _ = arg
+        self._filename()
+
+
+    def do_name(self, arg: str) -> None:
+        """Set the filename to save images as (same as filename and file)"""
+        _ = arg
+        self._filename()
+
+
+    def _filename(self) -> None:
+        while True:
+            if hasattr(self.odb, "hdf_path"):
+                filename: str = input(f"Enter the filename to save images as. The time will be appended (Leave blank for default value {self.odb.hdf_path.stem}): ")
+                if filename == "":
+                    filename = self.odb.hdf_path.stem                
+            else:
+                filename: str = input("Enter the filename to save images as. The time wiill be appended: ")
+
+            if self._confirm(f"You entered {filename}", "Is this correct?", "yes"):
+                self.odb.filename = filename
+                return
+
+
+    def do_title(self, arg: str) -> None:
+        """Set the title for images (same as label)"""
+        _ = arg
+        self._title()
+
+
+    def do_label(self, arg: str) -> None:
+        """Set the title for images (same as title)"""
+        _ = arg
+        self._title()
+
+
+    def _title(self) -> None:
+        while True:
+            if hasattr(self.odb, "filename"):
+                title: str = input(f"Enter the title for images (Leave blank for default value {self.odb.filename}): ")
+                if title == "":
+                    title = self.odb.filename
+            else:
+                title: str = input("Enter the title for images: ")
+
+            if self._confirm(f"You entered {title}", "Is this correct?", "yes"):
+                self.odb.title = title
+                return
+
+
+    def do_load(self, arg: str) -> None:
+        """Load selected .hdf5 file (same as run and process)"""
+        _ = arg
+        self._load()
+
+
+    def do_run(self, arg: str) -> None:
+        """Load selected .hdf5 file (same as load and process)"""
+        _ = arg
+        self._load()
+
+
+    def do_process(self, arg: str) -> None:
+        """Load selected .hdf5 file (same as load and run)"""
+        _ = arg
+        self._load()
+
+
+    def _load(self) -> None:
+        self.odb.load_hdf()
+
+
+    def do_unload(self, arg: str) -> None:
+        """Unload seleted .hdf5 file (same as delete)"""
+        _ = arg
+        self._unload()
+
+
+    def do_delete(self, arg: str) -> None:
+        """Unload selected .hdf5 file (same as unload)"""
+        _ = arg
+        self._unload()
+
+
+    def _unload(self) -> None:
+        self.odb.unload_hdf()
+
+
+    def do_abaqus(self, arg: str) -> None:
+        """Select the Abaqus Executable (same as abq and abqpy)"""
+        _ = arg
+        self._abaqus()
+
+
+    def do_abq(self, arg: str) -> None:
+        """Select the Abaqus Executable (same as abaqus and abqpy)"""
+        _ = arg
+        self._abaqus()
+
+
+    def do_abqpy(self, arg: str) -> None:
+        """Select the Abaqus Executable (same as abaqus and abq)"""
+        _ = arg
+        self._abaqus()
+
+
+    def _abaqus(self) -> None:
+        while True:
+            abaqus_executable: str = input("Please enter the desired Abaqus Executable: ")
+            if self._confirm(f"You entered {abaqus_executable}", "Is this correct?", "yes"):
+                self.odb.abaqus_executable = abaqus_executable
+                return
+
+        
+    def do_cpu(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpus, core, and cores)"""
+        _ = arg
+        self._cpus()
+
+
+    def do_cpus(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpu, core, and cores)"""
+        _ = arg
+        self._cpus()
+
+
+    def do_core(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpu, cpus, and cores)"""
+        _ = arg
+        self._cpus()
+
+
+    def do_cores(self, arg: str) -> None:
+        """Set the number of CPU cores to use (same as cpu, cpus, and core)"""
+        _ = arg
+        self._cpus()
+
+
+    def _cpus(self) -> None:
+        while True:
+            try:
+                cpus: int = int(input("Please enter the number of CPU cores to use: "))
+                if cpus < 1:
+                    raise ValueError
+
+                if self._confirm(f"You entered {cpus}", "Is this correct?", "yes"):
+                    self.odb.cpus = cpus
+                    return
+
+            except ValueError:
+                print("Error. Number of CPU cores must be an Integer greater than 0")
+
+
+    def do_color(self, arg: str) -> None:
+        """Set the colormap to use (same as colors, colormap, cmap)"""
+        _ = arg
+        self._colormap()
+
+
+    def do_colors(self, arg: str) -> None:
+        """Set the colormap to use (same as color, colormap, cmap)"""
+        _ = arg
+        self._colormap()
+
+
+    def do_colormap(self, arg: str) -> None:
+        """Set the colormap to use (same as color, colors, cmap)"""
+        _ = arg
+        self._colormap()
+
+
+    def do_cmap(self, arg: str) -> None:
+        """Set the colormap to use (same as color, colors, colormap)"""
+        _ = arg
+        self._colormap()
+
+
+    def _colormap(self) -> None:
+        while True:
+            colormap: str = input("Please enter the desired colormap: ")
+            if self._confirm(f"You entered {colormap}.", "Is this correct?", "yes"):
+                self.odb.colormap = colormap
+                return
+
+
+    def do_save(self, arg: str) -> None:
+        """Toggle whether images should be saved"""
+        _ = arg
+        self.odb.save = not self.odb.save
+
+        if self.odb.save:
+            sys.stdout.write(f"Images will now be saved in {self.odb.result_dir}")
+            sys.stdout.write('Please use the "file", "name", or "filename" commands to format under which names these files are saved')
+        
+        else:
+            sys.stdout.write("Images will now be shown but not saved.")
+
+
+    def do_format(self, arg: str) -> None:
+        """Select the format for saving images (same as save_format)"""
+        _ = arg
+        self._save_format()
+
+
+    def do_save_format(self, arg: str) -> None:
+        """Select the format for saving images (same as format)"""
+        _ = arg
+        self._save_format()
+
+
+    def _save_format(self):
+        while True:
+            save_format: str = input("Please enter the format (.png, .jpeg, etc) as which to save images: ")
+            save_format = save_format.lower()
+            if not save_format.startswith("."):
+                save_format = "." + save_format
+
+            if self._confirm(f"You entered {save_format}.", "Is this correct?", "yes"):
+                self.odb.save_format = save_format
+                return
+
+
+    def do_font(self, arg: str) -> None:
+        """Set the font of the images"""
+        _ = arg
+        while True:
+            font: str = input("Please enter the desired font: ")
+            if self._confirm(f"You entered {font}.", "Is this correct?", "yes"):
+                self.odb.font = font
+                return
+
+
+    def do_font_color(self, arg: str) -> None:
+        """Set the color for fonts on images"""
+        _ = arg
+        while True:
+            font_color: str = input("Please enter the desired font color: ")
+            if self._confirm(f"You entered {font_color}.", "Is this correct?", "yes"):
+                self.odb.font_color = font_color
+                return
+
+
+    def do_font_size(self, arg: str) -> None:
+        """Set the size for fonts on iamges"""
+        _ = arg
+        while True:
+            try:
+                font_size: float = float(input("Please enter the desired font size: "))
+                if font_size <= 0.0:
+                    raise ValueError
+
+                if self._confirm(f"You entered {font_size}.", "Is this correct?", "yes"):
+                    self.odb.font_size = font_size
+                    return
+            
+            except ValueError:
+                print("Error. Font size must be a positive number")
+
+
+    def do_background_color(self, arg: str) -> None:
+        """Set the background color for images"""
+        _ = arg
+        while True:
+            background_color = input("Please enter the desired background color: ")
+            if self._confirm(f"You entered {background_color}", "Is this correct?", "yes"):
+                self.odb.background_color = background_color
+                return
+
+
+    def do_below_color(self, arg: str) -> None:
+        """Set the color for elements below the set range (same as below_range and below_range_color)"""
+        _ = arg
+        self._below_color()
+
+
+    def do_below_range(self, arg: str) -> None:
+        """Set the color for elements below the set range (same as below_color and below_range_color)"""
+        _ = arg
+        self._below_color()
+
+
+    def do_below_range_color(self, arg: str) -> None:
+        """Set the color for elements below the set range (same as below_color and below_range)"""
+        _ = arg
+        self._below_color()
+
+
+    def _below_color(self) -> None:
+        self.odb.below_range_color = self._set_nullable_color("below")
+
+
+    def do_above_color(self, arg: str) -> None:
+        """Set the color for elements above the set range (same as above_range and above_range_color)"""
+        _ = arg
+        self._above_color()
+
+
+    def do_above_range(self, arg: str) -> None:
+        """Set the color for elements above the set range (same as above_color and above_range_color)"""
+        _ = arg
+        self._above_color()
+
+
+    def do_above_range_color(self, arg: str) -> None:
+        """Set the color for elements above the set range (same as above_color and above_range)"""
+        _ = arg
+        self._above_color()
+
+
+    def _above_color(self) -> None:
+        self.odb.above_range_color = self._set_nullable_color("above")
+
+
+    def _set_nullable_color(self, color_type: str) -> str:
+        while True:
+            color: str = input(f"Please enter the desired {color_type} color: ")
+            if self._confirm(f"You entered {color}.", "Is this correct?", "yes"):
+                return color
+
+
+    #def _parse_range(self, range_str: str, extrema: List[int, int]) -> None:
+    #    final_list: List[Iterator[int]] = list()
+
+    #    selected_vals: List[str] = list(
+    #        filter(
+    #            lambda x: len(x) > 0 and not x.isspace(),
+    #            re.split(r"[\[\]\(\)\{\}]", range_str)
+    #        )
+    #    )
+
+    #    val: str
+    #    try:
+    #        for val in selected_vals:
+    #            split_vals = list(map(int, val.split(":")))
+    #            
+    #            if len(split_vals) == 1:
+    #                if split_vals[0].isspace():
+    #                    pass # No-op in this case
+    #                else:
+    #                    final_list.append(range(split_vals[0], split_vals[0] + 1))
+
+    #            elif len(split_vals) == 2:
+    #                if all(len(x) == 0 for x in split_vals):
+    #                    return chain(range(extrema[0], extrema[1] + 1))
+
+    #                else:
+    #                    if len(split_vals[0]) == 0:
+    #                        final_list.append(range(0, split_vals[1] + 1))
+    #                    elif len(split_vals[1] == 0):
+    #                        final_list.append(range(split_vals[0], extrema[1] + 1))
+    #                    else:
+    #                        final_list.append(range(split_vals[0], split_vals[1]))
+
+    #            elif len(split_vals) == 3:
+    #                if all(len(x) == 0 for x in split_vals):
+    #                    return chain(range(extrema[0], extrema[1] + 1))
+
+    #                else:
+    #                    if len(split_vals[0]) == 0:
+    #                        if len(split_vals[1]) == 0:
+    #                            if split_vals[2] == 1 or split_vals[2] == -1:
+    #                                return chain(range(extrema[0], extrema[1] + 1))
+    #                            else:
+    #                                final_list.append(range(extrema[0], extrema[1] + 1, split_vals[2]))
+
+    #                        else:
+    #                            final_list.append(range(extrema[0], split_vals[1], split_vals[2]))
+
+    #                    elif len(split_vals[1] == 0):
+    #                        final_list.append(range(split_vals[0], extrema[1] + 1, split_vals[2]))
+
+    #                    else:
+    #                        final_list.append(range(split_vals[0], split_vals[1], split_vals[2]))
+
+    #        return chain(*final_list)
+
+    #    except ValueError:
+    #        raise ValueError("Error! Values for ranges must be entered like Python slices ([#:#:#]) or single numbers (#)")
+
+
+    #def do_nodes(self, arg: str) -> None:
+    #    """Set a list of nodes from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
+    #    _ = arg
+    #    if not hasattr(self.odb, "_node_range"):
+    #        try:
+    #            self.odb.get_odb_info()
+    #        
+    #        except AttributeError:
+    #            sys.stdout.write('You can only use the "nodes" command once a .odb file has been selected')
+    #            return
+
+    #    max_val: int
+    #    min_val: int
+    #    min_val, max_val = self.odb._node_range
+    #    while True:
+    #        nodes_str: str = input(f"Please enter the node or range(s) of nodes you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
+
+    #        try:
+    #            nodes: chain = self._parse_range(nodes_str, self.odb._node_range)
+
+    #        except ValueError as e:
+    #            print(*e.args)
+    #        
+    #        if self._confirm(f"You entered {nodes_str}", "Is this correct?", "yes"):
+    #            self.odb.nodes = nodes
+    #            return
+
+
+    # frames
+    #def do_frames(self, arg: str) -> None:
+    #    """Set a list of frames from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
+    #    _ = arg
+    #    if not hasattr(self.odb, "_frame_range"):
+    #        try:
+    #            self.odb.get_odb_info()
+    #        
+    #        except AttributeError:
+    #            print('You can only use the "frames" command once a .odb file has been selected')
+    #            return
+
+    #    max_val: int
+    #    min_val: int
+    #    min_val, max_val = self.odb._frame_range
+    #    while True:
+    #        frames_str: input(f"Please enter the frame or range(s) of frames you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
+
+    #        try:
+    #            frames: chain = self._parse_range(frames_str, self.odb._frame_range)
+
+    #        except ValueError as e:
+    #            print(*e.args)
+    #        
+    #        if self._confirm(f"You entered {frames_str}", "Is this correct?", "yes"):
+    #            self.odb.frames = frames
+    #            return
+
+
+    # steps
+    def do_steps(self, arg: str) -> None:
+        """Add to the list of steps from which to extract or which to convert (use clear_steps to empty this list)"""
+        _ = arg
+        if not hasattr(self.odb, "_step_names"):
+            try:
+                self.odb.get_odb_info()
+
+            except AttributeError:
+                print("Warning: .odb file with list of steps is not given to compare against")
+
+        
+        step: str = ""
+        print('Enter names of steps. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        if hasattr(self.odb, "_step_names"):
+            print(f"Valid step names are: {self.odb._step_names}")
+        while step.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected steps: {self.odb.steps}")
+                add_step: bool = True
+
+                step = input("Enter the name of a step to add: ")
+
+                if hasattr(self.odb, "_step_names"):
+                    if step not in self.odb._step_names:
+                        add_step = False
+
+                if add_step:
+                    if self.odb.steps is None:
+                        self.odb.steps = list()
+                    self.odb.steps.append(step)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_steps(self, arg: str) -> None:
+        """Clear out current list of steps (add some with steps)"""
+        _ = arg
+
+        print(f"Previous list of steps: {self.odb.steps}")
+        self.odb.steps = None
+
+        print("Step list has been cleared.")
+
+    # parts
+    def do_parts(self, arg: str) -> None:
+        """Add to the list of parts from which to extract or which to convert (use clear_parts to empty this list)"""
+        _ = arg
+        if not hasattr(self.odb, "_part_names"):
+            try:
+                self.odb.get_odb_info()
+
+            except AttributeError:
+                print("Warning: .odb file with list of parts is not given to compare against")
+
+        
+        part: str = ""
+        print('Enter names of parts. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        if hasattr(self.odb, "_part_names"):
+            print(f"Valid part names are: {self.odb._part_names}")
+        while part.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected parts: {self.odb.parts}")
+                add_part: bool = True
+
+                part = input("Enter the name of a step to add: ")
+
+                if hasattr(self.odb, "_part_names"):
+                    if part not in self.odb._part_names:
+                        add_part = False
+
+                if add_part:
+                    if self.odb.parts is None:
+                        self.odb.parts = list()
+                    self.odb.parts.append(part)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_parts(self, arg: str) -> None:
+        """Clear out current list of parts (add some with parts)"""
+        _ = arg
+
+        print(f"Previous list of parts: {self.odb.parts}")
+        self.odb.parts = None
+
+        print("Part list has been cleared.")
+
+
+    # nodesets
+    def do_nodesets(self, arg: str) -> None:
+        """Add to the list of nodesets from which to extract or which to convert (use clear_nodesets to empty this list)"""
+        _ = arg
+        if not hasattr(self.odb, "_nodeset_names"):
+            try:
+                self.odb.get_odb_info()
+
+            except AttributeError:
+                print("Warning: .odb file with list of nodesets is not given to compare against")
+
+        
+        nodeset: str = ""
+        print('Enter names of nodesets. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        if hasattr(self.odb, "_nodeset_names"):
+            print(f"Valid nodeset names are: {self.odb._nodeset_names}")
+        while nodeset.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected nodesets: {self.odb.nodesets}")
+                add_nodeset: bool = True
+
+                nodeset = input("Enter the name of a nodeset to add: ")
+
+                if hasattr(self.odb, "_nodeset_names"):
+                    if nodeset not in self.odb._nodeset_names:
+                        add_nodeset = False
+
+                if add_nodeset:
+                    if self.odb.nodesets is None:
+                        self.odb.nodesets = list()
+                    self.odb.nodesets.append(nodeset)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_nodesets(self, arg: str) -> None:
+        """Clear out current list of nodesets (add some with nodesets)"""
+        _ = arg
+
+        print(f"Previous list of nodesets: {self.odb.nodesets}")
+        self.odb.nodesets = None
+
+        print("Nodeset list has been cleared.")
+
+
+    # angle angles view views
+    def do_view(self, arg: str) -> None:
+        """Set the viewing angle (same as views, angle, angles)"""
+        _ = arg
+        self._view()
+
+
+    def do_views(self, arg: str) -> None:
+        """Set the viewing angle (same as view, angle, angles)"""
+        _ = arg
+        self._view()
+
+
+    def do_angle(self, arg: str) -> None:
+        """Set the viewing angle (same as view, views, angles)"""
+        _ = arg
+        self._view()
+
+
+    def do_angles(self, arg: str) -> None:
+        """Set the viewing angle (same as view, views, angle)"""
+        _ = arg
+        self._view()
+
+
+    def _view(self) -> None:
+        while True:
+            print(f"Valid views are {self.odb._views}")
+            view: str = input("Enter desired view: ")
+
+            if view not in self.odb._views:
+                print("Error. Invalid View")
+            else:
+                if self._confirm(f"You Entered {view}.", "Is this correct?", "yes"):
+                    self.odb.view = view
+                    return
+
+    # print state setting settings status
+    def do_print(self, arg: str) -> None:
+        """Output current state (same as state, setting, settings, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_state(self, arg: str) -> None:
+        """Output current state (same as print, setting, settings, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_setting(self, arg: str) -> None:
+        """Output current state (same as print, state, settings, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_settings(self, arg: str) -> None:
+        """Output current state (same as print, state, setting, status)"""
+        _ = arg
+        self._state()
+
+
+    def do_status(self, arg: str) -> None:
+        """Output current state (same as print, state, setting, settings)"""
+        _ = arg
+        self._state()
+
+
+    def _state(self) -> None:
+        result: str = self.odb.get_odb_settings_state()
+        if hasattr(self.odb, "odb"):
+            result += "True"
+        else:
+            result += "False"
+
+        print(result)
+
+
+    def do_coord(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coords, coordinate, coordinates)"""
+        _ = arg
+        self._coord()
+
+
+    def do_coords(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coord, coordinate, coordinates)"""
+        _ = arg
+        self._coord()
+
+
+    def do_coordinate(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coord, coords, coordinates)"""
+        _ = arg
+        self._coord()
+
+
+    def do_coordinates(self, arg: str) -> None:
+        """Set the name of the spatial coordinate key (same as coord, coords, coordinate)"""
+        _ = arg
+        self._coord()
+
+
+    def _coord(self) -> None:
+        while True:
+            if hasattr(self.odb, "_frame_keys"):
+                print(f"Valid potential keys: {self.odb._frame_keys}")
+
+            coord_key: str = input("Please enter the desired coordinate key: ")
+            if self.confirm(f"You entered {coord_key}.", "Is this correct?", "yes"):
+                self.odb.coord_key = coord_key
+                return
+
+
+    def do_target_outputs(self, arg: str) -> None:
+        """Add to the list of target output keys"""
+        _ = arg
+        if hasattr(self.odb, "_frame_keys"):
+            print(f"Valid potential keys: {self.odb._frame_keys}")
+        
+        target_output: str = ""
+        print('Enter desired keys. Type "quit", "exit", "stop, "done" or use Control-C to finish')
+        while target_output.lower() not in ("quit", "exit", "stop", "done"):
+            
+            try:
+                print(f"Currently selected target outputs: {self.odb.target_outputs}")
+
+                target_output = input("Enter the key to add: ")
+
+                if self.odb.target_outputs is None:
+                    self.odb.target_outputs = list()
+                self.odb.target_outputs.append(target_output)
+
+            except KeyboardInterrupt:
+                break
+
+                        
+    def do_clear_target_outputs(self, arg: str) -> None:
+        """Clear out current list of target outputs (add some with target_outputs)"""
+        _ = arg
+
+        print(f"Previous list of target outputs: {self.odb.target_outputs}")
+        self.odb.nodesets = None
+
+        print("Target outputs list has been cleared.")
+
+
+    def do_get_hdf_status(self, arg: str) -> None:
+        """Get the metadata about the loaded .hdf5"""
+        _ = arg
+        if hasattr(self.odb, "hdf_status"):
+            if hasattr(self.odb, "hdf_path"):
+                print(f"Metadata for {self.odb.hdf_path}:")
+            else:
+                print("Metadata for Currently Loaded .hdf5 file:")
+            k: str
+            v: str
+            for k, v in self.odb.hdf_status.items():
+                print(f"\t{k}:{v}")
 
         else:
-            try:
-                if user_input.isnumeric():
-                    chosen_ind: int = int(user_input) - 1
-                    state.elev = views_dict[list(views_dict.keys())[chosen_ind]]["elev"]
-                    state.azim = views_dict[list(views_dict.keys())[chosen_ind]]["azim"]
-                    state.roll = views_dict[list(views_dict.keys())[chosen_ind]]["roll"]
-                    return
+            print("No .hdf5 file is current loaded.")
 
+
+    # TODO Other types/scripts
+    def do_extract(self, arg: str) -> None:
+        """Get extracted minimum, mean, and maximum values from a .odb or a .hdf5"""
+        _ = arg
+        while True:
+            target: str = input('Please enter the file to which you\'d like to save the extracted .csv (or enter \"show\" to print these values).'
+                "If you do not enter an absolute path, the file will be saved in the results directory if it is set")
+            if self._confirm(f"You entered{target}.", "Is this correct?", "yes"):
+                results_df: DataFrameType = self.extract()
+                if target == "show":
+                    print(results_df)
+                
                 else:
-                    state.elev = views_dict[user_input]["elev"]
-                    state.azim = views_dict[user_input]["azim"]
-                    state.roll = views_dict[user_input]["roll"]
+                    target_path: pathlib.Path = pathlib.Path(target_path)
+                    if not target_path.absolute() and hasattr(self.odb, "result_dir"):
+                        results_df.to_csv(self.odb.result_dir / target_path)
+
+                    else:
+                        results_df.to_csv(target_path)
+
+
+    def do_get_odb_info(self, arg: str) -> None:
+        """Get data about a .odb file before extraction or conversion"""
+        _ = arg
+
+        if hasattr(self.odb, "odb_path"):
+            self.odb.get_odb_info()
+            print(f"Data for {self.odb.odb_path}")
+            print(f"Frame Range: {self.odb.frame_range}")
+            print(f"Frame Keys: {self.odb.frame_keys}")
+            print(f"Frame Keys Per Step: {self.odb.frame_keys_per_step}")
+            print(f"Step Names: {self.odb.step_names}")
+            print(f"Step Lengths: {self.odb.step_lens}")
+            print(f"Nodeset Names: {self.odb.nodeset_names}")
+            print(f"Part Names: {self.odb.part_names}")
+            print(f"Node Range: {self.odb.node_range}")
+            print(f"Node Ranges Per Part: {self.odb.node_ranges_per_part}")
+
+        else:
+            while True:
+                try:
+                    odb_path_str: str = input("Please enter the path of the file from which you would like to extract: ")
+                    if self._confirm(f"You entered {odb_path_str}.", "Is this correct?", "yes"):
+                        odb_path: pathlib.Path = pathlib.Path(odb_path_str)
+                        final_path: pathlib.Path
+                        if odb_path.exists():
+                            final_path = odb_path
+
+                        elif hasattr(self.odb, "odb_source_dir") and (self.odb.odb_source_dir / odb_path).exists():
+                            final_path = (self.odb.odb_source_dir / odb_path)
+
+                        elif (pathlib.Path.cwd() / odb_path).exists():
+                            final_path = (pathlib.Path.cwd() / odb_path)
+
+                        else:
+                            raise ValueError
+
+                        result: Dict[str, Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]]
+                        result = self.odb.get_odb_info_from_file(final_path)
+
+                        k: str
+                        v: Union[Tuple[int, int], List[str], Dict[str, Tuple[int, int]]]
+                        print(f"Data for {final_path}")
+                        for k, v in result.items():
+                            print(f"\t{k}: {v}")
+
+                        return
+
+                except ValueError:
+                    print(f"Error: File {odb_path} could not be found")
+
+
+    # TODO
+    # TODO
+    # TODO
+    # dir dirs directory directories
+
+
+    def do_plot_val_v_time(self, arg: str) -> None:
+        """2D Plot of mean or max values for a given key (same as plot_val_vs_time)"""
+        _ = arg
+        self._plot_val_v_time()
+
+
+    def do_plot_val_vs_time(self, arg: str) -> None:
+        """2D Plot of mean or max values for a given key (same as plot_val_v_time)"""
+        _ = arg
+        self._plot_val_v_time()
+
+
+    def _plot_val_v_time(self) -> None:
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        while True:
+            chosen_output: str = input("Select output: ")
+            if not hasattr(self.odb, "target_outputs") or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
+                if self._confirm(f"You entered {chosen_output}.", "Is this correct?", "yes"):
+                    chosen_range: str = ""
+                    while chosen_range not in ("max", "mean", "both"):
+                        chosen_range: str = input("Would you like to plot 'max', 'mean', or 'both'? ").lower()
+                        if chosen_range in ("max", "mean", "both"):
+                            if self._confirm(f"You entered {chosen_range}.", "Is this correct?", "yes"):
+                                result: Optional[str] = self.odb.plot_key_versus_time()
+                                if isinstance(result, str):
+                                    print(f"Results saved to {result}")
+                                    return
+
+                        else:
+                            print("Invalid choice")
+
+            else:
+                print("Invalid choice")
+
+
+    # TODO temp range
+    def do_plot_3d(self, arg: str) -> None:
+        """3D plot of .odb data over time"""
+        _ = arg
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        while True:
+            chosen_output: str = input("Select output: ")
+            if not hasattr(self.odb, "target_outputs") or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
+                if self._confirm(f"You entered {chosen_output}.", "Is this correct?", "yes"):
+                    results: List[pathlib.Path] = self.odb.plot_3d_all_times(chosen_output, title=self.odb.title)
+                    print(f"Results saved to: {results}")
                     return
 
-            except:
-                print('Error: input must be "list," "custom," or the index or name of a named view as seen from the "list" command.')
+            else:
+                print("Invalid choice")
 
 
-def get_custom_view() -> "Tuple[int, int, int]":
-    elev: int
-    azim: int
-    roll: int
-    while True:
+    def do_plot_meltpool(self, arg: str) -> None:
+        """3D Plot of thermal meltpool over time"""
+        _ = arg
+        print(f"Select one of these as the thermal values: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
         while True:
-            try:
-                elev = int(input("Elevation Angle in Degrees: "))
-                break
-            except ValueError:
-                print("Error: Elevation Angle must be an integer")
-        while True:
-            try:
-                azim = int(input("Azimuth Angle in Degrees: "))
-                break
-            except ValueError:
-                print("Error: Azimuth Angle must be an integer")
-        while True:
-            try:
-                roll = int(input("Roll Angle in Degrees: "))
-                break
-            except ValueError:
-                print("Error: Roll Angle must be an integer")
-
-        if confirm(f"X Rotation: {elev}\nY Rotation: {azim}\nZ Rotation: {roll}", "Is this correct?", "yes"):
-            break
-
-    return (elev, azim, roll)
-
-
-def print_views(views: "Dict[str, Dict[str, int]]") -> None:
-    print("Index | Name | Rotation Values")
-    v: Tuple[str, Dict[str, int]]
-    view: str
-    vals: Dict[str, int]
-    key: str
-    val: int
-    for i, v in enumerate(views.items()):
-        view, vals = v
-        print(f"{i + 1}: `{view}")
-        for key, val in vals.items():
-            print(f"\t{key}: {val}")
-        print()
-    print()
-
-
-def set_abaqus(state: OdbVisualizer) -> None:
-    while True:
-        user_input = input("Please enter the exectuable program to process .odb files: ")
-        if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
-            state.set_abaqus(user_input)
-            break
-
-
-def set_nodeset(state: OdbVisualizer) -> None:
-    while True:
-        user_input = input("Please enter the name of the target nodeset: ")
-        if confirm(f"You entered {user_input}", "Is this correct?", "yes"):
-            state.set_nodesets(user_input)
-            break
-
-
-def plot_time_range(state: OdbVisualizer, user_options: UserOptions) -> None:
-
-    if not state.loaded:
-        print('Error, you must load the contents of a .hdf5 file into memory with the "run" or "process" commands in order to plot')
-        return
-
-    if user_options.image_label == "" or user_options.image_title == "":
-        if not confirm("Warning: Either the image label or image title is unset. Consider setting them with the \"title\" or \"label\" commands.", "Do you want to continue", "no"):
-            return
-
-    # out_nodes["Time"] has the time values for each node, we only need one
-    # Divide length by len(bounded_nodes), go up to that
-    times: Any = state.out_nodes["Time"]
-    final_time_idx: int = int(len(times) / len(state.bounded_nodes))
-
-    if not state.interactive:
-        print("Please wait while the plotter prepares your images...")
-    for time in times[:final_time_idx]:
-        plot_time_slice(time, state, user_options)
-
-
-def plot_time_slice(time: float, state: OdbVisualizer, user_options: UserOptions) -> None:
-    formatted_time: str = format(round(time, 2), ".2f")
-
-    if state.interactive:
-        print(f"Plotting time step {formatted_time}")
-
-    save_str: str = os.path.join(user_options.results_directory, f"{user_options.image_title}-{formatted_time}.png")
-    plot: Any = state.plot_time_3d(time, user_options.image_label, state.interactive)
-
-    if state.interactive:
-        try:
-            plot.show()
-            plot.screenshot(save_str)
-        except RuntimeError:
-            print('Error: The plotter could not save a screenshot. Please close the viewing window by hitting the "q" key instead.')
-
-    else:
-        plot.screenshot(save_str)
-        # with plot.window_size_context((1920, 1080)):
-        #     plot.screenshot(save_str)
-
-    del plot
+            temp: str = input("Select the name of the temperature values: ")
+            if self._confirm(f"You entered {temp}.", "Is this correct?", "yes"):
+                target_nodes: DataFrameType = self.odb.odb[self.odb.odb[temp] >= self.odb.temp_high]
+                results: List[pathlib.Path] = self.odb.plot_3d_all_times(temp, title=self.odb.title, target_nodes=target_nodes)
+                print(f"Results saved to: {results}")
+                return
