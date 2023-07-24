@@ -106,7 +106,7 @@ class OdbSettings():
         self._below_range_color: Any = None
         self._above_range_color: Any = "#C0C0C0"
 
-        self.views: List[str] = list()
+        self._views: List[str] = list()
         tf: BinaryIO
         with open((pathlib.Path(__file__).parent / "data") / "views.toml", "rb") as tf:
             temp_views: Dict[str, List[str]] = tomllib.load(tf)
@@ -119,8 +119,8 @@ class OdbSettings():
             n: str
             self._sorted_views[key] = list()
             for n in self._negative_view_prefixes:
-                self.views.append(view)
-                self.views.append(f"{n}{view}")
+                self._views.append(view)
+                self._views.append(f"{n}{view}")
                 self._sorted_views[key].append(view)
                 self._sorted_views[key].append(f"{n}{view}")
 
@@ -511,7 +511,8 @@ class OdbSettings():
 
     @cpus.setter
     def cpus(self, value: int) -> None:
-        assert value > 0
+        if value <= 0:
+            raise ValueError("cpus must be an integer greater than 0")
         self._cpus = value
 
 
@@ -635,7 +636,7 @@ class OdbSettings():
 
     @font_size.setter
     def font_size(self, value: float) -> None:
-        self.font_size = value
+        self._font_size = value
 
 
     @property
@@ -676,7 +677,8 @@ class OdbSettings():
     @view.setter
     def view(self, value: str) -> None:
         value = value.lower()
-        assert value in self.views()
+        if value not in self._views:
+            raise ValueError("Invalid view")
         self._view = value
 
 

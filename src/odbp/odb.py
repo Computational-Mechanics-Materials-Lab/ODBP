@@ -79,6 +79,8 @@ class Odb(OdbSettings):
         "constructors" of this class in order to learn about initialization
         """
 
+        super().__init__()
+
         self._odb_handler: Union[OdbLoader, OdbUnloader] = OdbLoader()
         self._odb: DataFrameType 
 
@@ -267,7 +269,6 @@ class Odb(OdbSettings):
             else:
                 hdf_path = self.hdf_path
 
-        assert odb_path is not None
         self._convert(hdf_path, odb_path)
 
 
@@ -391,6 +392,9 @@ class Odb(OdbSettings):
         if target_file is None:
             target_file = self.odb_path
 
+        if target_file is None:
+            raise ValueError("odb_path must be set to extract from .odb file")
+
         extract_odb_pickle_input_dict: Dict[
             str, Optional[Union[List[str], List[int]]]
             ] = {
@@ -412,7 +416,6 @@ class Odb(OdbSettings):
                 protocol=2
                 )
 
-        assert target_file is not None
         args_list: List[Union[str, pathlib.Path]] = [
             self.abaqus_executable,
             "python",
@@ -820,7 +823,7 @@ class Odb(OdbSettings):
             plotter.view_zy(negative=negative)
 
         else:
-            raise AssertionError("Invalid View")
+            raise ValueError("Invalid View")
 
         plotter.show()
 

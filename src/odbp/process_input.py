@@ -38,9 +38,6 @@ def process_input() -> Odb:
 
     parser.add_argument("-H", "--hdf_path", help="Path to desired .hdf5 file")
 
-    parser.add_argument("-T", "--title", help="Title to save each generated file under")
-    parser.add_argument("-L", "--label", help="Label to put on each generated image")
-
     parser.add_argument("--x-low", help="Lower X-Axis Bound")
     parser.add_argument("--x-high", help="Upper X-Axis Bound")
     parser.add_argument("--y-low", help="Lower Y-Axis Bound")
@@ -51,8 +48,8 @@ def process_input() -> Odb:
     parser.add_argument("--time-low", help="Lower time limit, defaults to 0 (minimum possible)")
     parser.add_argument("--time-high", help="Upper time limit, defaults to infinity (max possible)")
 
+    parser.add_argument("--temp-low", help="Temperature lower bound, defaults to 300 K")
     parser.add_argument("--temp-high", help="Melting Point of the Mesh")
-    parser.add_argument("--temp-high", help="Temperature lower bound, defaults to 300 K")
     parser.add_argument("-t", "--time-step", help="Time-step value (N for every Nth frame you extracted). Defaults to 1")
 
     # TODO Lists
@@ -63,30 +60,30 @@ def process_input() -> Odb:
     parser.add_argument("-c", "--cpus", help="Number of cpu cores to use for this process")
 
     # Coord Key
-    parser.add_argument("--coord-key", help="Value by which coordinates are keyed in the .odb or .hdf5 files, defaults to 'COORD'")
+    parser.add_argument("-k", "--coord-key", help="Value by which coordinates are keyed in the .odb or .hdf5 files, defaults to 'COORD'")
 
     # TODO Lists
     # target_outputs ???
     
     parser.add_argument("-a", "--abaqus-executable", help="Abaqus executable program to extract from .odb files")
 
-    parser.add_argument("--colormap", help="Which colormap to use for plots. Defaults to 'turbo'")
+    parser.add_argument("-m", "--colormap", help="Which colormap to use for plots. Defaults to 'turbo'")
 
-    parser.add_argument("--save", help="Boolean for whether to save generated images to hard drive. Defaults to True")
+    parser.add_argument("-S", "--save", help="Boolean for whether to save generated images to hard drive. Defaults to True")
 
-    parser.add_argument("--save-format", help="What format should images be saved as. Default to '.png'")
+    parser.add_argument("-f", "--save-format", help="What format should images be saved as. Default to '.png'")
 
-    parser.add_argument("--filename", help="Format for the names of the saved images. Defaults to <name of the .hdf5 file>")
+    parser.add_argument("-F", "--filename", help="Format for the names of the saved images. Defaults to <name of the .hdf5 file>")
 
-    parser.add_argument("--title", help="Format for title shown on images.")
+    parser.add_argument("-T", "--title", help="Format for title shown on images.")
 
-    parser.add_argument("--font", help="Font to use on plots. Defaults to 'courier'")
-    parser.add_argument("--font-color", help="The color for fonts. Defaults to '#000000'")
-    parser.add_argument("--font-size", help="The size of fonts. Defaults to 14.0")
+    parser.add_argument("-n", "--font", help="Font to use on plots. Defaults to 'courier'")
+    parser.add_argument("-R", "--font-color", help="The color for fonts. Defaults to '#000000'")
+    parser.add_argument("-z", "--font-size", help="The size of fonts. Defaults to 14.0")
 
-    parser.add_argument("--background", help="Color for the backgrounds of images. Defaults to '#FFFFFF'")
-    parser.add_argument("--above-range", help="Color for above-ranges on the colormap. Defaults to '#C0C0C0'")
-    parser.add_argument("--below-range", help="Color for below-ranges on the colormap.")
+    parser.add_argument("-g", "--background", dest="background_color", help="Color for the backgrounds of images. Defaults to '#FFFFFF'")
+    parser.add_argument("-A", "--above-range", dest="above_range_color", help="Color for above-ranges on the colormap. Defaults to '#C0C0C0'")
+    parser.add_argument("-B", "--below-range", dest="below_range_color", help="Color for below-ranges on the colormap.")
     
     parser.add_argument("-V", "--view", help="Viewing Angle to show the plot in. Defaults to 'isometric'")
 
@@ -100,7 +97,7 @@ def process_input() -> Odb:
     
     else:
         final_settings_dict: Dict[str, Any] = dict()
-        odb_config_dir: pathlib.Path = pathlib.Path(platformdirs.use_config_dir("odbp"))
+        odb_config_dir: pathlib.Path = pathlib.Path(platformdirs.user_config_dir("odbp"))
         if not odb_config_dir.exists():
             odb_config_dir.mkdir()
         config_file_path: pathlib.Path = odb_config_dir / "config.toml"
@@ -125,6 +122,9 @@ def process_input() -> Odb:
         final_settings_dict.update(input_file_data) 
 
         cli_flags_data: Dict[str, Any] = vars(args)
+        key: str
+        val: Any
+        cli_flags_data = {key:val for key, val in cli_flags_data.items() if val is not None}
 
         final_settings_dict.update(cli_flags_data)
 

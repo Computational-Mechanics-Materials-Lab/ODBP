@@ -8,10 +8,10 @@ import os
 import sys
 import cmd
 import pathlib
-import re
+#import re
 import numpy as np
-from typing import Union, List, Tuple, Dict, Optional, Iterator
-from itertools import chain
+from typing import Union, List, Tuple, Dict, Optional #, Iterator
+#from itertools import chain
 from .odb import Odb
 from .types import DataFrameType
 from .process_input import process_input
@@ -24,8 +24,8 @@ class OdbPlotterCLI(cmd.Cmd):
         super().__init__()
         self.prompt: str = "> "
         self.intro: str = f"ODBPlotter {__version__}"
-        self.state: Odb
-        self.state = process_input()
+        self.odb: Odb
+        self.odb = process_input()
 
 
     # Gotta overload this method in order to get desired control flow
@@ -753,121 +753,121 @@ class OdbPlotterCLI(cmd.Cmd):
                 return color
 
 
-    def _parse_range(self, range_str: str, extrema: List[int, int]) -> None:
-        final_list: List[Iterator[int]] = list()
+    #def _parse_range(self, range_str: str, extrema: List[int, int]) -> None:
+    #    final_list: List[Iterator[int]] = list()
 
-        selected_vals: List[str] = list(
-            filter(
-                lambda x: len(x) > 0 and not x.isspace(),
-                re.split(r"[\[\]\(\)\{\}]", range_str)
-            )
-        )
+    #    selected_vals: List[str] = list(
+    #        filter(
+    #            lambda x: len(x) > 0 and not x.isspace(),
+    #            re.split(r"[\[\]\(\)\{\}]", range_str)
+    #        )
+    #    )
 
-        val: str
-        try:
-            for val in selected_vals:
-                split_vals = list(map(int, val.split(":")))
-                
-                if len(split_vals) == 1:
-                    if split_vals[0].isspace():
-                        pass # No-op in this case
-                    else:
-                        final_list.append(range(split_vals[0], split_vals[0] + 1))
+    #    val: str
+    #    try:
+    #        for val in selected_vals:
+    #            split_vals = list(map(int, val.split(":")))
+    #            
+    #            if len(split_vals) == 1:
+    #                if split_vals[0].isspace():
+    #                    pass # No-op in this case
+    #                else:
+    #                    final_list.append(range(split_vals[0], split_vals[0] + 1))
 
-                elif len(split_vals) == 2:
-                    if all(len(x) == 0 for x in split_vals):
-                        return chain(range(extrema[0], extrema[1] + 1))
+    #            elif len(split_vals) == 2:
+    #                if all(len(x) == 0 for x in split_vals):
+    #                    return chain(range(extrema[0], extrema[1] + 1))
 
-                    else:
-                        if len(split_vals[0]) == 0:
-                            final_list.append(range(0, split_vals[1] + 1))
-                        elif len(split_vals[1] == 0):
-                            final_list.append(range(split_vals[0], extrema[1] + 1))
-                        else:
-                            final_list.append(range(split_vals[0], split_vals[1]))
+    #                else:
+    #                    if len(split_vals[0]) == 0:
+    #                        final_list.append(range(0, split_vals[1] + 1))
+    #                    elif len(split_vals[1] == 0):
+    #                        final_list.append(range(split_vals[0], extrema[1] + 1))
+    #                    else:
+    #                        final_list.append(range(split_vals[0], split_vals[1]))
 
-                elif len(split_vals) == 3:
-                    if all(len(x) == 0 for x in split_vals):
-                        return chain(range(extrema[0], extrema[1] + 1))
+    #            elif len(split_vals) == 3:
+    #                if all(len(x) == 0 for x in split_vals):
+    #                    return chain(range(extrema[0], extrema[1] + 1))
 
-                    else:
-                        if len(split_vals[0]) == 0:
-                            if len(split_vals[1]) == 0:
-                                if split_vals[2] == 1 or split_vals[2] == -1:
-                                    return chain(range(extrema[0], extrema[1] + 1))
-                                else:
-                                    final_list.append(range(extrema[0], extrema[1] + 1, split_vals[2]))
+    #                else:
+    #                    if len(split_vals[0]) == 0:
+    #                        if len(split_vals[1]) == 0:
+    #                            if split_vals[2] == 1 or split_vals[2] == -1:
+    #                                return chain(range(extrema[0], extrema[1] + 1))
+    #                            else:
+    #                                final_list.append(range(extrema[0], extrema[1] + 1, split_vals[2]))
 
-                            else:
-                                final_list.append(range(extrema[0], split_vals[1], split_vals[2]))
+    #                        else:
+    #                            final_list.append(range(extrema[0], split_vals[1], split_vals[2]))
 
-                        elif len(split_vals[1] == 0):
-                            final_list.append(range(split_vals[0], extrema[1] + 1, split_vals[2]))
+    #                    elif len(split_vals[1] == 0):
+    #                        final_list.append(range(split_vals[0], extrema[1] + 1, split_vals[2]))
 
-                        else:
-                            final_list.append(range(split_vals[0], split_vals[1], split_vals[2]))
+    #                    else:
+    #                        final_list.append(range(split_vals[0], split_vals[1], split_vals[2]))
 
-            return chain(*final_list)
+    #        return chain(*final_list)
 
-        except ValueError:
-            raise ValueError("Error! Values for ranges must be entered like Python slices ([#:#:#]) or single numbers (#)")
+    #    except ValueError:
+    #        raise ValueError("Error! Values for ranges must be entered like Python slices ([#:#:#]) or single numbers (#)")
 
 
-    def do_nodes(self, arg: str) -> None:
-        """Set a list of nodes from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
-        _ = arg
-        if not hasattr(self.odb, "_node_range"):
-            try:
-                self.odb.get_odb_info()
-            
-            except AttributeError:
-                sys.stdout.write('You can only use the "nodes" command once a .odb file has been selected')
-                return
+    #def do_nodes(self, arg: str) -> None:
+    #    """Set a list of nodes from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
+    #    _ = arg
+    #    if not hasattr(self.odb, "_node_range"):
+    #        try:
+    #            self.odb.get_odb_info()
+    #        
+    #        except AttributeError:
+    #            sys.stdout.write('You can only use the "nodes" command once a .odb file has been selected')
+    #            return
 
-        max_val: int
-        min_val: int
-        min_val, max_val = self.odb._node_range
-        while True:
-            nodes_str: str = input(f"Please enter the node or range(s) of nodes you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
+    #    max_val: int
+    #    min_val: int
+    #    min_val, max_val = self.odb._node_range
+    #    while True:
+    #        nodes_str: str = input(f"Please enter the node or range(s) of nodes you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
 
-            try:
-                nodes: chain = self._parse_range(nodes_str, self.odb._node_range)
+    #        try:
+    #            nodes: chain = self._parse_range(nodes_str, self.odb._node_range)
 
-            except ValueError as e:
-                print(*e.args)
-            
-            if self._confirm(f"You entered {nodes_str}", "Is this correct?", "yes"):
-                self.odb.nodes = nodes
-                return
+    #        except ValueError as e:
+    #            print(*e.args)
+    #        
+    #        if self._confirm(f"You entered {nodes_str}", "Is this correct?", "yes"):
+    #            self.odb.nodes = nodes
+    #            return
 
 
     # frames
-    def do_frames(self, arg: str) -> None:
-        """Set a list of frames from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
-        _ = arg
-        if not hasattr(self.odb, "_frame_range"):
-            try:
-                self.odb.get_odb_info()
-            
-            except AttributeError:
-                print('You can only use the "frames" command once a .odb file has been selected')
-                return
+    #def do_frames(self, arg: str) -> None:
+    #    """Set a list of frames from which to extract or to convert. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#) """
+    #    _ = arg
+    #    if not hasattr(self.odb, "_frame_range"):
+    #        try:
+    #            self.odb.get_odb_info()
+    #        
+    #        except AttributeError:
+    #            print('You can only use the "frames" command once a .odb file has been selected')
+    #            return
 
-        max_val: int
-        min_val: int
-        min_val, max_val = self.odb._frame_range
-        while True:
-            frames_str: input(f"Please enter the frame or range(s) of frames you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
+    #    max_val: int
+    #    min_val: int
+    #    min_val, max_val = self.odb._frame_range
+    #    while True:
+    #        frames_str: input(f"Please enter the frame or range(s) of frames you would like to process. Possible range is from {min_val} to {max_val}, inclusive. Use one or more Python Slice syntax instances ([#:#:#]) or single numbers (#): ")
 
-            try:
-                frames: chain = self._parse_range(frames_str, self.odb._frame_range)
+    #        try:
+    #            frames: chain = self._parse_range(frames_str, self.odb._frame_range)
 
-            except ValueError as e:
-                print(*e.args)
-            
-            if self._confirm(f"You entered {frames_str}", "Is this correct?", "yes"):
-                self.odb.frames = frames
-                return
+    #        except ValueError as e:
+    #            print(*e.args)
+    #        
+    #        if self._confirm(f"You entered {frames_str}", "Is this correct?", "yes"):
+    #            self.odb.frames = frames
+    #            return
 
 
     # steps
