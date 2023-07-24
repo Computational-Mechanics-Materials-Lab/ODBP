@@ -596,8 +596,9 @@ class Odb(OdbSettings):
     # Times are repeated
     # We'll assume, by default, that you want (one of) min, max, mean of duplicated time
 
-    def plot_temp_versus_time(
+    def plot_key_versus_time(
         self,
+        target_output: str,
         mean_max_both: str = "both"
         ) -> Optional[pathlib.Path]:
         # TODO What if I want to 2d-plot only 1 nodeset, but I extractor more stuff
@@ -624,42 +625,39 @@ class Odb(OdbSettings):
         if mean_max_both.lower() in ("mean", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes["mean"].values,
+                self._extracted_nodes[target_output]["mean"].values,
                 color="#FF7F00", # TODO param
                 label="Mean Temperature")
 
         if mean_max_both.lower() in ("max", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes["max"].values,
+                self._extracted_nodes[target_output]["max"].values,
                 color="#FF0000", # TODO param
                 label="Max Temperature")
 
+        screenshot: Union[bool, pathlib.Path] = self.result_dir / f"{title}.png" if self.save else False
         if self.save:
             if not self.result_dir.exists():
                 self.result_dir.mkdir()
 
-            save_path: pathlib.Path = self.result_dir / f"{title}.png"
-            temp_v_time.show(
-                interactive=True,
-                off_screen=False,
-                screenshot=self.result_dir / f"{title}.png"
-                )
+        save_path: pathlib.Path = self.result_dir / f"{title}.png"
+        temp_v_time.show(
+            interactive=True,
+            off_screen=False,
+            screenshot=screenshot
+            )
 
+        if self.save:
             return save_path
-
-        elif self.interactive:
-            temp_v_time.show(
-                interactive=True,
-                off_screen=False,
-                screenshot=False)
 
 
     # 3D Plotting
     def plot_3d_all_times(
             self,
+            target_output: str,
             *,
-            label: Optional[str] = None,
+            title: Optional[str] = None,
             target_nodes: Optional[DataFrameType] = None
             ) -> "List[pathlib.Path]":
         """
@@ -673,7 +671,7 @@ class Odb(OdbSettings):
                 " or Odb.convert() to another tool,"
                 " such as matplotlib or bokeh.")
 
-        label = self.hdf_path.stem if label is None else label
+        title = self.hdf_path.stem if (title is None or not title) else title
 
         if target_nodes is None:
             if not hasattr(self, "odb"):
@@ -689,7 +687,7 @@ class Odb(OdbSettings):
         for frame in self:
             time: float = frame["Time"].values[0]
             if self.time_low <= time <= self.time_high:
-                results.append(self._plot_3d_single(time, label, target_nodes))
+                results.append(self._plot_3d_single(time, title, target_output, target_nodes))
 
         return results
 
@@ -697,7 +695,8 @@ class Odb(OdbSettings):
     def _plot_3d_single(
         self,
         time: float,
-        label: str,
+        title: str,
+        target_output: str,
         target_nodes: DataFrameType,
         )-> Optional[pathlib.Path]:
         """
@@ -711,7 +710,7 @@ class Odb(OdbSettings):
                 " such as matplotlib or bokeh.")
 
         dims_columns: set[str] = {"X", "Y", "Z"}
-        combined_label: str = f"{label}-{round(time, 2):.2f}"
+        combined_label: str = f"{title}-{round(time, 2):.2f}"
 
         filtered_target_nodes: DataFrameType = target_nodes[
             target_nodes["Time"] == time
@@ -758,12 +757,12 @@ class Odb(OdbSettings):
             )
 
 
-        points["Temp"] = filtered_target_nodes["Temp"].to_numpy()
+        points[target_output] = filtered_target_nodes[target_output].to_numpy()
         mesh: pv.PolyData = points.delaunay_3d()
 
         plotter.add_mesh(
             mesh,
-            scalars="Temp",
+            scalars=target_output,
             cmap = pv.LookupTable(
                 cmap=self._colormap,
                 scalar_range=(

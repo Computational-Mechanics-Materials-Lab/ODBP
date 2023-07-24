@@ -52,6 +52,8 @@ class OdbSettings():
         "_background_color",
         "_below_range_color",
         "_above_range_color",
+        "_filename",
+        "_title",
     )
 
     def __init__(self):
@@ -123,6 +125,9 @@ class OdbSettings():
                 self._sorted_views[key].append(f"{n}{view}")
 
         self._view: str = "isometric"
+
+        self._filename: str = ""
+        self._title: str = ""
 
 
     @property
@@ -675,6 +680,26 @@ class OdbSettings():
         self._view = value
 
 
+    @property
+    def filename(self) -> str:
+        return self._filename
+
+
+    @filename.setter
+    def filename(self, value: str) -> None:
+        self._filename = value
+
+
+    @property
+    def title(self) -> str:
+        return self._title
+
+
+    @title.setter
+    def title(self, value: str) -> None:
+        self._title = value
+
+
     def get_odb_settings_state(self) -> str:
         result: str = "Current state of the ODB Object:"
 
@@ -751,11 +776,15 @@ class OdbSettings():
         result += "\n\nPlotting Options:"
         result += f"\n\tViewing Angle: {view}"
         result += f"\n\tColormap: {colormap}"
-        result += f"\n\tWill images be saved? {'Yes' if self.save else 'No'}"
+        result += f"\n\tWill images be saved: {'Yes' if self.save else 'No'}"
         result += f"\n\tImage format as which images will be saved: {save_format}"
         result += f"\n\tFont family/size/color: {font}/{font_size}/{font_color}"
         result += f"\n\tImage Background Color: {background_color}"
         result += f"\n\tColor for values below given range: {below_range_color}"
         result += f"\n\tColor for values above given range: {above_range_color}"
+
+        result += f"\n\nFilename under which images are saved: {self.filename}"
+        result += f"\nTitle placed on images: {self.title}"
+        result += "\n\nODB Data Loaded: "
 
         return result

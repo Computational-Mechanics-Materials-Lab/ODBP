@@ -9,34 +9,13 @@ import sys
 import cmd
 import pathlib
 import re
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
 import numpy as np
-import pandas as pd
-from typing import Any, Union, TextIO, List, Tuple, Dict, Optional, Iterator
+from typing import Union, List, Tuple, Dict, Optional, Iterator
 from itertools import chain
 from .odb import Odb
 from .types import DataFrameType
-from .state import process_input, print_state, load_views_dict
+from .process_input import process_input
 from odbp import __version__
-
-
-class OdbPlotterCLIOptions():
-    """Simple struct to store a few options that do not belong directly
-    in the Odb object"""
-
-    __slots__ = (
-        "filename", # Done
-        "title", # Done
-        "run_immediate", # TODO
-    )
-
-    def __init__(self) -> None:
-        self.filename: str = ""
-        self.title: str = ""
-        self.run_immediate: bool = False
 
 
 class OdbPlotterCLI(cmd.Cmd):
@@ -46,10 +25,7 @@ class OdbPlotterCLI(cmd.Cmd):
         self.prompt: str = "> "
         self.intro: str = f"ODBPlotter {__version__}"
         self.state: Odb
-        self.options: OdbPlotterCLIOptions
-        #self.state, self.options = process_input()
-        self.odb = Odb()
-        self.options = OdbPlotterCLIOptions()
+        self.state = process_input()
 
 
     # Gotta overload this method in order to get desired control flow
@@ -179,8 +155,6 @@ class OdbPlotterCLI(cmd.Cmd):
                 hdf_path: pathlib.Path = pathlib.Path(hdf_str)
                 if(self._confirm(f"You entered {hdf_path}", "Is this correct", "yes")):
                     self.odb.hdf_path = hdf_path
-                    # TODO!!!
-                    #pre_process_data(self.odb, user_options)
                     return
 
             except ValueError:
@@ -479,7 +453,7 @@ class OdbPlotterCLI(cmd.Cmd):
                 filename: str = input("Enter the filename to save images as. The time wiill be appended: ")
 
             if self._confirm(f"You entered {filename}", "Is this correct?", "yes"):
-                self.options.filename = filename
+                self.odb.filename = filename
                 return
 
 
@@ -497,15 +471,15 @@ class OdbPlotterCLI(cmd.Cmd):
 
     def _title(self) -> None:
         while True:
-            if hasattr(self.options, "filename"):
-                title: str = input(f"Enter the title for images (Leave blank for default value {self.options.filename}): ")
+            if hasattr(self.odb, "filename"):
+                title: str = input(f"Enter the title for images (Leave blank for default value {self.odb.filename}): ")
                 if title == "":
-                    title = self.options.filename
+                    title = self.odb.filename
             else:
                 title: str = input("Enter the title for images: ")
 
             if self._confirm(f"You entered {title}", "Is this correct?", "yes"):
-                self.options.title = title
+                self.odb.title = title
                 return
 
 
@@ -1106,9 +1080,6 @@ class OdbPlotterCLI(cmd.Cmd):
 
     def _state(self) -> None:
         result: str = self.odb.get_odb_settings_state()
-        result += f"\n\nFilename under which images are saved: {self.options.filename}"
-        result += f"\nTitle placed on images: {self.options.title}"
-        result += "\n\nODB Data Loaded: "
         if hasattr(self.odb, "odb"):
             result += "True"
         else:
@@ -1279,10 +1250,67 @@ class OdbPlotterCLI(cmd.Cmd):
     # TODO
     # dir dirs directory directories
 
-    # plot
-    #   plot 3d (keys)
-    #   plot 2d (keys)
 
-    # run immediately
+    def do_plot_val_v_time(self, arg: str) -> None:
+        """2D Plot of mean or max values for a given key (same as plot_val_vs_time)"""
+        _ = arg
+        self._plot_val_v_time()
 
-    # process input
+
+    def do_plot_val_vs_time(self, arg: str) -> None:
+        """2D Plot of mean or max values for a given key (same as plot_val_v_time)"""
+        _ = arg
+        self._plot_val_v_time()
+
+
+    def _plot_val_v_time(self) -> None:
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        while True:
+            chosen_output: str = input("Select output: ")
+            if not hasattr(self.odb, "target_outputs") or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
+                if self._confirm(f"You entered {chosen_output}.", "Is this correct?", "yes"):
+                    chosen_range: str = ""
+                    while chosen_range not in ("max", "mean", "both"):
+                        chosen_range: str = input("Would you like to plot 'max', 'mean', or 'both'? ").lower()
+                        if chosen_range in ("max", "mean", "both"):
+                            if self._confirm(f"You entered {chosen_range}.", "Is this correct?", "yes"):
+                                result: Optional[str] = self.odb.plot_key_versus_time()
+                                if isinstance(result, str):
+                                    print(f"Results saved to {result}")
+                                    return
+
+                        else:
+                            print("Invalid choice")
+
+            else:
+                print("Invalid choice")
+
+
+    # TODO temp range
+    def do_plot_3d(self, arg: str) -> None:
+        """3D plot of .odb data over time"""
+        _ = arg
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        while True:
+            chosen_output: str = input("Select output: ")
+            if not hasattr(self.odb, "target_outputs") or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
+                if self._confirm(f"You entered {chosen_output}.", "Is this correct?", "yes"):
+                    results: List[pathlib.Path] = self.odb.plot_3d_all_times(chosen_output, title=self.odb.title)
+                    print(f"Results saved to: {results}")
+                    return
+
+            else:
+                print("Invalid choice")
+
+
+    def do_plot_meltpool(self, arg: str) -> None:
+        """3D Plot of thermal meltpool over time"""
+        _ = arg
+        print(f"Select one of these as the thermal values: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        while True:
+            temp: str = input("Select the name of the temperature values: ")
+            if self._confirm(f"You entered {temp}.", "Is this correct?", "yes"):
+                target_nodes: DataFrameType = self.odb.odb[self.odb.odb[temp] >= self.odb.temp_high]
+                results: List[pathlib.Path] = self.odb.plot_3d_all_times(temp, title=self.odb.title, target_nodes=target_nodes)
+                print(f"Results saved to: {results}")
+                return
