@@ -40,7 +40,7 @@ class OdbSettings():
         "_coord_key",
         "_target_outputs",
         "_views", 
-        "_negative_view_prefixes", 
+        "_negative_view_prefix", 
         "_sorted_views", 
         "_view", 
         "_colormap", 
@@ -112,17 +112,16 @@ class OdbSettings():
             temp_views: Dict[str, List[str]] = tomllib.load(tf)
 
         self._sorted_views: Dict[str, List[str]] = dict()
-        self._negative_view_prefixes: List[str] = temp_views.pop("negative")
+        self._negative_view_prefix: str = temp_views.pop("negative")
         key: str
         view: str
         for key, view in temp_views.items():
             n: str
             self._sorted_views[key] = list()
-            for n in self._negative_view_prefixes:
-                self._views.append(view)
-                self._views.append(f"{n}{view}")
-                self._sorted_views[key].append(view)
-                self._sorted_views[key].append(f"{n}{view}")
+            self._views.append(view)
+            self._views.append(f"{self._negative_view_prefix}{view}")
+            self._sorted_views[key].append(view)
+            self._sorted_views[key].append(f"{self._negative_view_prefix}{view}")
 
         self._view: str = "isometric"
 
