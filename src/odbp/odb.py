@@ -482,11 +482,13 @@ class Odb(OdbSettings):
             output: str
             frame_dict: Dict[int, Dict[str, float]] = {time: {}}
             chosen_outputs = self.target_outputs if (hasattr(self, "target_outputs") and self.target_outputs is not None) else frame.keys()
+            print(chosen_outputs)
             for output in chosen_outputs:
                 output_data: DataFrameType = frame[output]
+                print(output_data)
                 if output in ("NT11",):
                     output_data: DataFrameType = frame[frame[output] != 300]
-                    output_data= output_data[output_data[output] != 0]
+                    output_data = output_data[output_data[output] != 0]
                 output_data = output_data[output_data[output] != np.nan]
                 output_vals: NDArrayType = output_data[output].values
                 min_val: float = np.min(output_vals) if len(output_vals) > 0 else np.nan
@@ -527,17 +529,20 @@ class Odb(OdbSettings):
 
         if hasattr(self, "hdf_path"):
             hdf5_file: H5PYFileType
-            with h5py.File(self.hdf_path, "w") as hdf5_file:
+            with h5py.File(self.hdf_path, "r+") as hdf5_file:
                 total_name: str = str(self.hdf_path.stem)
                 hdf5_file[total_name].attrs["frame_range"] = self._frame_range
                 hdf5_file[total_name].attrs["frame_keys"] = self._frame_keys
-                hdf5_file[total_name].attrs["frame_keys_per_step"] = self._frame_keys_per_step
+                for step, frame_keys in self._frame_keys_per_step.items():
+                    hdf5_file[total_name].attrs[f"frame_keys_per_{step}"] = frame_keys
                 hdf5_file[total_name].attrs["step_names"] = self._step_names
-                hdf5_file[total_name].attrs["step_lens"] = self._step_lens
+                for step, length in self._step_lens.items():
+                    hdf5_file[total_name].attrs[f"step_{step}_length"] = length
                 hdf5_file[total_name].attrs["nodeset_names"] = self._nodeset_names
                 hdf5_file[total_name].attrs["part_names"] = self._part_names
                 hdf5_file[total_name].attrs["node_range"] = self._node_range
-                hdf5_file[total_name].attrs["node_ranges_per_part"] = self._node_ranges_per_part
+                for part, node_range in self._node_ranges_per_part.items():
+                    hdf5_file[total_name].attrs[f"node_ranges_per_{part}"] = node_range
 
 
     @classmethod
