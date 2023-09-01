@@ -482,18 +482,15 @@ class Odb(OdbSettings):
             output: str
             frame_dict: Dict[int, Dict[str, float]] = {time: {}}
             chosen_outputs = self.target_outputs if (hasattr(self, "target_outputs") and self.target_outputs is not None) else frame.keys()
-            print(chosen_outputs)
             for output in chosen_outputs:
-                output_data: DataFrameType = frame[output]
-                print(output_data)
+                output_data: DataFrameType = frame[output].values
                 if output in ("NT11",):
-                    output_data: DataFrameType = frame[frame[output] != 300]
-                    output_data = output_data[output_data[output] != 0]
-                output_data = output_data[output_data[output] != np.nan]
-                output_vals: NDArrayType = output_data[output].values
-                min_val: float = np.min(output_vals) if len(output_vals) > 0 else np.nan
-                max_val: float = np.max(output_vals) if len(output_vals) > 0 else np.nan
-                mean_val: float = np.mean(output_vals).values[0] if len(output_vals) > 0 else np.nan
+                    output_data = output_data[output_data != 300.0]
+                    output_data = output_data[output_data != 0.0]
+                output_data = output_data[output_data != np.nan]
+                min_val: float = np.min(output_data) if len(output_data) > 0 else np.nan
+                max_val: float = np.max(output_data) if len(output_data) > 0 else np.nan
+                mean_val: float = np.mean(output_data) if len(output_data) > 0 else np.nan
                 frame_dict[time][f"{output}_min"] = min_val
                 frame_dict[time][f"{output}_max"] = max_val
                 frame_dict[time][f"{output}_mean"] = mean_val
@@ -633,7 +630,7 @@ class Odb(OdbSettings):
                 ' Please install pyvista via pip install odb-plotter["plot"]'
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly, or bokeh.")
 
         if not hasattr(self, "_extracted_nodes"):
             _ = self.extract()
@@ -649,14 +646,14 @@ class Odb(OdbSettings):
         if mean_max_both.lower() in ("mean", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes[target_output]["mean"].values,
-                color="#FF7F00", # TODO param
+                self._extracted_nodes[f"{target_output}_mean"].values,
+                color="#0000FF", # TODO param
                 label=f"Mean {target_output}")
 
         if mean_max_both.lower() in ("max", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes[target_output]["max"].values,
+                self._extracted_nodes[f"{target_output}_max"].values,
                 color="#FF0000", # TODO param
                 label=f"Max {target_output}")
 
@@ -686,12 +683,12 @@ class Odb(OdbSettings):
                 ' Please install pyvista via pip install odb-plotter["plot"]'
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly, or bokeh.")
 
         if not hasattr(self, "_odb"):
             self.load_hdf()
 
-        node_vals = self.odb["Node Label" == node]
+        node_vals = self.odb[self.odb["Node Label"] == node]
 
         title: str = self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
         title += f" {target_output} versus Time for Node {node}"
@@ -706,7 +703,7 @@ class Odb(OdbSettings):
             label=f"{target_output} per time for Node {node}"
         )
 
-        screenshot: Union[bool, pathlib.Path] = self.result_dir / f"{target_output + '_'}{'Node_' + node + '_'}{title}.png" if self.save else False
+        screenshot: Union[bool, pathlib.Path] = self.result_dir / f"{target_output}_Node_{node}_{title}.png" if self.save else False
         if self.save:
             if not self.result_dir.exists():
                 self.result_dir.mkdir()
@@ -740,7 +737,7 @@ class Odb(OdbSettings):
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract()",
                 " or Odb.convert() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly, or bokeh.")
 
         title = self.hdf_path.stem if (title is None or not title) else title
 
@@ -779,7 +776,7 @@ class Odb(OdbSettings):
                 ' Please install pyvista via pip install odb-plotter["plot"]'
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly,  or bokeh.")
 
         dims_columns: set[str] = {"X", "Y", "Z"}
         combined_label: str = f"{title}-{round(time, 2):.2f}"
@@ -868,7 +865,7 @@ class Odb(OdbSettings):
 
         plotter.set_background(color=self.background_color)
 
-        negative: bool = any(self.view.startswith(n) for n in self._negative_view_prefixes)
+        negative: bool = self.view.startswith(self._negative_view_prefix)
 
         if self.view in self._sorted_views["isometric"]:
             plotter.view_isometric(negative=negative)

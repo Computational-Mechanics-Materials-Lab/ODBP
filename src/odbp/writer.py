@@ -137,9 +137,12 @@ def convert_npz_to_hdf(
                     compression="gzip"
                     )
 
-        hdf5_file[total_name].attrs["temp_low"] = temp_low
-        hdf5_file[total_name].attrs["temp_high"] = temp_high
-        hdf5_file[total_name].attrs["time_step"] = time_step
+        if temp_low is not None:
+            hdf5_file[total_name].attrs["temp_low"] = temp_low
+        if temp_high is not None:
+            hdf5_file[total_name].attrs["temp_high"] = temp_high
+        if time_step is not None:
+            hdf5_file[total_name].attrs["time_step"] = time_step
         if nodesets is not None:
             hdf5_file[total_name].attrs["nodesets"] = nodesets
         else:

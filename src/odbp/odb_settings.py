@@ -3,6 +3,8 @@
 import pathlib
 import multiprocessing
 
+import numpy as np
+
 from typing import Optional, BinaryIO, Dict, List, Any
 
 try:
@@ -79,19 +81,19 @@ class OdbSettings():
         self._coord_key: str = "COORD"
         self._target_outputs: NullableStrList = None
 
-        self._x_low: float
-        self._x_high: float
-        self._y_low: float
-        self._y_high: float
-        self._z_low: float
-        self._z_high: float
+        self._x_low: float = -1 * np.inf
+        self._x_high: float = np.inf
+        self._y_low: float = -1 * np.inf
+        self._y_high: float = np.inf
+        self._z_low: float = -1 * np.inf
+        self._z_high: float = np.inf
 
-        self._temp_low: float
-        self._temp_high: float
+        self._temp_low: float = 0
+        self._temp_high: float = np.inf
         self._time_step: int = 1
 
-        self._time_low: float
-        self._time_high: float
+        self._time_low: float = 0
+        self._time_high: float = np.inf
 
         self._cpus = multiprocessing.cpu_count()
 
