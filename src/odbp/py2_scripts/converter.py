@@ -194,7 +194,10 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_parts, user_ste
             
         if target_outputs is None or len(target_outputs) == 0:
             target_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
-            target_outputs.remove(coord_key)
+            try:
+                target_outputs.remove(coord_key)
+            except ValueError:
+                raise ValueError("Coordinate Key {} was not found in this .odb file.".format(coord_key))
 
     finally:
         odb.close()

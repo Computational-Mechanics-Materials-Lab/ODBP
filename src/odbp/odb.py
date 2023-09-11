@@ -14,6 +14,7 @@ import subprocess
 import shutil
 import pathlib
 import pickle
+import h5py
 
 import numpy as np
 import pandas as pd
@@ -25,7 +26,7 @@ from abc import abstractmethod
 from .odb_settings import OdbSettings
 from .writer import convert_npz_to_hdf
 from .reader import get_odb_data
-from .types import DataFrameType, NDArrayType
+from .types import DataFrameType, NDArrayType, H5PYFileType
 from .magic import ensure_magic, ODB_MAGIC_NUM, HDF_MAGIC_NUM
 
 try:
@@ -183,7 +184,6 @@ class Odb(OdbSettings):
     @odb.deleter
     def odb(self) -> None:
         del self._odb
-
 
     @property
     def frame_range(self) -> "Tuple[int, int]":
@@ -480,16 +480,16 @@ class Odb(OdbSettings):
             time: float = frame["Time"].values[0]
             output: str
             frame_dict: Dict[int, Dict[str, float]] = {time: {}}
-            for output in self.target_outputs:
-                output_data: DataFrameType = frame[output]
+            chosen_outputs = self.target_outputs if (hasattr(self, "target_outputs") and self.target_outputs is not None) else frame.keys()
+            for output in chosen_outputs:
+                output_data: DataFrameType = frame[output].values
                 if output in ("NT11",):
-                    output_data: DataFrameType = frame[frame[output] != 300]
-                    output_data= output_data[output_data[output] != 0]
-                output_data = output_data[output_data[output] != np.nan]
-                output_vals: NDArrayType = output_data[output].values
-                min_val: float = np.min(output_vals) if len(output_vals) > 0 else np.nan
-                max_val: float = np.max(output_vals) if len(output_vals) > 0 else np.nan
-                mean_val: float = np.mean(output_vals).values[0] if len(output_vals) > 0 else np.nan
+                    output_data = output_data[output_data != 300.0]
+                    output_data = output_data[output_data != 0.0]
+                output_data = output_data[output_data != np.nan]
+                min_val: float = np.min(output_data) if len(output_data) > 0 else np.nan
+                max_val: float = np.max(output_data) if len(output_data) > 0 else np.nan
+                mean_val: float = np.mean(output_data) if len(output_data) > 0 else np.nan
                 frame_dict[time][f"{output}_min"] = min_val
                 frame_dict[time][f"{output}_max"] = max_val
                 frame_dict[time][f"{output}_mean"] = mean_val
@@ -522,6 +522,23 @@ class Odb(OdbSettings):
         self._part_names = result["part_names"]
         self._node_range = result["node_range"]
         self._node_ranges_per_part = result["node_ranges_per_part"]
+
+        if hasattr(self, "hdf_path"):
+            hdf5_file: H5PYFileType
+            with h5py.File(self.hdf_path, "r+") as hdf5_file:
+                total_name: str = str(self.hdf_path.stem)
+                hdf5_file[total_name].attrs["frame_range"] = self._frame_range
+                hdf5_file[total_name].attrs["frame_keys"] = self._frame_keys
+                for step, frame_keys in self._frame_keys_per_step.items():
+                    hdf5_file[total_name].attrs[f"frame_keys_per_{step}"] = frame_keys
+                hdf5_file[total_name].attrs["step_names"] = self._step_names
+                for step, length in self._step_lens.items():
+                    hdf5_file[total_name].attrs[f"step_{step}_length"] = length
+                hdf5_file[total_name].attrs["nodeset_names"] = self._nodeset_names
+                hdf5_file[total_name].attrs["part_names"] = self._part_names
+                hdf5_file[total_name].attrs["node_range"] = self._node_range
+                for part, node_range in self._node_ranges_per_part.items():
+                    hdf5_file[total_name].attrs[f"node_ranges_per_{part}"] = node_range
 
 
     @classmethod
@@ -602,8 +619,9 @@ class Odb(OdbSettings):
     def plot_key_versus_time(
         self,
         target_output: str,
-        mean_max_both: str = "both"
-        ) -> Optional[pathlib.Path]:
+        mean_max_both: str = "both",
+        title: Optional[str] = None
+        ) -> "Optional[pathlib.Path]":
         # TODO What if I want to 2d-plot only 1 nodeset, but I extractor more stuff
         # or DIDN'T extract the nodeset at all. Same w/ 3D. Metadata?
 
@@ -612,15 +630,16 @@ class Odb(OdbSettings):
                 ' Please install pyvista via pip install odb-plotter["plot"]'
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly, or bokeh.")
 
         if not hasattr(self, "_extracted_nodes"):
             _ = self.extract()
+        
+        target_data = self._extracted_nodes[(self.time_low <= self._extracted_nodes["Time_mean"]) & (self._extracted_nodes["Time_mean"] <= self.time_high)]
+        time_data: List[float] = list(target_data.index)
 
-        time_data: List[float] = list(self._extracted_nodes.index)
-
-        title: str = self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
-        title += " Temperature versus Time"
+        title = title if title is not None else self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
+        title += f" {target_output} versus Time"
 
         temp_v_time: pv.Chart2D = pv.Chart2D(x_label="Time (seconds)", y_label="Temperature (Kelvin)")
         temp_v_time.title = title
@@ -628,18 +647,68 @@ class Odb(OdbSettings):
         if mean_max_both.lower() in ("mean", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes[target_output]["mean"].values,
-                color="#FF7F00", # TODO param
-                label="Mean Temperature")
+                target_data[f"{target_output}_mean"].values,
+                color="#0000FF", # TODO param
+                label=f"Mean {target_output}")
 
         if mean_max_both.lower() in ("max", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes[target_output]["max"].values,
+                target_data[f"{target_output}_max"].values,
                 color="#FF0000", # TODO param
-                label="Max Temperature")
+                label=f"Max {target_output}")
 
         screenshot: Union[bool, pathlib.Path] = self.result_dir / f"{title}.png" if self.save else False
+        if self.save:
+            if not self.result_dir.exists():
+                self.result_dir.mkdir()
+
+        save_path: pathlib.Path = self.result_dir / f"{mean_max_both + '_'}{target_output + '_'}{title}.png"
+        temp_v_time.show(
+            interactive=True,
+            off_screen=False,
+            screenshot=screenshot
+            )
+
+        if self.save:
+            return save_path
+
+
+    def plot_single_node(
+        self,
+        target_output: str,
+        node: int,
+        title: Optional[str] = None
+        ) -> "Optional[pathlib.Path]":
+        if not PYVISTA_AVAILABLE:
+            raise Exception("Plotting cabailities are not included."
+                ' Please install pyvista via pip install odb-plotter["plot"]'
+                ' or odb-plotter["all"] rather than pip install odb-plotter'
+                " Or export the data from Odb.extract() to another tool,"
+                " such as matplotlib, plotly, or bokeh.")
+
+        if not hasattr(self, "_odb"):
+            self.load_hdf()
+
+        node_vals = self.odb[self.odb["Node Label"] == node]
+
+        title = title if title is not None else self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
+        title += f" {target_output} versus Time for Node {node}"
+
+        temp_v_time: pv.Chart2D = pv.Chart2D(x_label="Time (seconds)", y_label="Temperature (Kelvin)")
+        temp_v_time.title = title
+
+        data_to_plot = node_vals.drop(columns=list(set(node_vals.keys()) - set(("Time", target_output))))
+        data_to_plot = data_to_plot[(self.time_low <= data_to_plot["Time"]) & (data_to_plot["Time"] <= self.time_high)]
+        data_to_plot = data_to_plot.sort_values(by="Time", ascending=True)
+        temp_v_time.line(
+            data_to_plot["Time"],
+            data_to_plot[target_output],
+            color="#FF0000", # TODO param
+            label=f"{target_output} per time for Node {node}"
+        )
+
+        screenshot: Union[bool, pathlib.Path] = self.result_dir / f"{target_output}_Node_{node}_{title}.png" if self.save else False
         if self.save:
             if not self.result_dir.exists():
                 self.result_dir.mkdir()
@@ -660,8 +729,9 @@ class Odb(OdbSettings):
             self,
             target_output: str,
             *,
-            title: Optional[str] = None,
-            target_nodes: Optional[DataFrameType] = None
+            title: "Optional[str]" = None,
+            target_nodes: "Optional[DataFrameType]" = None,
+            plot_type: "Optional[str]" = None
             ) -> "List[pathlib.Path]":
         """
 
@@ -672,7 +742,7 @@ class Odb(OdbSettings):
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract()",
                 " or Odb.convert() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly, or bokeh.")
 
         title = self.hdf_path.stem if (title is None or not title) else title
 
@@ -686,11 +756,10 @@ class Odb(OdbSettings):
             self.result_dir.mkdir()
 
         results: List[pathlib.Path] = list()
-        frame: DataFrameType
-        for frame in self:
-            time: float = frame["Time"].values[0]
+        time: float
+        for time in np.sort(target_nodes["Time"].unique()):
             if self.time_low <= time <= self.time_high:
-                results.append(self._plot_3d_single(time, title, target_output, target_nodes))
+                results.append(self._plot_3d_single(time, title, target_output, target_nodes, plot_type))
 
         return results
 
@@ -701,7 +770,8 @@ class Odb(OdbSettings):
         title: str,
         target_output: str,
         target_nodes: DataFrameType,
-        )-> Optional[pathlib.Path]:
+        plot_type: "Optional[str]"
+        )-> "Optional[pathlib.Path]":
         """
         """
 
@@ -710,7 +780,7 @@ class Odb(OdbSettings):
                 ' Please install pyvista via pip install odb-plotter["plot"]'
                 ' or odb-plotter["all"] rather than pip install odb-plotter'
                 " Or export the data from Odb.extract() to another tool,"
-                " such as matplotlib or bokeh.")
+                " such as matplotlib, plotly,  or bokeh.")
 
         dims_columns: set[str] = {"X", "Y", "Z"}
         combined_label: str = f"{title}-{round(time, 2):.2f}"
@@ -799,7 +869,7 @@ class Odb(OdbSettings):
 
         plotter.set_background(color=self.background_color)
 
-        negative: bool = any(self.view.startswith(n) for n in self._negative_view_prefixes)
+        negative: bool = self.view.startswith(self._negative_view_prefix)
 
         if self.view in self._sorted_views["isometric"]:
             plotter.view_isometric(negative=negative)
@@ -828,7 +898,7 @@ class Odb(OdbSettings):
         plotter.show()
 
         if self.save:
-            final_name: str = f"{combined_label}{self.save_format}"
+            final_name: str = f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"
             plotter.screenshot(self.result_dir / final_name)
             return final_name
 

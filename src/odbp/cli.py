@@ -8,10 +8,8 @@ import os
 import sys
 import cmd
 import pathlib
-#import re
 import numpy as np
-from typing import Union, List, Tuple, Dict, Optional #, Iterator
-#from itertools import chain
+from typing import Union, List, Tuple, Dict, Optional
 from .odb import Odb
 from .types import DataFrameType
 from .process_input import process_input
@@ -69,11 +67,15 @@ class OdbPlotterCLI(cmd.Cmd):
                                 line = 'EOF'
                             else:
                                 line = line.rstrip('\r\n')
+
+                    if line == "EOF":
+                        raise EOFError
+
                     line = self.precmd(line)
                     stop = self.onecmd(line)
                     stop = self.postcmd(stop, line)
                 except KeyboardInterrupt:
-                    self.stdout.write("Caught a Control-C. Returning to main command line")
+                    self.stdout.write("Caught a Control-C. Returning to main command line\n")
 
                     if os.name == "posix":
                         eof_str: str = "(or Control-D)"
@@ -165,13 +167,8 @@ class OdbPlotterCLI(cmd.Cmd):
         while True:
             try:
                 odb_path = input("Please enter the path of the odb file: ")
-                if self._confirm(f"You entered {odb_path}", "Is thsi correct?", "yes"):
+                if self._confirm(f"You entered {odb_path}", "Is this correct?", "yes"):
                     self.odb.odb_path = odb_path
-
-                    # TODO
-                    # handle time step
-                    #
-                    # NO, no more time step, but we should ensure the user is ready, possibly with a print state.
 
                 if self._confirm("You many now convert this .odb file to a .hdf5 file." "Would you like to perform this conversion now?", "yes"):
                     self._convert()
@@ -179,8 +176,13 @@ class OdbPlotterCLI(cmd.Cmd):
                 else:
                     print('You may perform this conversion later with the "convert" command')
 
-            except (FileNotFoundError, ValueError):
-                pass
+                return
+
+            except FileNotFoundError:
+                print(f"Error: {odb_path} does not exist.")
+
+            except ValueError:
+                print("Error. Invalid Input")
 
 
     def do_odb(self, arg: str) -> None:
@@ -202,7 +204,7 @@ class OdbPlotterCLI(cmd.Cmd):
 
 
     def _convert(self) -> None:
-        if not hasattr(self, "odb_path"):
+        if not hasattr(self.odb, "odb_path"):
             while True:
                 target_odb: str = input("No .odb file is selected. Please enter the target .odb file: ")
                 if self._confirm(f"You entered {target_odb}", "Is this correct", "yes"):
@@ -212,7 +214,7 @@ class OdbPlotterCLI(cmd.Cmd):
         else:
             print(f"{self.odb.odb_path} is set as current .odb file")
 
-        if not hasattr(self, "hdf_path"):
+        if not hasattr(self.odb, "hdf_path"):
             self._hdf()
 
         else:
@@ -502,7 +504,10 @@ class OdbPlotterCLI(cmd.Cmd):
 
 
     def _load(self) -> None:
-        self.odb.load_hdf()
+        try:
+            self.odb.load_hdf()
+        except Exception:
+            print("Error accessing the .hdf5 file. Make sure it exists.")
 
 
     def do_unload(self, arg: str) -> None:
@@ -1264,17 +1269,17 @@ class OdbPlotterCLI(cmd.Cmd):
 
 
     def _plot_val_v_time(self) -> None:
-        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else self.odb._frame_keys if hasattr(self.odb, '_frame_keys') and self.odb._frame_keys is not None else 'All Outputs'}")
         while True:
             chosen_output: str = input("Select output: ")
-            if not hasattr(self.odb, "target_outputs") or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
+            if (not hasattr(self.odb, "target_outputs") or self.odb.target_outputs is None) or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
                 if self._confirm(f"You entered {chosen_output}.", "Is this correct?", "yes"):
                     chosen_range: str = ""
                     while chosen_range not in ("max", "mean", "both"):
                         chosen_range: str = input("Would you like to plot 'max', 'mean', or 'both'? ").lower()
                         if chosen_range in ("max", "mean", "both"):
                             if self._confirm(f"You entered {chosen_range}.", "Is this correct?", "yes"):
-                                result: Optional[str] = self.odb.plot_key_versus_time()
+                                result: Optional[str] = self.odb.plot_key_versus_time(chosen_output, chosen_range)
                                 if isinstance(result, str):
                                     print(f"Results saved to {result}")
                                     return
@@ -1290,10 +1295,10 @@ class OdbPlotterCLI(cmd.Cmd):
     def do_plot_3d(self, arg: str) -> None:
         """3D plot of .odb data over time"""
         _ = arg
-        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else self.odb._frame_keys if hasattr(self.odb, '_frame_keys') and self.odb._frame_keys is not None else 'All Outputs'}")
         while True:
             chosen_output: str = input("Select output: ")
-            if not hasattr(self.odb, "target_outputs") or (hasattr(self.odb, "target_outputs") and chosen_output in self.odb.target_outputs):
+            if not hasattr(self.odb, "target_outputs") or self.odb.target_outputs is None  or chosen_output in self.odb.target_outputs:
                 if self._confirm(f"You entered {chosen_output}.", "Is this correct?", "yes"):
                     results: List[pathlib.Path] = self.odb.plot_3d_all_times(chosen_output, title=self.odb.title)
                     print(f"Results saved to: {results}")
@@ -1306,11 +1311,30 @@ class OdbPlotterCLI(cmd.Cmd):
     def do_plot_meltpool(self, arg: str) -> None:
         """3D Plot of thermal meltpool over time"""
         _ = arg
-        print(f"Select one of these as the thermal values: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else 'All Outputs'}")
+        print(f"Select one of these as the thermal values: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else self.odb._frame_keys if hasattr(self.odb, '_frame_keys') and self.odb._frame_keys is not None else 'All Outputs'}")
         while True:
             temp: str = input("Select the name of the temperature values: ")
             if self._confirm(f"You entered {temp}.", "Is this correct?", "yes"):
                 target_nodes: DataFrameType = self.odb.odb[self.odb.odb[temp] >= self.odb.temp_high]
-                results: List[pathlib.Path] = self.odb.plot_3d_all_times(temp, title=self.odb.title, target_nodes=target_nodes)
+                results: List[pathlib.Path] = self.odb.plot_3d_all_times(temp, title=self.odb.title, target_nodes=target_nodes, plot_type="meltpool")
                 print(f"Results saved to: {results}")
                 return
+
+
+    def do_plot_node(self, arg: str) -> None:
+        """Plot a value over time for one node"""
+        _ = arg
+        print(f"Potential values to plot: {self.odb.target_outputs if hasattr(self.odb, 'target_outputs') and self.odb.target_outputs is not None else self.odb._frame_keys if hasattr(self.odb, '_frame_keys') and self.odb._frame_keys is not None else 'All Outputs'}")
+        while True:
+            target_output: str = input("Select the name of the value to plot over time: ")
+            if self._confirm(f"You entered {target_output}.", "Is this correct?", "yes"):
+                while True:
+                    try:
+                        target_node: int = int(input("Select one node by integer index which you would like to plot: "))
+                        if self._confirm(f"You entered {target_node}.", "Is this correct?", "yes"):
+                            result: pathlib.Path = self.odb.plot_single_node(target_output, target_node)
+                            print(f"Results saved to {result}")
+                            return
+
+                    except ValueError:
+                        print("Target node must be an integer")

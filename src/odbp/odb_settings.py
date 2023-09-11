@@ -3,6 +3,8 @@
 import pathlib
 import multiprocessing
 
+import numpy as np
+
 from typing import Optional, BinaryIO, Dict, List, Any
 
 try:
@@ -40,7 +42,7 @@ class OdbSettings():
         "_coord_key",
         "_target_outputs",
         "_views", 
-        "_negative_view_prefixes", 
+        "_negative_view_prefix", 
         "_sorted_views", 
         "_view", 
         "_colormap", 
@@ -79,19 +81,19 @@ class OdbSettings():
         self._coord_key: str = "COORD"
         self._target_outputs: NullableStrList = None
 
-        self._x_low: float
-        self._x_high: float
-        self._y_low: float
-        self._y_high: float
-        self._z_low: float
-        self._z_high: float
+        self._x_low: float = -1 * np.inf
+        self._x_high: float = np.inf
+        self._y_low: float = -1 * np.inf
+        self._y_high: float = np.inf
+        self._z_low: float = -1 * np.inf
+        self._z_high: float = np.inf
 
-        self._temp_low: float
-        self._temp_high: float
+        self._temp_low: float = 0
+        self._temp_high: float = np.inf
         self._time_step: int = 1
 
-        self._time_low: float
-        self._time_high: float
+        self._time_low: float = 0
+        self._time_high: float = np.inf
 
         self._cpus = multiprocessing.cpu_count()
 
@@ -112,17 +114,16 @@ class OdbSettings():
             temp_views: Dict[str, List[str]] = tomllib.load(tf)
 
         self._sorted_views: Dict[str, List[str]] = dict()
-        self._negative_view_prefixes: List[str] = temp_views.pop("negative")
+        self._negative_view_prefix: str = temp_views.pop("negative")
         key: str
         view: str
         for key, view in temp_views.items():
             n: str
             self._sorted_views[key] = list()
-            for n in self._negative_view_prefixes:
-                self._views.append(view)
-                self._views.append(f"{n}{view}")
-                self._sorted_views[key].append(view)
-                self._sorted_views[key].append(f"{n}{view}")
+            self._views.append(view)
+            self._views.append(f"{self._negative_view_prefix}{view}")
+            self._sorted_views[key].append(view)
+            self._sorted_views[key].append(f"{self._negative_view_prefix}{view}")
 
         self._view: str = "isometric"
 

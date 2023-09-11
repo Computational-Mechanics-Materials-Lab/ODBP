@@ -30,8 +30,8 @@ from .types import NDArrayType, NPZFileType, H5PYFileType, NullableNodeType,\
 def convert_npz_to_hdf(
     hdf_path: pathlib.Path,
     npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
-    temp_low: Optional[float] = None,
-    temp_high: Optional[float] = None,
+    temp_low: "Optional[float]" = None,
+    temp_high: "Optional[float]" = None,
     time_step: int = 1,
     nodesets: NullableStrList = None,
     nodes: NullableNodeType = None,
@@ -39,7 +39,7 @@ def convert_npz_to_hdf(
     steps: NullableStrList = None,
     coord_key: str = "COORD",
     target_outputs: NullableStrList = None,
-    odb_path: Optional[str] = None
+    odb_path: "Optional[str]" = None
     ) -> None:
 
     # Format of the npz_dir:
@@ -137,9 +137,12 @@ def convert_npz_to_hdf(
                     compression="gzip"
                     )
 
-        hdf5_file[total_name].attrs["temp_low"] = temp_low
-        hdf5_file[total_name].attrs["temp_high"] = temp_high
-        hdf5_file[total_name].attrs["time_step"] = time_step
+        if temp_low is not None:
+            hdf5_file[total_name].attrs["temp_low"] = temp_low
+        if temp_high is not None:
+            hdf5_file[total_name].attrs["temp_high"] = temp_high
+        if time_step is not None:
+            hdf5_file[total_name].attrs["time_step"] = time_step
         if nodesets is not None:
             hdf5_file[total_name].attrs["nodesets"] = nodesets
         else:
@@ -162,6 +165,6 @@ def convert_npz_to_hdf(
         else:
             hdf5_file[total_name].attrs["target_outputs"] = "All Fields"
         if odb_path is not None:
-            hdf5_file[total_name].attrs["odb_path"] = odb_path
+            hdf5_file[total_name].attrs["odb_path"] = str(odb_path)
         else:
             hdf5_file[total_name].attrs["odb_path"] = "Unknown"

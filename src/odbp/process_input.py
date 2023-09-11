@@ -92,7 +92,7 @@ def process_input() -> Odb:
     # Manage the options
     # Help is handled by the library
     if args.version:
-        print(f"ODB Plotter version {__version__}")
+        print(f"ODBPlotter {__version__}")
         sys.exit(0)
     
     else:

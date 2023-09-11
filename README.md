@@ -46,6 +46,7 @@ from odbp import Odb
     * 0.6.6: Fixing conversion problems
     * 0.6.7: Implementing tools for .odbs with coords in only some steps or tools for frame steps with different sizes
 * 0.7.0: Improve user settings, parameterization, metadata. Let users select plotting colors, keep metadata of nodesets or spatial, thermal, temporal bounds within the .hdf5. Reqwrite CLI to use Python's cmd module and pyreadline/GNU readline.
+    * 0.7.1: Data Output fixes, sane defaults, fixing typos, improved plotting, including 2D and better regard to time ranges.
 * Upcoming:
     * 1.0.0: Final bug-fixing, type checking, bounds checking, etc. Hopefully coinciding with (or following) a publication.
     * 1.1.0: Improve pyvista functionality: views, gifs, non-interactive image saving, leave the viewer.
