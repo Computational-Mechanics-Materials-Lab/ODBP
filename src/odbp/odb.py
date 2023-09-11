@@ -185,7 +185,6 @@ class Odb(OdbSettings):
     def odb(self) -> None:
         del self._odb
 
-
     @property
     def frame_range(self) -> "Tuple[int, int]":
         return self._frame_range
@@ -620,7 +619,8 @@ class Odb(OdbSettings):
     def plot_key_versus_time(
         self,
         target_output: str,
-        mean_max_both: str = "both"
+        mean_max_both: str = "both",
+        title: Optional[str] = None
         ) -> "Optional[pathlib.Path]":
         # TODO What if I want to 2d-plot only 1 nodeset, but I extractor more stuff
         # or DIDN'T extract the nodeset at all. Same w/ 3D. Metadata?
@@ -634,10 +634,11 @@ class Odb(OdbSettings):
 
         if not hasattr(self, "_extracted_nodes"):
             _ = self.extract()
+        
+        target_data = self._extracted_nodes[(self.time_low <= self._extracted_nodes["Time_mean"]) & (self._extracted_nodes["Time_mean"] <= self.time_high)]
+        time_data: List[float] = list(target_data.index)
 
-        time_data: List[float] = list(self._extracted_nodes.index)
-
-        title: str = self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
+        title = title if title is not None else self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
         title += f" {target_output} versus Time"
 
         temp_v_time: pv.Chart2D = pv.Chart2D(x_label="Time (seconds)", y_label="Temperature (Kelvin)")
@@ -646,14 +647,14 @@ class Odb(OdbSettings):
         if mean_max_both.lower() in ("mean", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes[f"{target_output}_mean"].values,
+                target_data[f"{target_output}_mean"].values,
                 color="#0000FF", # TODO param
                 label=f"Mean {target_output}")
 
         if mean_max_both.lower() in ("max", "both"):
             temp_v_time.line(
                 time_data,
-                self._extracted_nodes[f"{target_output}_max"].values,
+                target_data[f"{target_output}_max"].values,
                 color="#FF0000", # TODO param
                 label=f"Max {target_output}")
 
@@ -676,7 +677,8 @@ class Odb(OdbSettings):
     def plot_single_node(
         self,
         target_output: str,
-        node: int
+        node: int,
+        title: Optional[str] = None
         ) -> "Optional[pathlib.Path]":
         if not PYVISTA_AVAILABLE:
             raise Exception("Plotting cabailities are not included."
@@ -690,16 +692,19 @@ class Odb(OdbSettings):
 
         node_vals = self.odb[self.odb["Node Label"] == node]
 
-        title: str = self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
+        title = title if title is not None else self.hdf_path.stem if hasattr(self, "hdf_path") else self.odb_path.stem
         title += f" {target_output} versus Time for Node {node}"
 
         temp_v_time: pv.Chart2D = pv.Chart2D(x_label="Time (seconds)", y_label="Temperature (Kelvin)")
         temp_v_time.title = title
 
+        data_to_plot = node_vals.drop(columns=list(set(node_vals.keys()) - set(("Time", target_output))))
+        data_to_plot = data_to_plot[(self.time_low <= data_to_plot["Time"]) & (data_to_plot["Time"] <= self.time_high)]
+        data_to_plot = data_to_plot.sort_values(by="Time", ascending=True)
         temp_v_time.line(
-            node_vals["Time"].to_numpy(),
-            node_vals[target_output].to_numpy(),
-            color="#0000FF", # TODO param
+            data_to_plot["Time"],
+            data_to_plot[target_output],
+            color="#FF0000", # TODO param
             label=f"{target_output} per time for Node {node}"
         )
 
@@ -751,9 +756,8 @@ class Odb(OdbSettings):
             self.result_dir.mkdir()
 
         results: List[pathlib.Path] = list()
-        frame: DataFrameType
-        for frame in self:
-            time: float = frame["Time"].values[0]
+        time: float
+        for time in np.sort(target_nodes["Time"].unique()):
             if self.time_low <= time <= self.time_high:
                 results.append(self._plot_3d_single(time, title, target_output, target_nodes, plot_type))
 
