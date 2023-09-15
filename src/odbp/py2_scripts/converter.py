@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-ODBPlotter convert.py
+ODBPlotter converter.py
 
 ODBPlotter
 https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
@@ -91,7 +91,9 @@ def main():
     num_cpus = int(input_dict.get("cpus"))
     time_step = int(input_dict.get("time_step", 1))
 
-    result_name = convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_parts, user_steps, coord_key, target_outputs, num_cpus, time_step)
+    data_model = int(input_dict["data_model"])
+
+    result_name = convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_parts, user_steps, coord_key, target_outputs, num_cpus, time_step, data_model)
     try:
         result_file = open(result_path, "wb")
         pickle.dump(result_name, result_file)
@@ -99,7 +101,7 @@ def main():
         result_file.close()
 
 
-def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_parts, user_steps, coord_key, target_outputs, num_cpus, time_step):
+def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_parts, user_steps, coord_key, target_outputs, num_cpus, time_step, data_model):
     """
     Based on the 4 lists given, convert the .odb data to .npz files
     odb_path: str path to the .odb file
@@ -205,13 +207,14 @@ def convert_odb_to_npz(odb_path, user_nodesets, user_nodes, user_parts, user_ste
     for nodeset in target_nodesets:
         for step_key, base_time, base_idx in base_times:
             coord_file = os.path.join(parent_dir, "node_coords.npz")
-            read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key)
-            read_step_data(odb_path, data_dir, time_dir, step_key, base_time, base_idx, max_idx, target_frames[step_key], nodeset, target_outputs, num_cpus)
+            if data_model != 2:
+                read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key)
+            read_step_data(odb_path, data_dir, time_dir, step_key, base_time, base_idx, max_idx, target_frames[step_key], nodeset, target_outputs, num_cpus, data_model, coord_key)
 
     return parent_dir
 
 
-def read_step_data(odb_path, data_dir, time_dir, step_key, base_time, base_idx, max_idx, target_frames, nodeset, target_outputs, num_cpus):
+def read_step_data(odb_path, data_dir, time_dir, step_key, base_time, base_idx, max_idx, target_frames, nodeset, target_outputs, num_cpus, data_model, coord_key):
     try:
         odb = openOdb(odb_path, readOnly=True)
 
@@ -238,7 +241,10 @@ def read_step_data(odb_path, data_dir, time_dir, step_key, base_time, base_idx, 
 
             temp_procs = list()
             for frame_list in combined_frame_list:
-                p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, frame_list, max_pad, step_key, curr_step_dir, frame_times, base_time, base_idx, nodeset, target_outputs))
+                if data_model == 2:
+                    p = multiprocessing.Process(target=read_single_frame_data, args=(odb_path, frame_list, max_pad, step_key, curr_step_dir, frame_times, base_time, base_idx, nodeset, target_outputs, coord_key))
+                else:
+                    p = multiprocessing.Process(target=read_single_frame_temp, args=(odb_path, frame_list, max_pad, step_key, curr_step_dir, frame_times, base_time, base_idx, nodeset, target_outputs))
                 p.start()
                 temp_procs.append(p)
 
@@ -299,6 +305,71 @@ def read_single_frame_temp(odb_path, frame_list, max_pad, step_key, curr_step_di
                         ),
                         np.array(node_vals)
                     )
+
+    finally:
+        odb.close()
+
+
+def read_single_frame_data(odb_path, frame_list, max_pad, step_key, curr_step_dir, frame_times, base_time, base_idx, nodeset, target_outputs, coord_key):
+
+    all_data_outputs = target_outputs[:]
+    all_data_outputs.append(coord_key)
+
+    try:
+        odb = openOdb(odb_path, readOnly=True)
+
+    except Exception as e:
+        print("Abaqus Error:")
+        print(e)
+        sys.exit(1)
+
+    try:
+        steps = odb.steps
+        assembly = odb.rootAssembly
+
+        for idx, frame in enumerate(steps[step_key].frames):
+            if frame.frameId not in frame_list:
+                continue
+                
+            frame_times.append(float(format(round(frame.frameValue + base_time, 5), ".2f")))    
+            for output in all_data_outputs:
+                field = frame.fieldOutputs[output].getSubset(region=assembly.nodeSets[nodeset])
+                node_vals = list()
+                if output == coord_key:
+                    for item in field.values:
+                        node = item.nodeLabel
+                        coord = item.data
+                        xyz = [node]
+                        for axis in coord:
+                            xyz.append(axis)
+                        node_vals.append(xyz)
+                    
+                    if len(node_vals) > 0:
+                        node_vals = np.array(node_vals)
+                        num = str(idx + base_idx).zfill(max_pad)
+                        for i, key in enumerate(["Node Label", "X", "Y", "Z"]):
+                            np.savez_compressed(
+                                os.path.join(
+                                    curr_step_dir,
+                                    "{}_{}".format(key, num)
+                                ),
+                                node_vals[:,i]
+                            )
+                else:
+                    for item in field.values:
+                        val = item.data
+                        node_vals.append(val)
+
+
+                    if len(node_vals) > 0:
+                        num = str(idx + base_idx).zfill(max_pad)
+                        np.savez_compressed(
+                            os.path.join(
+                                curr_step_dir,
+                                "{}_{}".format(output, num)
+                            ),
+                            np.array(node_vals)
+                        )
 
     finally:
         odb.close()

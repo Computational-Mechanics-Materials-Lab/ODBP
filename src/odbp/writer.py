@@ -29,6 +29,7 @@ from .types import NDArrayType, NPZFileType, H5PYFileType, NullableNodeType,\
 
 def convert_npz_to_hdf(
     hdf_path: pathlib.Path,
+    data_model: str,
     npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
     temp_low: "Optional[float]" = None,
     temp_high: "Optional[float]" = None,
@@ -51,7 +52,6 @@ def convert_npz_to_hdf(
 
     hdf_path = pathlib.Path(hdf_path)
     npz_dir = pathlib.Path(npz_dir)
-
     step_frame_times_dir: pathlib.Path = npz_dir / pathlib.Path("step_frame_times")
     step_frame_times: Dict[str, NDArrayType] = dict()
     root: pathlib.Path
@@ -72,14 +72,15 @@ def convert_npz_to_hdf(
 
             step_frame_times[key] = time_data
 
-    node_coords_path: pathlib.Path = npz_dir / pathlib.Path("node_coords.npz")
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning, append=1)
-        node_coords_file: NPZFileType
-        with np.load(node_coords_path) as node_coords_file:
-            coordinate_data: NDArrayType = node_coords_file[
-                node_coords_file.files[0]
-                ]
+    if data_model != "mechanical":
+        node_coords_path: pathlib.Path = npz_dir / pathlib.Path("node_coords.npz")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, append=1)
+            node_coords_file: NPZFileType
+            with np.load(node_coords_path) as node_coords_file:
+                coordinate_data: NDArrayType = node_coords_file[
+                    node_coords_file.files[0]
+                    ]
 
     data_dir: pathlib.Path = npz_dir / pathlib.Path("data")
 
@@ -105,6 +106,8 @@ def convert_npz_to_hdf(
                     data_file[data_file.files[0]]
                     )
 
+    #for _i in data.items():
+    #    print(len(_i.items()))
     hdf5_file: H5PYFileType
     with h5py.File(hdf_path, "w") as hdf5_file:
         total_name: str = str(hdf_path.stem)
@@ -117,26 +120,79 @@ def convert_npz_to_hdf(
                 data_type_dict: Dict[str, NDArrayType]
                 frame, data_type_dict = frame_dict
                     
-                target_len: int = len(list(data_type_dict.values())[0])
-                column_headers: List[str] = ["Time", "Node Label", "X", "Y", "Z"]
-                column_headers += list(data_type_dict.keys())
-                column_dtypes: np.dtype = np.dtype({"names": column_headers, "formats": [np.float64 for _ in column_headers]})
-                total_data: NDArrayType = np.hstack((
-                    np.vstack(
-                        np.full(
-                            (target_len),
-                            step_frame_times[step][i]
-                            )),
-                            coordinate_data,
-                            *list(data_type_dict.values())
-                        ))
-                total_rec: np.record = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
-                hdf5_file.create_dataset(
-                    f"{total_name}/{step}/{frame}",
-                    data = total_rec,
-                    compression="gzip"
-                    )
+                if data_model == "thermal":
+                    target_len: int = len(list(data_type_dict.values())[0])
+                    column_headers: List[str] = ["Time", "Node Label", "X", "Y", "Z"]
+                    column_headers += list(data_type_dict.keys())
+                    column_dtypes: np.dtype = np.dtype({"names": column_headers, "formats": [np.float64 for _ in column_headers]})
+                    total_data: NDArrayType = np.hstack((
+                        np.vstack(
+                            np.full(
+                                (target_len),
+                                step_frame_times[step][i]
+                                )),
+                                coordinate_data,
+                                *list(data_type_dict.values())
+                            ))
+                    total_rec: np.record = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
+                    hdf5_file.create_dataset(
+                        f"{total_name}/{step}/{frame}",
+                        data = total_rec,
+                        compression="gzip"
+                        )
 
+                elif data_model == "minimal":
+                    target_len: int = len(list(data_type_dict.values())[0])
+                    column_headers: List[str] = ["Time",]
+                    column_headers += list(data_type_dict.keys())
+                    column_dtypes: np.dtype = np.dtype({"names": column_headers, "formats": [np.float64 for _ in column_headers]})
+                    total_data: NDArrayType = np.hstack((
+                        np.vstack(
+                            np.full(
+                                (target_len),
+                                step_frame_times[step][i]
+                                )),
+                                *list(data_type_dict.values())
+                            ))
+                    total_rec: np.record = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
+                    hdf5_file.create_dataset(
+                        f"{total_name}/{step}/{frame}",
+                        data = total_rec,
+                        compression="gzip"
+                        )
+
+
+                elif data_model == "mechanical":
+                    target_len: int = len(list(data_type_dict.values())[0])
+                    #column_headers: List[str] = ["Time",]
+                    #column_headers += list(data_type_dict.keys())
+                    #TODO!!!!!
+                    column_headers: List[str] = ["Time", "Node Label", "X", "Y", "Z", "NT11"]
+                    column_dtypes: np.dtype = np.dtype({"names": column_headers, "formats": [np.float64 for _ in column_headers]})
+                    total_data: NDArrayType = np.hstack((
+                        np.vstack(
+                            np.full(
+                                (target_len),
+                                step_frame_times[step][i]
+                                )),
+                                *list(data_type_dict.values())
+                            ))
+                    total_rec: np.record = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
+                    hdf5_file.create_dataset(
+                        f"{total_name}/{step}/{frame}",
+                        data = total_rec,
+                        compression="gzip"
+                        )
+
+        if data_model == "minimal":
+            hdf5_file.create_dataset(
+                f"{total_name}/coordinates",
+                data=coordinate_data,
+                compression="gzip"
+            )
+
+
+        hdf5_file[total_name].attrs["data_model"] = data_model
         if temp_low is not None:
             hdf5_file[total_name].attrs["temp_low"] = temp_low
         if temp_high is not None:

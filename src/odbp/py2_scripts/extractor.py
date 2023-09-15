@@ -81,7 +81,7 @@ def main():
         if user_steps is not None:
             for step in user_steps:
                 step_data = steps[step]
-                target_frames[step] - set()
+                target_frames[step] = set()
                 for frame in step_data.frames:
                     target_frames[step].add(frame.frameId)
 

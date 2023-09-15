@@ -49,6 +49,7 @@ class Odb(OdbSettings):
         # file-defined components
         "_odb_handler",
         "_odb",
+        "_py2_scripts_path",
         "_convert_script_path",
         "_convert_pickle_path",
         "_convert_result_path",
@@ -85,19 +86,19 @@ class Odb(OdbSettings):
         self._odb_handler: Union[OdbLoader, OdbUnloader] = OdbLoader()
         self._odb: DataFrameType 
 
-        # TODO can be simpler
-        # Hardcoded paths for Python 3 - 2 communication
-        self._convert_script_path: pathlib.Path = pathlib.Path(
+        self._py2_scripts_path: pathlib.Path = pathlib.Path(
             pathlib.Path(__file__).parent,
-            "py2_scripts",
-            "converter.py"
+            "py2_scripts"
         ).absolute()
 
-        self._extract_script_path: pathlib.Path = pathlib.Path(
-            pathlib.Path(__file__).parent,
-            "py2_scripts",
-            "extractor.py"
-        ).absolute()
+        # TODO can be simpler
+        # Hardcoded paths for Python 3 - 2 communication
+        self._convert_script_path: pathlib.Path = self._py2_scripts_path / "converter.py"
+
+        self._extract_script_path: pathlib.Path = self._py2_scripts_path / "extractor.py"
+
+        self._get_odb_info_script_path: pathlib.Path = self._py2_scripts_path / "odb_info_getter.py"
+
 
         self._convert_pickle_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd().absolute(),
@@ -118,12 +119,6 @@ class Odb(OdbSettings):
             pathlib.Path.cwd().absolute(),
             "extract_results.pickle"
         )
-
-        self._get_odb_info_script_path: pathlib.Path = pathlib.Path(
-            pathlib.Path(__file__).parent,
-            "py2_scripts",
-            "odb_info_getter.py"
-        ).absolute()
 
         self._get_odb_info_result_path: pathlib.Path = pathlib.Path(
             pathlib.Path.cwd(),
@@ -300,6 +295,7 @@ class Odb(OdbSettings):
                 "steps": self.steps,
                 "coord_key": self.coord_key,
                 "target_outputs": self.target_outputs,
+                "data_model": self._data_model,
             }
 
         pickle_file: BinaryIO
@@ -337,6 +333,7 @@ class Odb(OdbSettings):
 
         convert_npz_to_hdf(
             hdf_path,
+            self.data_model,
             result_dir,
             temp_low,
             temp_high,

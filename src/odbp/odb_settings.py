@@ -35,6 +35,7 @@ class OdbSettings():
         "_result_dir", # TODO
         "_abaqus_executable", 
         "_cpus", 
+        "_data_model",
         "_nodesets", 
         "_nodes", 
         "_parts", 
@@ -95,7 +96,10 @@ class OdbSettings():
         self._time_low: float = 0
         self._time_high: float = np.inf
 
-        self._cpus = multiprocessing.cpu_count()
+        self._cpus: int = multiprocessing.cpu_count()
+
+        # We'll have to use a simple enum, because of python 2-3 conversion
+        self._data_model: int = 0
 
         self._colormap: str = "turbo"
         self._save_format: str = ".png"
@@ -515,6 +519,30 @@ class OdbSettings():
         if value <= 0:
             raise ValueError("cpus must be an integer greater than 0")
         self._cpus = value
+
+
+    @property
+    def data_model(self) -> str:
+        if self._data_model == 0:
+            return "minimal"
+        elif self._data_model == 1:
+            return "thermal"
+        elif self._data_model == 2:
+            return "mechanical"
+
+        raise ValueError
+
+
+    @data_model.setter
+    def data_model(self, value: str) -> None:
+        if value.lower() == "minimal":
+            self._data_model = 0
+        elif value.lower() == "thermal":
+            self._data_model = 1
+        elif value.lower() == "mechanical":
+            self._data_model = 2
+        else:
+            raise ValueError
 
 
     @property
