@@ -21,6 +21,7 @@ import argparse
 import pickle
 from odbAccess import openOdb
 
+
 def main():
     input_args = "input args"
     parser = argparse.ArgumentParser()
@@ -33,6 +34,7 @@ def main():
     finally:
         result_file.close()
 
+
 def get_odb_info(odb_path):
     result = dict()
     try:
@@ -44,7 +46,6 @@ def get_odb_info(odb_path):
         sys.exit(1)
 
     try:
-
         # What are our targets:
         # Frames
         # Steps --> Frames
@@ -61,7 +62,9 @@ def get_odb_info(odb_path):
         for step_key, step_data in steps.items():
             step_lens[step_key] = len(step_data.frames)
             frame_range += step_lens[step_key]
-            frame_keys_per_step[step_key] = list(step_data.frames[0].fieldOutputs.keys())
+            frame_keys_per_step[step_key] = list(
+                step_data.frames[0].fieldOutputs.keys()
+            )
 
         for v in frame_keys_per_step.values():
             for k in v:
@@ -81,14 +84,14 @@ def get_odb_info(odb_path):
                 parts_to_nodes[key].append(node.label)
                 all_nodes.append(node.label)
 
-        #Temporal
+        # Temporal
         result["frame_keys"] = frame_keys
         result["frame_keys_per_step"] = frame_keys_per_step
         result["frame_range"] = frame_range
         result["step_names"] = list(step_lens.keys())
         result["step_lens"] = step_lens
-        
-        #Spatial
+
+        # Spatial
         result["nodeset_names"] = nodesets
         result["part_names"] = list(all_parts)
 
@@ -97,7 +100,7 @@ def get_odb_info(odb_path):
         for s, f in parts_to_nodes.items():
             node_ranges_per_part[s] = (min(f), max(f))
         result["node_ranges_per_part"] = node_ranges_per_part
-    
+
     finally:
         odb.close()
 

@@ -18,9 +18,9 @@ dependencies = [
 dynamic = ["version",]
 
 [project.optional-dependencies]
-all = ['odb-plotter[plot]',]
+all = ["odb-plotter[plot]",]
 plot = [
-    'pyvista',
+    "pyvista",
 ]
 
 [project.urls]

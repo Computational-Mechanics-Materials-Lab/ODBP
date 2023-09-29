@@ -14,9 +14,7 @@ from itertools import chain
 # Python 3.6+ version
 NullableIntList = Optional[List[int]]
 NullableStrList = Optional[List[str]]
-NodeType = Union[
-    Dict[str, chain], List[chain], chain
-]
+NodeType = Union[Dict[str, chain], List[chain], chain]
 NullableNodeType = Optional[NodeType]
 
 NDArrayType = np.ndarray

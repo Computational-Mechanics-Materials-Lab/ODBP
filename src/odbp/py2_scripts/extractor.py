@@ -132,7 +132,6 @@ def main():
 
 
 def extract(odb_path, save_path, target_nodesets, target_frames, target_outputs):
-
     try:
         odb = openOdb(odb_path, readOnly=True)
 
@@ -156,21 +155,30 @@ def extract(odb_path, save_path, target_nodesets, target_frames, target_outputs)
                     frame_time = step_start_time + frame.frameValue
                     selected_output_results = frame.fieldOutputs[output]
                     for nodeset in target_nodesets:
-
                         region = assembly.nodeSets[nodeset]
                         output_subset = selected_output_results.getSubset(region=region)
-                        output_vals = np.copy(output_subset.bulkDataBlocks[0].data).astype("float64")
+                        output_vals = np.copy(
+                            output_subset.bulkDataBlocks[0].data
+                        ).astype("float64")
                         if output in ("NT11",):
                             output_vals[output_vals == 0] = np.nan
                             output_vals[output_vals == 300] = np.nan
                         output_vals = output_vals[~np.isnan(output_vals)]
 
-                        final_record[output].append({
-                            "time": frame_time,
-                            "max": np.max(output_vals) if len(output_vals) > 0 else np.nan,
-                            "mean": np.mean(output_vals) if len(output_vals) > 0 else np.nan,
-                            "min": np.min(output_vals) if len(output_vals) > 0 else np.nan,
-                        })
+                        final_record[output].append(
+                            {
+                                "time": frame_time,
+                                "max": np.max(output_vals)
+                                if len(output_vals) > 0
+                                else np.nan,
+                                "mean": np.mean(output_vals)
+                                if len(output_vals) > 0
+                                else np.nan,
+                                "min": np.min(output_vals)
+                                if len(output_vals) > 0
+                                else np.nan,
+                            }
+                        )
 
     finally:
         odb.close()
@@ -182,6 +190,6 @@ def extract(odb_path, save_path, target_nodesets, target_frames, target_outputs)
     finally:
         save_file.close()
 
- 
+
 if __name__ == "__main__":
     main()
