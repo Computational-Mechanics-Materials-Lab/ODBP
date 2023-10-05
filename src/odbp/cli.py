@@ -1026,6 +1026,20 @@ class OdbPlotterCLI(cmd.Cmd):
                     self.odb.view = view
                     return
 
+    def do_axis(self, arg: str) -> None:
+        """Show or hide the 3D axes (same as axes)"""
+        _ = arg
+        self._axes()
+
+    def do_axes(self, arg: str) -> None:
+        """Show or hide the 3D axes (same as axis)"""
+        _ = arg
+        self._axes()
+
+    def _axes(self) -> None:
+        self.odb.show_axes = not self.odb.show_axes
+        print(f"Show axes toggled to {self.odb.show_axes}")
+
     # print state setting settings status
     def do_print(self, arg: str) -> None:
         """Output current state (same as state, setting, settings, status)"""

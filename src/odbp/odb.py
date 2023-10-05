@@ -821,43 +821,44 @@ class Odb(OdbSettings):
         #    fmt="%.2f",
         #)
 
-        # TODO Dynamically update these
-        x_low, x_high, y_low, y_high, z_low, z_high = mesh.bounds
+        if self.show_axes:
+            # TODO Dynamically update these
+            x_low, x_high, y_low, y_high, z_low, z_high = mesh.bounds
 
-        #x_pad = (x_high - x_low) / 10.0
-        #y_pad = (y_high - y_low) / 10.0
-        #z_pad = (z_high - z_low) / 10.0
-        x_pad = y_pad = z_pad = 1.5
+            #x_pad = (x_high - x_low) / 10.0
+            #y_pad = (y_high - y_low) / 10.0
+            #z_pad = (z_high - z_low) / 10.0
+            x_pad = y_pad = z_pad = 1.5
 
-        ruler_x = plotter.add_ruler(
-            pointa=(x_low, y_high + y_pad, z_low - z_pad),
-            pointb=(x_high, y_high + y_pad, z_low - z_pad),
-            label_format="%.2f",
-            font_size_factor=0.4,
-            label_color=self.axis_text_color,
-            title="X Axis"
-        )
-        ruler_x.SetRange(x_low, x_high)
+            ruler_x = plotter.add_ruler(
+                pointa=(x_low, y_high + y_pad, z_low - z_pad),
+                pointb=(x_high, y_high + y_pad, z_low - z_pad),
+                label_format="%.2f",
+                font_size_factor=0.4,
+                label_color=self.axis_text_color,
+                title="X Axis"
+            )
+            ruler_x.SetRange(x_low, x_high)
 
-        ruler_y = plotter.add_ruler(
-            pointa=(x_high + x_pad, y_low, z_low - z_pad),
-            pointb=(x_high + x_pad, y_high, z_low - z_pad),
-            label_format="%.2f",
-            font_size_factor=0.4,
-            label_color=self.axis_text_color,
-            title="Y Axis"
-        )
-        ruler_y.SetRange(y_low, y_high)
+            ruler_y = plotter.add_ruler(
+                pointa=(x_high + x_pad, y_low, z_low - z_pad),
+                pointb=(x_high + x_pad, y_high, z_low - z_pad),
+                label_format="%.2f",
+                font_size_factor=0.4,
+                label_color=self.axis_text_color,
+                title="Y Axis"
+            )
+            ruler_y.SetRange(y_low, y_high)
 
-        ruler_z = plotter.add_ruler(
-            pointa=(x_high + x_pad, y_low - y_pad, z_low),
-            pointb=(x_high + x_pad, y_low - y_pad, z_high),
-            label_format="%.2f",
-            font_size_factor=0.4,
-            label_color=self.axis_text_color,
-            title="Z Axis"
-        )
-        ruler_z.SetRange(z_low, z_high)
+            ruler_z = plotter.add_ruler(
+                pointa=(x_high + x_pad, y_low - y_pad, z_low),
+                pointb=(x_high + x_pad, y_low - y_pad, z_high),
+                label_format="%.2f",
+                font_size_factor=0.4,
+                label_color=self.axis_text_color,
+                title="Z Axis"
+            )
+            ruler_z.SetRange(z_low, z_high)
 
         plotter.set_background(color=self.background_color)
 
@@ -887,12 +888,18 @@ class Odb(OdbSettings):
         else:
             raise ValueError("Invalid View")
 
-        plotter.show()
+        print(plotter.camera.position)
+        if not self.save:
+            plotter.show(interactive_update=True)
+        else:
+            plotter.show(
+                before_close_callback=lambda p: p.screenshot(self.result_dir / f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"))
+        print(plotter.camera.position)
 
-        if self.save:
-            final_name: str = f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"
-            plotter.screenshot(self.result_dir / final_name)
-            return final_name
+        #if self.save:
+        #    final_name: str = f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"
+        #    plotter.screenshot(self.result_dir / final_name)
+        #    return final_name
 
         return
 

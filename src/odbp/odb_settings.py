@@ -59,6 +59,7 @@ class OdbSettings:
         "_axis_text_color",
         "_filename",
         "_title",
+        "_show_axes",
     )
 
     def __init__(self):
@@ -124,7 +125,6 @@ class OdbSettings:
         key: str
         view: str
         for key, view in temp_views.items():
-            n: str
             self._sorted_views[key] = list()
             self._views.append(view)
             self._views.append(f"{self._negative_view_prefix}{view}")
@@ -135,6 +135,8 @@ class OdbSettings:
 
         self._filename: str = ""
         self._title: str = ""
+
+        self._show_axes: bool = True
 
     @property
     def x_low(self) -> float:
@@ -688,6 +690,16 @@ class OdbSettings:
     @title.setter
     def title(self, value: str) -> None:
         self._title = value
+
+
+    @property
+    def show_axes(self) -> bool:
+        return self._show_axes
+
+
+    @show_axes.setter
+    def show_axes(self, value: bool) -> None:
+        self._show_axes = value
 
     def get_odb_settings_state(self) -> str:
         result: str = "Current state of the ODB Object:"
