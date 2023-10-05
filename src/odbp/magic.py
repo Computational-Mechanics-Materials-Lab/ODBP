@@ -13,4 +13,3 @@ def ensure_magic(file_path: pathlib.Path, magic: bytes) -> bool:
         first_line = file.readline()
 
     return first_line.startswith(magic)
-

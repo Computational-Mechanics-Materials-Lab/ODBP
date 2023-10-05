@@ -3,6 +3,7 @@ results/
 hdfs/
 odbs/
 dist/
+testbed/
 
 src/*.egg-info
 src/odbp/__pycache__/*
