@@ -825,14 +825,16 @@ class Odb(OdbSettings):
             # TODO Dynamically update these
             x_low, x_high, y_low, y_high, z_low, z_high = mesh.bounds
 
-            #x_pad = (x_high - x_low) / 10.0
-            #y_pad = (y_high - y_low) / 10.0
-            #z_pad = (z_high - z_low) / 10.0
-            x_pad = y_pad = z_pad = 1.5
+            x_pad = (x_high - x_low) / 4.0
+            y_pad = (y_high - y_low) / 4.0
+            z_pad = (z_high - z_low) / 4.0
+            pads = [x_pad, y_pad, z_pad]
+            pads.sort()
+            pad = pads[1]
 
             ruler_x = plotter.add_ruler(
-                pointa=(x_low, y_high + y_pad, z_low - z_pad),
-                pointb=(x_high, y_high + y_pad, z_low - z_pad),
+                pointa=(x_low, y_high + pad, z_low - pad),
+                pointb=(x_high, y_high + pad, z_low - pad),
                 label_format="%.2f",
                 font_size_factor=0.4,
                 label_color=self.axis_text_color,
@@ -841,8 +843,8 @@ class Odb(OdbSettings):
             ruler_x.SetRange(x_low, x_high)
 
             ruler_y = plotter.add_ruler(
-                pointa=(x_high + x_pad, y_low, z_low - z_pad),
-                pointb=(x_high + x_pad, y_high, z_low - z_pad),
+                pointa=(x_high + pad, y_low, z_low - pad),
+                pointb=(x_high + pad, y_high, z_low - pad),
                 label_format="%.2f",
                 font_size_factor=0.4,
                 label_color=self.axis_text_color,
@@ -851,8 +853,8 @@ class Odb(OdbSettings):
             ruler_y.SetRange(y_low, y_high)
 
             ruler_z = plotter.add_ruler(
-                pointa=(x_high + x_pad, y_low - y_pad, z_low),
-                pointb=(x_high + x_pad, y_low - y_pad, z_high),
+                pointa=(x_high + pad, y_low - pad, z_low),
+                pointb=(x_high + pad, y_low - pad, z_high),
                 label_format="%.2f",
                 font_size_factor=0.4,
                 label_color=self.axis_text_color,
@@ -888,13 +890,11 @@ class Odb(OdbSettings):
         else:
             raise ValueError("Invalid View")
 
-        print(plotter.camera.position)
         if not self.save:
             plotter.show(interactive_update=True)
         else:
             plotter.show(
                 before_close_callback=lambda p: p.screenshot(self.result_dir / f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"))
-        print(plotter.camera.position)
 
         #if self.save:
         #    final_name: str = f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"
