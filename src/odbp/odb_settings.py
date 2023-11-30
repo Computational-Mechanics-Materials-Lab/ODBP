@@ -110,10 +110,10 @@ class OdbSettings:
         self._font_size: int = 16
         # Any because we can't rely on pyvista.colorlike
         self._font_color: Any = "#000000"
-        self._background_color: Any = "#A0A0A0"
+        self._background_color: Any = "#FFFFFF"
         self._below_range_color: Any = "#000000"
         self._above_range_color: Any = "#F0F0F0"
-        self._axis_text_color: Any = "#FFFFFF"
+        self._axis_text_color: Any = "#000000"
 
         self._views: List[str] = list()
         tf: BinaryIO
