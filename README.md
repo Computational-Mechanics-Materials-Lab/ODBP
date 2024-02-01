@@ -8,6 +8,6 @@ ODB Plotter is being developed by [CMML](https://www.cmml.me.msstate.edu), and a
 pip install odb-plotter
 ```
 
-## See [GETTING_STARTED.md] for basic tutorial.
+## See [GETTING STARTED](./GETTING_STARTED.md) for basic tutorial.
 
 ## See [example_odbs] for the small .odb files used to benchmark ODBPlotter
