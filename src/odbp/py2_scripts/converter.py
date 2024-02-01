@@ -376,9 +376,7 @@ def read_single_frame_temp(
             if frame.frameId not in frame_list:
                 continue
 
-            #frame_times.append(
-            #    float(format(round(frame.frameValue + base_time, 5), ".2f"))
-            #)
+            num = str(idx + base_idx).zfill(max_pad)
 
             for output in target_outputs:
                 field = frame.fieldOutputs[output].getSubset(
@@ -388,10 +386,8 @@ def read_single_frame_temp(
                 for item in field.values:
                     val = item.data
                     node_vals.append(val)
-                len(node_vals)
 
                 if len(node_vals) > 0:
-                    num = str(idx + base_idx).zfill(max_pad)
                     np.savez_compressed(
                         os.path.join(curr_step_dir, "{}_{}".format(output, num)),
                         np.array(node_vals),
