@@ -14,14 +14,9 @@ dependencies = [
 "tomli_w",
 "pandas",
 "pyreadline3; platform_system == 'Windows'",
+"pyvista",
 ]
 dynamic = ["version",]
-
-[project.optional-dependencies]
-all = ["odb-plotter[plot]",]
-plot = [
-    "pyvista",
-]
 
 [project.urls]
 "Homepage" = "https://www.cmml.me.msstate.edu"
