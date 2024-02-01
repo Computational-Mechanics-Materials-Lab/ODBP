@@ -175,7 +175,7 @@ def process_input() -> Odb:
             platformdirs.user_config_dir("odbp")
         )
         if not odb_config_dir.exists():
-            odb_config_dir.mkdir()
+            odb_config_dir.mkdir(parents=True)
         config_file_path: pathlib.Path = odb_config_dir / "config.toml"
         if not config_file_path.exists():
             print(f"Generating default config file at {config_file_path}")
