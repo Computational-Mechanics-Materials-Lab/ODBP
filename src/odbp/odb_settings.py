@@ -44,9 +44,8 @@ class OdbSettings:
         "_coord_key",
         "_target_outputs",
         "_views",
-        "_negative_view_prefix",
-        "_sorted_views",
         "_view",
+        "_interactive",
         "_colormap",
         "_save",
         "_save_format",
@@ -115,23 +114,30 @@ class OdbSettings:
         self._above_range_color: Any = "#F0F0F0"
         self._axis_text_color: Any = "#000000"
 
-        self._views: List[str] = list()
+        self._views: dict = {}
         tf: BinaryIO
         with open((pathlib.Path(__file__).parent / "data") / "views.toml", "rb") as tf:
-            temp_views: Dict[str, List[str]] = tomllib.load(tf)
+            temp_views: dict[str, list[str]] = tomllib.load(tf)
 
-        self._sorted_views: Dict[str, List[str]] = dict()
-        self._negative_view_prefix: str = temp_views.pop("negative")
-        key: str
-        view: str
-        for key, view in temp_views.items():
-            self._sorted_views[key] = list()
-            self._views.append(view)
-            self._views.append(f"{self._negative_view_prefix}{view}")
-            self._sorted_views[key].append(view)
-            self._sorted_views[key].append(f"{self._negative_view_prefix}{view}")
+        reversed_views = {}
+        for v in temp_views.values():
+            new_v = v[:]
+            new_v = [tuple(n) if isinstance(n, list) else n for n in new_v]
+            new_v = tuple(new_v)
+            reversed_views[new_v] = []
+        #reversed_views: dict = {tuple(v): [] for v in temp_views.values()}
 
-        self._view: str = "isometric"
+        for k, v in temp_views.items():
+            new_v = v[:]
+            new_v = [tuple(n) if isinstance(n, list) else n for n in new_v]
+            new_v = tuple(new_v)
+            reversed_views[new_v].append(k)
+
+        self._views = {tuple(v): k for k, v in reversed_views.items()}
+
+        self._view: str = "UFR-U"
+
+        self._interactive: bool = True
 
         self._filename: str = ""
         self._title: str = ""
@@ -670,9 +676,7 @@ class OdbSettings:
 
     @view.setter
     def view(self, value: str) -> None:
-        value = value.lower()
-        if value not in self._views:
-            raise ValueError("Invalid view")
+        value = value.upper()
         self._view = value
 
     @property
@@ -701,6 +705,14 @@ class OdbSettings:
     def show_axes(self, value: bool) -> None:
         self._show_axes = value
 
+    @property
+    def interactive(self) -> bool:
+        return self._interactive
+
+    @interactive.setter
+    def interactive(self, value: bool) -> None:
+        self._interactive = value
+
     def get_odb_settings_state(self) -> str:
         result: str = "Current state of the ODB Object:"
 
@@ -719,9 +731,9 @@ class OdbSettings:
         result_dir: str = (
             str(self.result_dir) if hasattr(self, "result_dir") else "Not Set"
         )
-        result += f"\n\n\tSource Directory for .hdf5 files {hdf_source_dir}"
-        result += f"\n\tSource Directory for .odb files {odb_source_dir}"
-        result += f"\n\tDirectory for resulting images {result_dir}"
+        result += f"\n\n\tSource Directory for .hdf5 files: {hdf_source_dir}"
+        result += f"\n\tSource Directory for .odb files: {odb_source_dir}"
+        result += f"\n\tDirectory for resulting images: {result_dir}"
 
         # Ranges
         result += "\n\nRanges:\n\n\tSpatial Ranges:"
@@ -830,6 +842,7 @@ class OdbSettings:
 
         result += "\n\nPlotting Options:"
         result += f"\n\tViewing Angle: {view}"
+        result += f"\n\tInteractive Viewing?: {'Yes' if self.interactive else 'No'}"
         result += f"\n\tColormap: {colormap}"
         result += f"\n\tWill images be saved: {'Yes' if self.save else 'No'}"
         result += f"\n\tImage format as which images will be saved: {save_format}"
