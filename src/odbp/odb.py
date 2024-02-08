@@ -15,6 +15,7 @@ import shutil
 import pathlib
 import pickle
 import h5py
+import multiprocessing
 
 import numpy as np
 import pandas as pd
@@ -746,15 +747,31 @@ class Odb(OdbSettings):
         if not self.result_dir.exists():
             self.result_dir.mkdir()
 
-        results: List[pathlib.Path] = list()
-        time: float
-        for time in np.sort(target_nodes["Time"].unique()):
-            if self.time_low <= time <= self.time_high:
+        target_times = target_nodes["Time"].unique()
+        # There should be more elegant ways to do this, but np.where was misbehaving, and this works fine
+        target_times = target_times[target_times >= self.time_low]
+        target_times = target_times[target_times <= self.time_high]
+        if self.interactive:
+            results = []
+            for time in target_times:
                 results.append(
                     self._plot_3d_single(
                         time, title, target_output, target_nodes, plot_type
                     )
                 )
+
+        else:
+            with multiprocessing.Pool(processes=self.cpus) as pool:
+                results = pool.starmap(self._plot_3d_single, ((time, title, target_output, target_nodes, plot_type) for time in target_times))
+
+        #time: float
+        #for time in np.sort(target_nodes["Time"].unique()):
+        #    if self.time_low <= time <= self.time_high:
+        #        results.append(
+        #            self._plot_3d_single(
+        #                time, title, target_output, target_nodes, plot_type
+        #            )
+        #        )
 
         return results
 
@@ -767,7 +784,6 @@ class Odb(OdbSettings):
         plot_type: "Optional[str]",
     ) -> "Optional[pathlib.Path]":
         """ """
-
         if not PYVISTA_AVAILABLE:
             raise Exception(
                 "Plotting cabailities are not included."
@@ -781,8 +797,9 @@ class Odb(OdbSettings):
 
 
         plotter: pv.Plotter = pv.Plotter(
-            off_screen=False, window_size=(1920, 1080), lighting="three lights"
+            off_screen=(not self.interactive), window_size=(1920, 1080)
         )
+        plotter.add_light(pv.Light(light_type="headlight"))
 
         plotter.add_text(
             combined_label, position="upper_edge", color=self.font_color, font=self.font, font_size=self.font_size
@@ -790,12 +807,14 @@ class Odb(OdbSettings):
 
         mesh: pv.PolyData = self.get_mesh(time, target_nodes, target_output)
 
+        epsilon: float = np.finfo(float).eps
         plotter.add_mesh(
             mesh,
             scalars=target_output,
             cmap=pv.LookupTable(
                 cmap=self._colormap,
-                scalar_range=(self.temp_low, self.temp_high),
+                # Handle Epsilon
+                scalar_range=(self.temp_low + epsilon, self.temp_high - epsilon),
                 above_range_color=self.above_range_color,
                 below_range_color=self.below_range_color,
             ),
@@ -864,42 +883,24 @@ class Odb(OdbSettings):
 
         plotter.set_background(color=self.background_color)
 
-        negative: bool = self.view.startswith(self._negative_view_prefix)
+        invalid_view = True
+        for k in self._views.keys():
+            if self.view in k:
+                invalid_view = False
+                view_angle, viewup, roll = self._views[k]
+                break
 
-        if self.view in self._sorted_views["isometric"]:
-            plotter.view_isometric(negative=negative)
-
-        elif self.view in self._sorted_views["xy"]:
-            plotter.view_xy(negative=negative)
-
-        elif self.view in self._sorted_views["xz"]:
-            plotter.view_xz(negative=negative)
-
-        elif self.view in self._sorted_views["yx"]:
-            plotter.view_yx(negative=negative)
-
-        elif self.view in self._sorted_views["yz"]:
-            plotter.view_yz(negative=negative)
-
-        elif self.view in self._sorted_views["zx"]:
-            plotter.view_zx(negative=negative)
-
-        elif self.view in self._sorted_views["zy"]:
-            plotter.view_zy(negative=negative)
-
-        else:
-            raise ValueError("Invalid View")
+        if invalid_view:
+            raise RuntimeError("View Panic")
+        plotter.view_vector(view_angle, viewup=viewup)
+        plotter.camera.roll = roll
 
         if not self.save:
             plotter.show(interactive_update=True)
         else:
             plotter.show(
-                before_close_callback=lambda p: p.screenshot(self.result_dir / f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"))
-
-        #if self.save:
-        #    final_name: str = f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"
-        #    plotter.screenshot(self.result_dir / final_name)
-        #    return final_name
+                before_close_callback=lambda p: p.screenshot(self.result_dir / f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}")
+                )
 
         return
 
