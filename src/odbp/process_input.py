@@ -158,7 +158,7 @@ def process_input() -> Odb:
     parser.add_argument(
         "-V",
         "--view",
-        help="Viewing Angle to show the plot in. Defaults to 'isometric'",
+        help="Viewing Angle to show the plot in. Defaults to 'UFR-U'",
     )
 
     args: argparse.Namespace = parser.parse_args()

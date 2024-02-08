@@ -79,14 +79,14 @@ class OdbPlotterCLI(cmd.Cmd):
                     )
 
                     if os.name == "posix":
-                        eof_str: str = "(or Control-D)"
+                        eof_str: str = " (or Control-D)"
                     elif os.name == "nt":
-                        eof_str: str = "(or Control-Z+Return)"
+                        eof_str: str = " (or Control-Z+Return)"
                     else:
                         eof_str: str = ""
 
                     self.stdout.write(
-                        f'Please use the "quit", "q", or "exit" commands {eof_str} to exit ODBPlotter\n'
+                        f'Please use the "quit", "q", or "exit" commands{eof_str} to exit ODBPlotter\n'
                     )
 
                 except EOFError:
@@ -1015,16 +1015,30 @@ class OdbPlotterCLI(cmd.Cmd):
         self._view()
 
     def _view(self) -> None:
+        views = [", ".join(k) + ": " + str(v) for k, v in self.odb._views.items()]
+        print(f"Valid views are:")
+        for v in views:
+            print(v)
         while True:
-            print(f"Valid views are {self.odb._views}")
             view: str = input("Enter desired view: ")
 
-            if view not in self.odb._views:
+            view_valid = False
+            for k in self.odb._views.keys():
+                if view in k:
+                    view_valid = True
+                    if self._confirm(f"You entered {view}.", "Is this correct?", "yes"):
+                        self.odb.view = view
+                        return
+                    else:
+                        break
+ 
+            if not view_valid:
                 print("Error. Invalid View")
-            else:
-                if self._confirm(f"You Entered {view}.", "Is this correct?", "yes"):
-                    self.odb.view = view
-                    return
+
+    def do_interactive(self, arg: str) -> None:
+        """Toggle between ineractive or non-interactive plotting"""
+        self.odb.interactive = not self.odb.interactive
+        print(f"Interactive plotting toggled to {self.odb.interactive}")
 
     def do_axis(self, arg: str) -> None:
         """Show or hide the 3D axes (same as axes)"""

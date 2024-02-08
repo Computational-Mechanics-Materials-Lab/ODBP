@@ -19,7 +19,8 @@
 
     1.0.0: Minor bugfixes for release aloginside publication, in addition to rudimentary documentation and corresponding .odb files in this git repository
         1.0.1: Fixing a very tiny bug with populating the default config file with the CLI.
+        1.0.2: Implementing default plotting views and non-interactive plotting
 
     Upcoming:
         Mechanical/coordinate data in future odbp data
-        Improved pyvista functionality, such as more default views, gifs, non-interactive image saving, .stl or .vtk outputs, etc.
+        Improved pyvista functionality, such as .gif .stl or .vtk outputs, etc.

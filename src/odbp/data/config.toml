@@ -179,23 +179,7 @@ above_range_color = "#C0C0C0"
 # below_range_color = 
 
 # These are the viewing angles at which you can show the plot
-# These named values are set internally
-# Possible values can be seen in the interactive plotter
-# They're also listed here for your convenience
-# "isometric"
-# "negative isometric"
-# "xy"
-# "negative xy"
-# "xz"
-# "negative xz"
-# "yx"
-# "negative yx"
-# "yz"
-# "negative yz"
-# "zx"
-# "negative zx"
-# "zy"
-# "negative zy"
+# TODO Explain these
 
-# Default is isometric
-view = "isometric"
+# Default is "UFR-U" which is an isometric view of the Up/Front/Right Corner with the Up face on top.
+view = "UFR-U"

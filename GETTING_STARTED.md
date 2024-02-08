@@ -84,6 +84,15 @@ from odbp import Odb
 odb = Odb()
 odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
 
+# Choose whether to open the interactive PyVista plotter,
+# allowing for panning and zooming (interactive = True)
+# Or to save plots automatically (interactive = False)
+odb.interative = <boolean>
+
+# Choose a default view (especially if non-interactive)
+odb.view = "UFR-U" # The Up/Front/Right Corner with the "Up" face on top
+# All views are found in views.toml, but follow this format, view views for all Faces, Edges, and Vertices.
+
 # Plot the currently set time range:
 odb.plot_3d_all_times("<target_output>")
 # The "target output" is the name given to the output. For example, "NT11" or "Temp"
@@ -155,6 +164,12 @@ You entered the lower temperature value as 300.0 and the upper temperature value
 Is this correct? (Y/n)? y
 ```
 
+Set Plotting Criteria:
+```
+> views # view and select views
+> interactive # toggle interactive plotting
+``` 
+
 Plot 3D:
 ```
 > plot_3d
@@ -168,6 +183,11 @@ Plot 2D:
 ...
 > plot_val_v_time
 ...
+```
+
+View the current settings of the CLI Plotter
+```
+> status
 ```
 
 Full Documentation can be found at: **COMING SOON!**
