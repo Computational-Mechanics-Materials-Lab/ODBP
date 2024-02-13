@@ -10,4 +10,4 @@ pip install odb-plotter
 
 ## See [GETTING STARTED](./GETTING_STARTED.md) for basic tutorial.
 
-## See [the example odbs repository](https://data.mendeley.com/datasets/g9m574ybt8/1) for the small .odb files used to benchmark ODBPlotter
+## See [the example odbs repository](https://data.mendeley.com/datasets/g9m574ybt8/2) for the small .odb files used to benchmark ODBPlotter
