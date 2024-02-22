@@ -160,7 +160,7 @@ def convert_npz_to_h5(
                     (
                         np.vstack(np.arange(1, target_len + 1, 1)),
                         np.vstack(np.full((target_len), frame_time)),
-                        *list(data_type_dict.values()),
+                        *list(data_type_dict.values())
                     )
                 )
                 total_rec: np.rec = np.rec.fromarrays(total_data.T, dtype=column_dtypes)

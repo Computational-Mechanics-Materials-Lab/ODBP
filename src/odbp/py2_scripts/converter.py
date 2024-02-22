@@ -217,9 +217,7 @@ def convert_odb_to_npz(
         target_nodesets = sorted(list(target_nodesets))
 
         if len(target_nodesets) == 0:
-            target_nodesets = [
-                list(assembly.nodeSets.keys())[0]
-            ]  # If none is specified, grab the first
+            target_nodesets = [list(assembly.nodeSets.keys())[0]] # If none is specified, grab the first
 
         target_elementsets = set()
         if user_elements is not None:
