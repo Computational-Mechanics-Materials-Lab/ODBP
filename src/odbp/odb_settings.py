@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 
+import sys
 import pathlib
 import multiprocessing
 
 import numpy as np
 
-from typing import Optional, BinaryIO, Any
+from typing import BinaryIO, Any
 
-try:
+if sys.version_info.major >= 3 and sys.version_info.minor >= 11:
     import tomllib
-except ModuleNotFoundError:
+else:
     import tomli as tomllib
 
 from .types import NodeType
-from .magic import ensure_magic, HDF_MAGIC_NUM, ODB_MAGIC_NUM
+from .magic import ensure_magic, H5_MAGIC_NUM, ODB_MAGIC_NUM
 
 
 class OdbSettings:
@@ -24,24 +25,24 @@ class OdbSettings:
         "_y_high",
         "_z_low",
         "_z_high",
-        "_temp_low",
-        "_temp_high",
+        "_temp_low",  # TODO
+        "_temp_high",  # TODO
         "_time_low",
         "_time_high",
         "_time_step",
         "_odb_path",
         "_odb_source_dir",  # TODO
-        "_hdf_path",
-        "_hdf_source_dir",  # TODO
+        "_h5_path",
+        "_h5_source_dir",  # TODO
         "_result_dir",  # TODO
         "_abaqus_executable",
         "_cpus",
-        "_nodesets",
-        "_nodes",
-        "_parts",
-        "_steps",
-        "_coord_key",
-        "_target_outputs",
+        "_nodesets",  # TODO
+        "_nodes",  # TODO
+        "_parts",  # TODO
+        "_steps",  # TODO
+        "_coord_key",  # TODO
+        "_target_outputs",  # TODO
         "_views",
         "_view",
         "_interactive",
@@ -57,20 +58,20 @@ class OdbSettings:
         "_axis_text_color",
         "_filename",
         "_title",
-        "_show_axes",
-        "_output_mapping",
+        "_show_axes",  # TODO
+        "_output_mapping",  # TODO
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._odb_path: pathlib.Path
-        self._odb_source_dir: Optional[pathlib.Path]
+        self._odb_source_dir: pathlib.Path | None
         self._odb_source_dir = pathlib.Path.cwd().absolute() / "odbs"
 
-        self._hdf_path: pathlib.Path
-        self._hdf_source_dir: Optional[pathlib.Path]
-        self._hdf_source_dir = pathlib.Path.cwd().absolute() / "hdfs"
+        self._h5_path: pathlib.Path
+        self._h5_source_dir: pathlib.Path | None
+        self._h5_source_dir = pathlib.Path.cwd().absolute() / "h5s"
 
-        self._result_dir: Optional[pathlib.Path]
+        self._result_dir: pathlib.Path | None
         self._result_dir = pathlib.Path.cwd().absolute() / "results"
 
         self._abaqus_executable: str = "abaqus"
@@ -108,25 +109,20 @@ class OdbSettings:
         self._font_color: Any = "#000000"
         self._background_color: Any = "#FFFFFF"
         self._below_range_color: Any = "#000000"
-        self._above_range_color: Any = "#F0F0F0"
+        self._above_range_color: Any = "#A0A0A0"
         self._axis_text_color: Any = "#000000"
 
-        self._views: dict = {}
+        self._views: dict[tuple[str], tuple[int | tuple[int]]] = {}
         tf: BinaryIO
         with open((pathlib.Path(__file__).parent / "data") / "views.toml", "rb") as tf:
             temp_views: dict[str, list[str]] = tomllib.load(tf)
 
-        reversed_views = {}
-        for v in temp_views.values():
-            new_v = v[:]
-            new_v = [tuple(n) if isinstance(n, list) else n for n in new_v]
-            new_v = tuple(new_v)
-            reversed_views[new_v] = []
-
+        reversed_views: dict[tuple[int | tuple[int]], tuple[str]] = {}
         for k, v in temp_views.items():
-            new_v = v[:]
-            new_v = [tuple(n) if isinstance(n, list) else n for n in new_v]
+            new_v = [tuple(n) if isinstance(n, list) else n for n in v]
             new_v = tuple(new_v)
+            if new_v not in reversed_views.keys():
+                reversed_views[new_v] = []
             reversed_views[new_v].append(k)
 
         self._views = {tuple(v): k for k, v in reversed_views.items()}
@@ -407,7 +403,7 @@ class OdbSettings:
         self._time_step = value
 
     @property
-    def odb_source_dir(self) -> "Optional[pathlib.Path]":
+    def odb_source_dir(self) -> pathlib.Path | None:
         return self._odb_source_dir
 
     @odb_source_dir.setter
@@ -420,7 +416,7 @@ class OdbSettings:
         self._odb_source_dir = value
 
     @property
-    def odb_path(self) -> "Optional[pathlib.Path]":
+    def odb_path(self) -> pathlib.Path | None:
         return self._odb_path
 
     @odb_path.setter
@@ -452,45 +448,45 @@ class OdbSettings:
         self._odb_path = target_path
 
     @property
-    def hdf_source_dir(self) -> "Optional[pathlib.Path]":
-        return self._hdf_source_dir
+    def h5_source_dir(self) -> pathlib.Path | None:
+        return self._h5_source_dir
 
-    @hdf_source_dir.setter
-    def hdf_source_dir(self, value: pathlib.Path) -> None:
+    @h5_source_dir.setter
+    def h5_source_dir(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
         if not value.exists():
             raise FileNotFoundError(f"Directory {value} does not exist")
 
-        self._hdf_source_dir = value
+        self._h5_source_dir = value
 
     @property
-    def hdf_path(self) -> pathlib.Path:
-        return self._hdf_path
+    def h5_path(self) -> pathlib.Path:
+        return self._h5_path
 
-    @hdf_path.setter
-    def hdf_path(self, value: pathlib.Path) -> None:
+    @h5_path.setter
+    def h5_path(self, value: pathlib.Path) -> None:
         value = pathlib.Path(value)
 
         if (
             not value.is_absolute()
-            and hasattr(self, "hdf_source_dir")
-            and self.hdf_source_dir is not None
+            and hasattr(self, "h5_source_dir")
+            and self.h5_source_dir is not None
         ):
-            value = self.hdf_source_dir / value
+            value = self.h5_source_dir / value
 
         if value.exists():
             # Ensure magic numbers
-            if not ensure_magic(value, HDF_MAGIC_NUM):
+            if not ensure_magic(value, H5_MAGIC_NUM):
                 raise ValueError(
                     f"Given file {value} is not"
                     " a .hdf5 hierarchical data format file."
                 )
 
-        self._hdf_path = value
+        self._h5_path = value
 
     @property
-    def result_dir(self) -> Optional[pathlib.Path]:
+    def result_dir(self) -> pathlib.Path | None:
         return self._result_dir
 
     @result_dir.setter
@@ -533,7 +529,7 @@ class OdbSettings:
         return self._nodesets
 
     @nodesets.setter
-    def nodesets(self, value: "list[str]") -> None:
+    def nodesets(self, value: list[str]) -> None:
         self._nodesets = value
 
     @property
@@ -541,7 +537,7 @@ class OdbSettings:
         return self._parts
 
     @parts.setter
-    def parts(self, value: "list[str]") -> None:
+    def parts(self, value: list[str]) -> None:
         self._parts = value
 
     @property
@@ -549,7 +545,7 @@ class OdbSettings:
         return self._steps
 
     @steps.setter
-    def steps(self, value: "list[str]") -> None:
+    def steps(self, value: list[str]) -> None:
         self._steps = value
 
     @property
@@ -561,11 +557,11 @@ class OdbSettings:
         self._coord_key = value
 
     @property
-    def target_outputs(self) -> list[str | None]:
+    def target_outputs(self) -> list[str] | None:
         return self._target_outputs
 
     @target_outputs.setter
-    def target_outputs(self, value: "list[str]") -> None:
+    def target_outputs(self, value: list[str]) -> None:
         self._target_outputs = value
 
     @property
@@ -651,7 +647,9 @@ class OdbSettings:
     def axis_text_color(self, value: Any) -> None:
         if type(value) is str:
             if value.lower() not in ("white", "black", "#000000", "#ffffff"):
-                raise ValueError(f"Axis color must be a form of the colors white or black, not {value}")
+                raise ValueError(
+                    f"Axis color must be a form of the colors white or black, not {value}"
+                )
 
         self._axis_text_color = value
 
@@ -680,11 +678,9 @@ class OdbSettings:
     def title(self, value: str) -> None:
         self._title = value
 
-
     @property
     def show_axes(self) -> bool:
         return self._show_axes
-
 
     @show_axes.setter
     def show_axes(self, value: bool) -> None:
@@ -703,8 +699,8 @@ class OdbSettings:
         return self._output_mapping
 
     # TODO
-    #@output_mapping.setter
-    #def output_mapping()
+    # @output_mapping.setter
+    # def output_mapping()
     # Actually probably a .add() method and .remove() method (and .clear() and .reset()?)
 
     def get_odb_settings_state(self) -> str:
@@ -712,12 +708,12 @@ class OdbSettings:
 
         # Files
         result += "\n\nFiles:"
-        hdf_file: str = str(self.hdf_path) if hasattr(self, "hdf_path") else "Not Set"
+        h5_file: str = str(self.h5_path) if hasattr(self, "h5_path") else "Not Set"
         odb_file: str = str(self.odb_path) if hasattr(self, "odb_path") else "Not Set"
-        result += f"\n\n\t.hdf5 file: {hdf_file}"
+        result += f"\n\n\t.hdf5 file: {h5_file}"
         result += f"\n\t.odb file: {odb_file}"
-        hdf_source_dir: str = (
-            str(self.hdf_source_dir) if hasattr(self, "hdf_source_dir") else "Not Set"
+        h5_source_dir: str = (
+            str(self.h5_source_dir) if hasattr(self, "h5_source_dir") else "Not Set"
         )
         odb_source_dir: str = (
             str(self.odb_source_dir) if hasattr(self, "odb_source_dir") else "Not Set"
@@ -725,7 +721,7 @@ class OdbSettings:
         result_dir: str = (
             str(self.result_dir) if hasattr(self, "result_dir") else "Not Set"
         )
-        result += f"\n\n\tSource Directory for .hdf5 files: {hdf_source_dir}"
+        result += f"\n\n\tSource Directory for .hdf5 files: {h5_source_dir}"
         result += f"\n\tSource Directory for .odb files: {odb_source_dir}"
         result += f"\n\tDirectory for resulting images: {result_dir}"
 
@@ -782,11 +778,12 @@ class OdbSettings:
             if hasattr(self, "steps") and self.steps is not None
             else "Not Set"
         )
-        nodes: str = (
-            str(self.parse_chain(self.nodes))
-            if hasattr(self, "nodes") and self.nodes is not None
-            else "All Nodes"
-        )
+        nodes: str = "All Nodes"
+        # nodes: str = ( # TODO
+        #    str(self.parse_chain(self.nodes))
+        #    if hasattr(self, "nodes") and self.nodes is not None
+        #    else "All Nodes"
+        # )
         coord_key: str = (
             str(self.coord_key) if hasattr(self, "coord_key") else "Not Set"
         )

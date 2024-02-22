@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Utility methods for odb_plotter
+ODBPlotter types
 """
 
 import h5py
@@ -18,4 +18,4 @@ NPZFileType = np.lib.npyio.NpzFile
 DataFrameType = pd.DataFrame
 H5PYGroupType = h5py.Group
 H5PYFileType = h5py.File
-MultiprocessingPoolType = multiprocessing.Pool
+MultiprocessingPoolType = multiprocessing.pool.Pool

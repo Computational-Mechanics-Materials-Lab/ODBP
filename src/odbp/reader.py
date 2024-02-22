@@ -17,30 +17,30 @@ import pandas as pd
 from .types import DataFrameType, H5PYFileType, MultiprocessingPoolType
 
 
-def get_odb_data(
-    hdf_path: pathlib.Path, cpus: int
-) -> "tuple[dict[str, str], DataFrameType]":
+def get_h5_data(
+    h5_path: pathlib.Path, cpus: int
+) -> tuple[dict[str, str], DataFrameType]:
     """
-    get_node_coords(hdf_path: pathlib.Path) -> DataFrameType
+    get_node_coords(h5_path: pathlib.Path) -> DataFrameType
     return a data frame with nodes by integer index and floating point
     3-dimensional coordinates.
     """
 
     try:
-        hdf_file: H5PYFileType
-        with h5py.File(hdf_path, "r") as hdf_file:
-            dataset_name: str = list(hdf_file.keys())[0] # should only be 1 entry
-            final_result_attrs: dict[str, str] = dict(hdf_file[dataset_name].attrs)
-            steps_keys: list[str] = list(hdf_file[dataset_name].keys())
-            result_dfs: list[list[DataFrameType]] = []
-
+        hdf5_file: H5PYFileType
+        with h5py.File(h5_path, "r") as hdf5_file:
+            dataset_name: str = list(hdf5_file.keys())[0]  # should only be 1 entry
+            final_result_attrs: dict[str, str] = dict(hdf5_file[dataset_name].attrs)
+            steps_keys: list[str] = list(hdf5_file[dataset_name].keys())
+            result_dfs: list[DataFrameType] = []
 
             step_key: str
             for step_key in steps_keys:
-                frame_keys: list[str] = list(hdf_file[dataset_name][step_key].keys())
+                frame_keys: list[str] = list(hdf5_file[dataset_name][step_key].keys())
                 frame_key: str
                 args_list: list[tuple[pathlib.Path, str, str, str]] = [
-                    (hdf_path, dataset_name, step_key, frame_key) for frame_key in frame_keys
+                    (h5_path, dataset_name, step_key, frame_key)
+                    for frame_key in frame_keys
                 ]
 
                 pool: MultiprocessingPoolType
@@ -51,8 +51,7 @@ def get_odb_data(
                 result_dfs.append(pd.concat(results))
 
         final_result: DataFrameType = pd.concat(result_dfs).sort_values(
-            ["Time", "Node Label"],
-            ascending=True
+            ["Time", "Node Label"], ascending=True
         )
 
         return final_result_attrs, final_result
@@ -62,12 +61,12 @@ def get_odb_data(
 
 
 def get_frame_data(
-    hdf_path: pathlib.Path,
+    h5_path: pathlib.Path,
     dataset_name: str,
     step_name: str,
     frame_name: str,
 ) -> DataFrameType:
 
-    hdf_file: H5PYFileType
-    with h5py.File(hdf_path, "r") as hdf_file:
-        return pd.DataFrame(hdf_file[dataset_name][step_name][frame_name][:])
+    hdf5_file: H5PYFileType
+    with h5py.File(h5_path, "r") as hdf5_file:
+        return pd.DataFrame(hdf5_file[dataset_name][step_name][frame_name][:])

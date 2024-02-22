@@ -29,8 +29,8 @@ from .types import (
 )
 
 
-def convert_npz_to_hdf(
-    hdf_path: pathlib.Path,
+def convert_npz_to_h5(
+    h5_path: pathlib.Path,
     npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
     temp_low: float | None = None,
     temp_high: float | None = None,
@@ -42,7 +42,7 @@ def convert_npz_to_hdf(
     coord_key: str = "COORD",
     target_outputs: list[str] | None = None,
     output_mapping: dict | None = None,
-    odb_path: str | None = None,
+    odb_path: pathlib.Path | None = None,
 ) -> None:
     # Format of the npz_dir:
     # node_coords.npz (locations per node)
@@ -51,25 +51,25 @@ def convert_npz_to_hdf(
     # All of these must exist (error if they do not)
     # They're the only things we care about
 
-    hdf_path = pathlib.Path(hdf_path)
+    h5_path = pathlib.Path(h5_path)
     npz_dir = pathlib.Path(npz_dir)
 
     data_dir: pathlib.Path = npz_dir / pathlib.Path("data")
 
     data: dict[str, dict[int, dict[str, NDArrayType | dict[str, NDArrayType]]]] = {}
-    step: pathlib.Path
-    for step in data_dir.iterdir():
-        step_key: str = step.stem
+    step_dir: pathlib.Path
+    for step_dir in data_dir.iterdir():
+        step_key: str = step_dir.stem
         data[step_key] = {}
         file: pathlib.Path
-        for file in step.iterdir():
+        for file in step_dir.iterdir():
             data_parts: list[str] = file.stem.split("_")
             data_type: str = data_parts.pop(0)
             frame_str: str = data_parts.pop(-1)
             component_label: str | None = None
-            frame: int = int(frame_str)
-            if frame not in data[step_key]:
-                data[step_key][frame] = {}
+            frame_val: int = int(frame_str)
+            if frame_val not in data[step_key]:
+                data[step_key][frame_val] = {}
             if len(data_parts) > 0:
                 # TODO What if this length is > 1
                 if len(data_parts) != 1:
@@ -77,24 +77,23 @@ def convert_npz_to_hdf(
                 else:
                     component_label = data_parts[0]
 
+            data_file: NPZFileType
             if component_label is not None:
-                if data_type not in data[step_key][frame].keys():
-                    data[step_key][frame][data_type] = {}
+                if data_type not in data[step_key][frame_val].keys():
+                    data[step_key][frame_val][data_type] = {}
 
                 with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=UserWarning, append=1)
-                    data_file: NPZFileType
+                    warnings.filterwarnings("ignore", category=UserWarning, append=True)
                     with np.load(file) as data_file:
-                        data[step_key][frame][data_type][component_label] = np.vstack(
-                            data_file[data_file.files[0]]
+                        data[step_key][frame_val][data_type][component_label] = (
+                            np.vstack(data_file[data_file.files[0]])
                         )
 
             else:
                 with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=UserWarning, append=1)
-                    data_file: NPZFileType
+                    warnings.filterwarnings("ignore", category=UserWarning, append=True)
                     with np.load(file) as data_file:
-                        data[step_key][frame][data_type] = np.vstack(
+                        data[step_key][frame_val][data_type] = np.vstack(
                             data_file[data_file.files[0]]
                         )
 
@@ -112,7 +111,7 @@ def convert_npz_to_hdf(
                 if isinstance(output_obj, dict):
                     to_remove.append(output)
                     spec_output: str
-                    spec_output: NDArrayType
+                    spec_output_obj: NDArrayType
                     for spec_output, spec_output_obj in output_obj.items():
                         if not isinstance(spec_output_obj, np.ndarray):
                             raise RuntimeError("NOT SURE HOW TO FIX THIS YET!!!")
@@ -133,19 +132,22 @@ def convert_npz_to_hdf(
         output_mapping = {}
 
     hdf5_file: H5PYFileType
-    with h5py.File(hdf_path, "w") as hdf5_file:
-        total_name: str = hdf_path.stem
-        step: str
-        for step in data:
-            frame_dict : dict[int, dict[str, NDArrayType]]
-            for frame_dict in data[step].items():
-                frame: int
+    with h5py.File(h5_path, "w") as hdf5_file:
+        total_name: str = h5_path.stem
+        data_step: str
+        for data_step in data:
+            data_frame_dict: dict[int, dict[str, NDArrayType]]
+            for data_frame_dict in data[data_step].items():
+                data_frame: int
                 data_type_dict: dict[str, NDArrayType]
-                frame, data_type_dict = frame_dict
+                data_frame, data_type_dict = data_frame_dict
 
                 frame_time: NDArrayType = data_type_dict.pop("Time")
                 target_len: int = len(list(data_type_dict.values())[0])
-                column_headers: list[str] = ["Node Label", "Time",]
+                column_headers: list[str] = [
+                    "Node Label",
+                    "Time",
+                ]
                 column_headers += list(data_type_dict.keys())
                 column_headers = [output_mapping.get(c, c) for c in column_headers]
                 column_dtypes: np.dtype = np.dtype(
@@ -158,19 +160,18 @@ def convert_npz_to_hdf(
                     (
                         np.vstack(np.arange(1, target_len + 1, 1)),
                         np.vstack(np.full((target_len), frame_time)),
-                        *list(data_type_dict.values())
+                        *list(data_type_dict.values()),
                     )
                 )
-                total_rec: np.rec = np.rec.fromarrays(
-                    total_data.T, dtype=column_dtypes
-                )
+                total_rec: np.rec = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
                 hdf5_file.create_dataset(
-                    f"{total_name}/{step}/{frame}",
+                    f"{total_name}/{data_step}/{data_frame}",
                     data=total_rec,
                     compression="gzip",
                     compression_opts=9,
                 )
 
+        # TODO!!!
         if temp_low is not None:
             hdf5_file[total_name].attrs["temp_low"] = temp_low
         if temp_high is not None:

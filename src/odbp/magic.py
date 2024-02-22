@@ -1,9 +1,9 @@
 import pathlib
-from typing import BinaryIO
+from typing import BinaryIO, Final
 
 # Magic # Constants
-ODB_MAGIC_NUM: bytes = b"HKSRD0"
-HDF_MAGIC_NUM: bytes = b"\x89HDF\r\n"
+ODB_MAGIC_NUM: Final[bytes] = b"HKSRD0"
+H5_MAGIC_NUM: Final[bytes] = b"\x89HDF\r\n"
 
 
 def ensure_magic(file_path: pathlib.Path, magic: bytes) -> bool:

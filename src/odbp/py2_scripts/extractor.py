@@ -168,15 +168,21 @@ def extract(odb_path, save_path, target_nodesets, target_frames, target_outputs)
                         final_record[output].append(
                             {
                                 "time": frame_time,
-                                "max": np.max(output_vals)
-                                if len(output_vals) > 0
-                                else np.nan,
-                                "mean": np.mean(output_vals)
-                                if len(output_vals) > 0
-                                else np.nan,
-                                "min": np.min(output_vals)
-                                if len(output_vals) > 0
-                                else np.nan,
+                                "max": (
+                                    np.max(output_vals)
+                                    if len(output_vals) > 0
+                                    else np.nan
+                                ),
+                                "mean": (
+                                    np.mean(output_vals)
+                                    if len(output_vals) > 0
+                                    else np.nan
+                                ),
+                                "min": (
+                                    np.min(output_vals)
+                                    if len(output_vals) > 0
+                                    else np.nan
+                                ),
                             }
                         )
 

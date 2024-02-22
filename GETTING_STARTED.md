@@ -19,7 +19,7 @@ odb = Odb()
 odb.odb_path = <"path/to/example.odb">
 
 # Give the resulting .hdf5 file a path and name
-odb.hdf_path = <"path/to/example.hdf5">
+odb.h5_path = <"path/to/example.hdf5">
 
 # Assuming you have a working Abaqus installation, you can automatically convert from a .odb to a .hdf5
 odb.convert()
@@ -31,9 +31,9 @@ Opening a .hdf5 reads the data into memory and tidies the data into a useable [p
 ```py
 from odbp import Odb
 odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this like above
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this like above
 odb.load_hdf()
-odb.odb # This is now a standard pandas dataframe with the .odb data
+odb.data # This is now a standard pandas dataframe with the .odb data
 ```
 As such, the .odb data can now be used just as any other Python 3 pandas DataFrame.
 
@@ -41,7 +41,7 @@ Before loading data in, it may be necessary to define bounds, such as for not lo
 ```py
 from odbp import Odb
 odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this
 
 # Spatial constraints use the same coordinate axes as in Abaqus
 odb.x_low = -1
@@ -68,7 +68,7 @@ Thus, to show a cut view from any plane, simply update the spatial constraints, 
 ```py
 from odbp import Odb
 odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this
 
 # Plot the thermal history of a single node:
 odb.plot_single_node(<node_number_int>)
@@ -82,7 +82,7 @@ And 3D Plotting is as follows:
 ```py
 from odbp import Odb
 odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this
 
 # Choose whether to open the interactive PyVista plotter,
 # allowing for panning and zooming (interactive = True)
@@ -102,7 +102,7 @@ odb.plot_3d_all_times("<target_output>")
 
 # Ensure that the melting point is set
 odb.temp_high = 1727.0
-meltpool_only = self.odb.odb[self.odb.odb["Temp"] >= self.odb.temp_high]
+meltpool_only = self.odb.data[self.odb.data["Temp"] >= self.odb.temp_high]
 self.odb.plot_3d_all_times(
 "Temp",
 target_nodes=meltpool_only

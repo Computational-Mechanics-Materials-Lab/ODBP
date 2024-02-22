@@ -1,4 +1,5 @@
 """"""
+
 import argparse
 import pathlib
 
@@ -27,14 +28,14 @@ def process_input() -> Odb:
     """
 
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="python -m odbp", description="ODB Plotter"
+        prog="python -m odbp", description="ODBPlotter"
     )
 
     parser.add_argument(
         "-v",
         "--version",
         action="store_true",
-        help="Show the version of ODB Plotter and exit",
+        help="Show the version of ODBPlotter and exit",
     )
 
     parser.add_argument(
@@ -44,7 +45,7 @@ def process_input() -> Odb:
     )
 
     parser.add_argument(
-        "-s", "--hdf-source-dir", help="Directory from which to source .hdf5 files"
+        "-s", "--h5-source-dir", help="Directory from which to source .hdf5 files"
     )
     parser.add_argument(
         "-b", "--odb-source-dir", help="Directory from which to source .odb files"
@@ -55,7 +56,7 @@ def process_input() -> Odb:
 
     parser.add_argument("-o", "--odb_path", help="Path to the desired .odb file")
 
-    parser.add_argument("-H", "--hdf_path", help="Path to desired .hdf5 file")
+    parser.add_argument("-H", "--h5_path", help="Path to desired .hdf5 file")
 
     parser.add_argument("--x-low", help="Lower X-Axis Bound")
     parser.add_argument("--x-high", help="Upper X-Axis Bound")
@@ -214,8 +215,8 @@ def process_input() -> Odb:
 def generate_cli_settings(settings_dict: "Dict[str, Any]") -> Odb:
     odb: Odb = Odb()
 
-    if "hdf_source_dir" in settings_dict:
-        odb.hdf_source_dir = pathlib.Path(settings_dict["hdf_source_dir"])
+    if "h5_source_dir" in settings_dict:
+        odb.h5_source_dir = pathlib.Path(settings_dict["h5_source_dir"])
 
     if "odb_source_dir" in settings_dict:
         odb.odb_source_dir = pathlib.Path(settings_dict["odb_source_dir"])
@@ -229,8 +230,8 @@ def generate_cli_settings(settings_dict: "Dict[str, Any]") -> Odb:
     if "odb_path" in settings_dict:
         odb.odb_path = pathlib.Path(settings_dict["odb_path"])
 
-    if "hdf_path" in settings_dict:
-        odb.hdf_path = pathlib.Path(settings_dict["hdf_path"])
+    if "h5_path" in settings_dict:
+        odb.h5_path = pathlib.Path(settings_dict["h5_path"])
 
     if "steps" in settings_dict:
         odb.steps = settings_dict["steps"]

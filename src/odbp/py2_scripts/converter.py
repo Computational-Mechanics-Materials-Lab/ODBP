@@ -217,7 +217,9 @@ def convert_odb_to_npz(
         target_nodesets = sorted(list(target_nodesets))
 
         if len(target_nodesets) == 0:
-            target_nodesets = [list(assembly.nodeSets.keys())[0]] # If none is specified, grab the first
+            target_nodesets = [
+                list(assembly.nodeSets.keys())[0]
+            ]  # If none is specified, grab the first
 
         target_elementsets = set()
         if user_elements is not None:
@@ -244,7 +246,9 @@ def convert_odb_to_npz(
         target_elementsets = sorted(list(target_elementsets))
 
         if len(target_elementsets) == 0:
-            target_elementsets = [list(assembly.elementSets.keys())[0]] # If none is specified, grab the first
+            target_elementsets = [
+                list(assembly.elementSets.keys())[0]
+            ]  # If none is specified, grab the first
 
         all_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
         if coord_key not in all_outputs:
@@ -274,7 +278,11 @@ def convert_odb_to_npz(
             elset_coords = False
 
         if not nodeset_coords and not elset_coords:
-            print("ERROR! {} not mapped to either Nodesets or Elementsets".format(coord_key))
+            print(
+                "ERROR! {} not mapped to either Nodesets or Elementsets".format(
+                    coord_key
+                )
+            )
             sys.exit(-1)
 
     finally:
@@ -298,7 +306,7 @@ def convert_odb_to_npz(
                 )
 
     else:
-        use_nodeset = False 
+        use_nodeset = False
         for elset in target_elementsets:
             for step_key, base_time, base_idx in base_times:
                 read_step_data(
@@ -378,7 +386,6 @@ def read_step_data(
             for p in temp_procs:
                 p.join()
 
-
     finally:
         odb.close()
 
@@ -450,7 +457,9 @@ def read_single_frame_data(
 
                         for k, v in reordered_dict.items():
                             np.savez_compressed(
-                                os.path.join(curr_step_dir, "{}_{}_{}".format(output, k, num)),
+                                os.path.join(
+                                    curr_step_dir, "{}_{}_{}".format(output, k, num)
+                                ),
                                 np.array(v),
                             )
                     else:
@@ -461,7 +470,7 @@ def read_single_frame_data(
 
             np.savez_compressed(
                 os.path.join(curr_step_dir, "Time_{}".format(num)),
-                np.asarray([round(frame.frameValue + base_time, 5)])
+                np.asarray([round(frame.frameValue + base_time, 5)]),
             )
 
     finally:
