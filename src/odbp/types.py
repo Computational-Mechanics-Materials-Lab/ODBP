@@ -8,14 +8,10 @@ import h5py
 import multiprocessing
 import numpy as np
 import pandas as pd
-from typing import Union, List, Optional, Dict
 from itertools import chain
 
 # Python 3.6+ version
-NullableIntList = Optional[List[int]]
-NullableStrList = Optional[List[str]]
-NodeType = Union[Dict[str, chain], List[chain], chain]
-NullableNodeType = Optional[NodeType]
+NodeType = dict[str, chain] | list[chain] | chain
 
 NDArrayType = np.ndarray
 NPZFileType = np.lib.npyio.NpzFile

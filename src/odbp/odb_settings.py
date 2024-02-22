@@ -5,14 +5,14 @@ import multiprocessing
 
 import numpy as np
 
-from typing import Optional, BinaryIO, Dict, List, Any
+from typing import Optional, BinaryIO, Any
 
 try:
     import tomllib
 except ModuleNotFoundError:
     import tomli as tomllib
 
-from .types import NullableStrList, NullableNodeType, NodeType
+from .types import NodeType
 from .magic import ensure_magic, HDF_MAGIC_NUM, ODB_MAGIC_NUM
 
 
@@ -36,7 +36,6 @@ class OdbSettings:
         "_result_dir",  # TODO
         "_abaqus_executable",
         "_cpus",
-        #"_data_model",
         "_nodesets",
         "_nodes",
         "_parts",
@@ -59,6 +58,7 @@ class OdbSettings:
         "_filename",
         "_title",
         "_show_axes",
+        "_output_mapping",
     )
 
     def __init__(self):
@@ -75,13 +75,13 @@ class OdbSettings:
 
         self._abaqus_executable: str = "abaqus"
 
-        self._nodes: NullableNodeType = None
-        self._nodesets: NullableStrList = None
-        self._parts: NullableStrList = None
-        self._steps: NullableStrList = None
+        self._nodes: NodeType | None = None
+        self._nodesets: list[str] | None = None
+        self._parts: list[str] | None = None
+        self._steps: list[str] | None = None
 
         self._coord_key: str = "COORD"
-        self._target_outputs: NullableStrList = None
+        self._target_outputs: list[str] | None = None
 
         self._x_low: float = -1 * np.inf
         self._x_high: float = np.inf
@@ -98,9 +98,6 @@ class OdbSettings:
         self._time_high: float = np.inf
 
         self._cpus: int = multiprocessing.cpu_count()
-
-        # We'll have to use a simple enum, because of python 2-3 conversion
-        #self._data_model: int = 0
 
         self._colormap: str = "turbo"
         self._save_format: str = ".png"
@@ -125,7 +122,6 @@ class OdbSettings:
             new_v = [tuple(n) if isinstance(n, list) else n for n in new_v]
             new_v = tuple(new_v)
             reversed_views[new_v] = []
-        #reversed_views: dict = {tuple(v): [] for v in temp_views.values()}
 
         for k, v in temp_views.items():
             new_v = v[:]
@@ -143,6 +139,13 @@ class OdbSettings:
         self._title: str = ""
 
         self._show_axes: bool = True
+
+        self._output_mapping: dict[str, str] = {
+            "NT11": "Temp",
+            "COORD1": "X",
+            "COORD2": "Y",
+            "COORD3": "Z",
+        }
 
     @property
     def x_low(self) -> float:
@@ -517,26 +520,8 @@ class OdbSettings:
             raise ValueError("cpus must be an integer greater than 0")
         self._cpus = value
 
-    #@property
-    #def data_model(self) -> str:
-    #    if self._data_model == 0:
-    #        return "thermal"
-    #    elif self._data_model == 1:
-    #        return "mechanical"
-
-    #    raise ValueError
-
-    #@data_model.setter
-    #def data_model(self, value: str) -> None:
-    #    if value.lower() == "thermal":
-    #        self._data_model = 0
-    #    elif value.lower() == "mechanical":
-    #        self._data_model = 1
-    #    else:
-    #        raise ValueError
-
     @property
-    def nodes(self) -> NullableNodeType:
+    def nodes(self) -> NodeType | None:
         return self._nodes
 
     @nodes.setter
@@ -544,27 +529,27 @@ class OdbSettings:
         self._nodes = value
 
     @property
-    def nodesets(self) -> NullableStrList:
+    def nodesets(self) -> list[str] | None:
         return self._nodesets
 
     @nodesets.setter
-    def nodesets(self, value: "List[str]") -> None:
+    def nodesets(self, value: "list[str]") -> None:
         self._nodesets = value
 
     @property
-    def parts(self) -> NullableStrList:
+    def parts(self) -> list[str] | None:
         return self._parts
 
     @parts.setter
-    def parts(self, value: "List[str]") -> None:
+    def parts(self, value: "list[str]") -> None:
         self._parts = value
 
     @property
-    def steps(self) -> NullableStrList:
+    def steps(self) -> list[str] | None:
         return self._steps
 
     @steps.setter
-    def steps(self, value: "List[str]") -> None:
+    def steps(self, value: "list[str]") -> None:
         self._steps = value
 
     @property
@@ -576,11 +561,11 @@ class OdbSettings:
         self._coord_key = value
 
     @property
-    def target_outputs(self) -> NullableStrList:
+    def target_outputs(self) -> list[str | None]:
         return self._target_outputs
 
     @target_outputs.setter
-    def target_outputs(self, value: "List[str]") -> None:
+    def target_outputs(self, value: "list[str]") -> None:
         self._target_outputs = value
 
     @property
@@ -712,6 +697,15 @@ class OdbSettings:
     @interactive.setter
     def interactive(self, value: bool) -> None:
         self._interactive = value
+
+    @property
+    def output_mapping(self) -> dict[str, str]:
+        return self._output_mapping
+
+    # TODO
+    #@output_mapping.setter
+    #def output_mapping()
+    # Actually probably a .add() method and .remove() method (and .clear() and .reset()?)
 
     def get_odb_settings_state(self) -> str:
         result: str = "Current state of the ODB Object:"
