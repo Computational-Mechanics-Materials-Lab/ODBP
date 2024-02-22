@@ -65,6 +65,21 @@ def main():
     else:
         user_nodesets = None
 
+    user_elements = input_dict.get("elements")
+    if isinstance(user_elements, collections.Mapping):
+        temp_elements = dict()
+        for key, val in user_elements.items():
+            temp_elements[str(key)] = val
+        user_elements = temp_elements
+
+    unicode_elementsets = input_dict.get("elementsets")
+    if unicode_elementsets is not None:
+        user_elementsets = list()
+        for elementset in unicode_elementsets:
+            user_elementsets.append(str(elementset))
+    else:
+        user_elementsets = None
+
     unicode_parts = input_dict.get("parts")
     if unicode_parts is not None:
         user_parts = list()
@@ -82,20 +97,15 @@ def main():
         user_steps = None
 
     coord_key = str(input_dict.get("coord_key", "COORD"))
-    #target_outputs = input_dict.get("target_outputs", ["NT11"])
-    #if isinstance(target_outputs, collections.Iterable):
-    #    target_outputs = [str(key) for key in target_outputs]
-    #elif isinstance(target_outputs, str):
-    #    target_outputs = [str(target_outputs)]
-    num_cpus = int(input_dict.get("cpus"))
+    num_cpus = int(input_dict.get("cpus", multiprocessing.cpu_count()))
     time_step = int(input_dict.get("time_step", 1))
-
-    #data_model = int(input_dict["data_model"])
 
     result_name = convert_odb_to_npz(
         odb_path,
         user_nodesets,
         user_nodes,
+        user_elementsets,
+        user_elements,
         user_parts,
         user_steps,
         coord_key,
@@ -113,6 +123,8 @@ def convert_odb_to_npz(
     odb_path,
     user_nodesets,
     user_nodes,
+    user_elementsets,
+    user_elements,
     user_parts,
     user_steps,
     coord_key,
@@ -139,10 +151,6 @@ def convert_odb_to_npz(
     data_dir = os.path.join(parent_dir, "data")
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
-
-    #time_dir = os.path.join(parent_dir, "step_frame_times")
-    #if not os.path.exists(time_dir):
-    #    os.mkdir(time_dir)
 
     try:
         odb = openOdb(odb_path, readOnly=True)
@@ -200,7 +208,7 @@ def convert_odb_to_npz(
         if user_parts is not None:
             for part in assembly.instances.keys():
                 for nodeset in assembly.instances[part].nodeSets:
-                    target_nodesets.append(nodeset)
+                    target_nodesets.add(nodeset)
 
         if user_nodesets is not None:
             for nodeset in user_nodesets:
@@ -209,44 +217,102 @@ def convert_odb_to_npz(
         target_nodesets = sorted(list(target_nodesets))
 
         if len(target_nodesets) == 0:
-            target_nodesets = list(assembly.nodeSets.keys())
+            target_nodesets = [list(assembly.nodeSets.keys())[0]] # If none is specified, grab the first
+
+        target_elementsets = set()
+        if user_elements is not None:
+            if isinstance(user_elements, collections.Mapping):
+                for key, val in user_elements.items():
+                    assembly.ElementSetFromElementLabels(name=key, elementLabels=(val,))
+                    target_elementsets.add(key)
+            elif isinstance(user_elements, collections.Iterable):
+                if isinstance(user_elements[0], int):
+                    user_elements = [user_elements]
+                for i, val in enumerate(user_elements):
+                    assembly.ElementSetFromElementLabels(name=i, elementLabels=(val,))
+                    target_elementsets.add(i)
+
+        if user_parts is not None:
+            for part in assembly.instances.keys():
+                for elementset in assembly.instances[part].elementSets:
+                    target_elementsets.add(elementset)
+
+        if user_elementsets is not None:
+            for elementset in user_elementsets:
+                target_elementsets.add(elementset)
+
+        target_elementsets = sorted(list(target_elementsets))
+
+        if len(target_elementsets) == 0:
+            target_elementsets = [list(assembly.elementSets.keys())[0]] # If none is specified, grab the first
 
         all_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
-        print(all_outputs)
         if coord_key not in all_outputs:
             raise ValueError(
                 "Coordinate Key {} was no found in this .odb file".format(coord_key)
             )
-        #if target_outputs is None or len(target_outputs) == 0:
-        #    target_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
-        #    try:
-        #        target_outputs.remove(coord_key)
-        #    except ValueError:
-        #        raise ValueError(
-        #            "Coordinate Key {} was not found in this .odb file.".format(
-        #                coord_key
-        #            )
-        #        )
+
+        first_step = list(steps.values())[0]
+        first_frame = first_step.frames[0]
+
+        if len(target_nodesets) > 0:
+            first_nodeset = target_nodesets[0]
+            first_nodeset_field = first_frame.fieldOutputs[coord_key].getSubset(
+                region=assembly.nodeSets[first_nodeset]
+            )
+            nodeset_coords = len(first_nodeset_field.values) != 0
+        else:
+            nodeset_coords = False
+
+        if len(target_elementsets) > 0:
+            first_elset = target_elementsets[0]
+            first_elset_field = first_frame.fieldOutputs[coord_key].getSubset(
+                region=assembly.elementSets[first_elset]
+            )
+            elset_coords = len(first_elset_field.values) != 0
+        else:
+            elset_coords = False
+
+        if not nodeset_coords and not elset_coords:
+            print("ERROR! {} not mapped to either Nodesets or Elementsets".format(coord_key))
+            sys.exit(-1)
 
     finally:
         odb.close()
 
-    for nodeset in target_nodesets:
-        for step_key, base_time, base_idx in base_times:
-            #coord_file = os.path.join(parent_dir, "node_coords.npz")
-            #if data_model == 0:
-            #read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key)
-            read_step_data(
-                odb_path,
-                data_dir,
-                step_key,
-                base_time,
-                base_idx,
-                max_idx,
-                target_frames[step_key],
-                nodeset,
-                num_cpus,
-            )
+    if nodeset_coords:
+        use_nodeset = True
+        for nodeset in target_nodesets:
+            for step_key, base_time, base_idx in base_times:
+                read_step_data(
+                    odb_path,
+                    data_dir,
+                    step_key,
+                    base_time,
+                    base_idx,
+                    max_idx,
+                    target_frames[step_key],
+                    nodeset,
+                    num_cpus,
+                    use_nodeset,
+                )
+
+    else:
+        use_nodeset = False 
+        for elset in target_elementsets:
+            for step_key, base_time, base_idx in base_times:
+                read_step_data(
+                    odb_path,
+                    data_dir,
+                    step_key,
+                    base_time,
+                    base_idx,
+                    max_idx,
+                    target_frames[step_key],
+                    elset,
+                    num_cpus,
+                    use_nodeset,
+                )
 
     return parent_dir
 
@@ -259,8 +325,9 @@ def read_step_data(
     base_idx,
     max_idx,
     target_frames,
-    nodeset,
+    elset_or_nodeset,
     num_cpus,
+    use_nodeset,
 ):
     try:
         odb = openOdb(odb_path, readOnly=True)
@@ -301,7 +368,8 @@ def read_step_data(
                         curr_step_dir,
                         base_time,
                         base_idx,
-                        nodeset,
+                        elset_or_nodeset,
+                        use_nodeset,
                     ),
                 )
                 p.start()
@@ -323,7 +391,8 @@ def read_single_frame_data(
     curr_step_dir,
     base_time,
     base_idx,
-    nodeset,
+    elset_or_nodeset,
+    use_nodeset,
 ):
     try:
         odb = openOdb(odb_path, readOnly=True)
@@ -338,8 +407,6 @@ def read_single_frame_data(
         assembly = odb.rootAssembly
 
         for idx, frame in enumerate(steps[step_key].frames):
-            if idx < 90:
-                continue
             if frame.frameId not in frame_list:
                 continue
 
@@ -347,78 +414,59 @@ def read_single_frame_data(
 
             all_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
             for output in all_outputs:
-                field = frame.fieldOutputs[output].getSubset(
-                    region=assembly.nodeSets[nodeset]
-                )
-                print(field)
-                print(field.name)
-                print(field.type)
-                print(field.values)
-                print([f for f in field.values])
-                print
-                continue
-                node_vals = list()
-                for item in field.values:
-                    print(dir(item))
-                    val = item.data
-                    node_vals.append(val)
+                if use_nodeset:
+                    nodeset = elset_or_nodeset
+                    field = frame.fieldOutputs[output].getSubset(
+                        region=assembly.nodeSets[nodeset]
+                    )
+                else:
+                    elset = elset_or_nodeset
+                    field = frame.fieldOutputs[output].getSubset(
+                        region=assembly.elementSets[elset]
+                    )
+                node_vals = []
+                if len(field.componentLabels) > 0:
+                    for val in field.values:
+                        coord_triple = {}
+                        for item, lab in zip(val.data, field.componentLabels):
+                            coord_triple[lab] = item
 
-                #print(output, node_vals)
+                        node_vals.append(coord_triple)
+
+                else:
+                    for item in field.values:
+                        val = item.data
+                        node_vals.append(val)
 
                 if len(node_vals) > 0:
-                    np.savez_compressed(
-                        os.path.join(curr_step_dir, "{}_{}".format(output, num)),
-                        np.array(node_vals),
-                    )
+                    if type(node_vals[0]) is dict:
+                        reordered_dict = {}
+                        for k in node_vals[0].keys():
+                            reordered_dict[k] = []
 
-            raise SystemExit
+                        for node_dict in node_vals:
+                            for k, v in node_dict.items():
+                                reordered_dict[k].append(v)
+
+                        for k, v in reordered_dict.items():
+                            np.savez_compressed(
+                                os.path.join(curr_step_dir, "{}_{}_{}".format(output, k, num)),
+                                np.array(v),
+                            )
+                    else:
+                        np.savez_compressed(
+                            os.path.join(curr_step_dir, "{}_{}".format(output, num)),
+                            np.array(node_vals),
+                        )
+
             np.savez_compressed(
                 os.path.join(curr_step_dir, "Time_{}".format(num)),
                 np.asarray([round(frame.frameValue + base_time, 5)])
             )
-            #print("Time", frame.frameValue + base_time)
 
     finally:
         odb.close()
         raise SystemExit
-
-def read_nodeset_coords(odb_path, nodeset, coord_file, step_key, coord_key):
-    # Only extract coordinates from the first given nodeset/step
-    if not os.path.exists(coord_file):
-        try:
-            odb = openOdb(odb_path, readOnly=True)
-
-        except Exception as e:
-            print("Abaqus Error:")
-            print(e)
-            sys.exit(1)
-
-        try:
-            assembly = odb.rootAssembly
-            steps = odb.steps
-
-            frame = steps[step_key].frames[0]
-
-            try:
-                coords = frame.fieldOutputs[coord_key].getSubset(
-                    region=assembly.nodeSets[nodeset]
-                )
-
-                results_list = list()
-                for item in coords.values:
-                    node = item.nodeLabel
-                    coord = item.data
-                    xyz = [node]
-                    for axis in coord:
-                        xyz.append(axis)
-                    results_list.append(xyz)
-                np.savez_compressed(coord_file, np.array(results_list))
-
-            except KeyError:
-                pass
-
-        finally:
-            odb.close()
 
 
 if __name__ == "__main__":

@@ -304,7 +304,6 @@ class Odb(OdbSettings):
 
         convert_npz_to_hdf(
             hdf_path,
-            #self.data_model,
             result_dir,
             temp_low,
             temp_high,
@@ -315,6 +314,7 @@ class Odb(OdbSettings):
             self.steps,
             self.coord_key,
             self.target_outputs,
+            self.output_mapping,
             odb_path,
         )
 

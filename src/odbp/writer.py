@@ -19,33 +19,30 @@ Originally written by CMML Member CJ Nguyen
 
 import h5py
 import pathlib
-import os
 import warnings
 import numpy as np
-from typing import Dict, List, Optional
 from .types import (
+    NodeType,
     NDArrayType,
     NPZFileType,
     H5PYFileType,
-    NullableNodeType,
-    NullableStrList,
 )
 
 
 def convert_npz_to_hdf(
     hdf_path: pathlib.Path,
-    #data_model: str,
     npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
-    temp_low: "Optional[float]" = None,
-    temp_high: "Optional[float]" = None,
+    temp_low: float | None = None,
+    temp_high: float | None = None,
     time_step: int = 1,
-    nodesets: NullableStrList = None,
-    nodes: NullableNodeType = None,
-    parts: NullableStrList = None,
-    steps: NullableStrList = None,
+    nodesets: list[str] | None = None,
+    nodes: NodeType | None = None,
+    parts: list[str] | None = None,
+    steps: list[str] | None = None,
     coord_key: str = "COORD",
-    target_outputs: NullableStrList = None,
-    odb_path: "Optional[str]" = None,
+    target_outputs: list[str] | None = None,
+    output_mapping: dict | None = None,
+    odb_path: str | None = None,
 ) -> None:
     # Format of the npz_dir:
     # node_coords.npz (locations per node)
@@ -57,141 +54,123 @@ def convert_npz_to_hdf(
     hdf_path = pathlib.Path(hdf_path)
     npz_dir = pathlib.Path(npz_dir)
 
-    coordinate_data: Optional[NDArrayType] = None
-    #if data_model != "mechanical":
-    #step_frame_times_dir: pathlib.Path = npz_dir / "step_frame_times"
-    #step_frame_times: Dict[str, NDArrayType] = dict()
-    #for file in step_frame_times_dir.iterdir():
-    #    key: str = str(file.stem)
-    #    with warnings.catch_warnings():
-    #        warnings.filterwarnings("ignore", category=UserWarning, append=True)
-    #        step_frame_times_file: NPZFileType
-    #        with np.load(file) as step_frame_times_file:
-    #            time_data: NDArrayType = step_frame_times_file[
-    #                step_frame_times_file.files[0]
-    #            ]
-
-    #    step_frame_times[key] = time_data
-    node_coords_path: pathlib.Path = npz_dir / pathlib.Path("node_coords.npz")
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning, append=True)
-        node_coords_file: NPZFileType
-        with np.load(node_coords_path) as node_coords_file:
-            coordinate_data = node_coords_file[node_coords_file.files[0]]
-
     data_dir: pathlib.Path = npz_dir / pathlib.Path("data")
 
-    data: Dict[str, Dict[int, Dict[str, NDArrayType]]] = dict()
+    data: dict[str, dict[int, dict[str, NDArrayType | dict[str, NDArrayType]]]] = {}
     step: pathlib.Path
     for step in data_dir.iterdir():
-        step_key = str(step.stem)
-        data[step_key] = dict()
+        step_key: str = step.stem
+        data[step_key] = {}
         file: pathlib.Path
         for file in step.iterdir():
-            data_type: str
-            frame_str: str
-            data_type, frame_str = file.stem.split("_")
+            data_parts: list[str] = file.stem.split("_")
+            data_type: str = data_parts.pop(0)
+            frame_str: str = data_parts.pop(-1)
+            component_label: str | None = None
             frame: int = int(frame_str)
             if frame not in data[step_key]:
-                data[step_key][frame] = dict()
+                data[step_key][frame] = {}
+            if len(data_parts) > 0:
+                # TODO What if this length is > 1
+                if len(data_parts) != 1:
+                    raise RuntimeError("NOT SURE HOW TO FIX THIS YET!!!")
+                else:
+                    component_label = data_parts[0]
 
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning, append=1)
-                data_file: NPZFileType
-                with np.load(file) as data_file:
-                    data[step_key][frame][data_type] = np.vstack(
-                        data_file[data_file.files[0]]
-                    )
+            if component_label is not None:
+                if data_type not in data[step_key][frame].keys():
+                    data[step_key][frame][data_type] = {}
+
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=UserWarning, append=1)
+                    data_file: NPZFileType
+                    with np.load(file) as data_file:
+                        data[step_key][frame][data_type][component_label] = np.vstack(
+                            data_file[data_file.files[0]]
+                        )
+
+            else:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=UserWarning, append=1)
+                    data_file: NPZFileType
+                    with np.load(file) as data_file:
+                        data[step_key][frame][data_type] = np.vstack(
+                            data_file[data_file.files[0]]
+                        )
+
+    step: str
+    step_dict: dict[int, dict[str, NDArrayType | dict[str, NDArrayType]]]
+    for step, step_dict in data.items():
+        frame: int
+        frame_dict: dict[str, NDArrayType | dict[str, NDArrayType]]
+        for frame, frame_dict in step_dict.items():
+            to_remove: list[str] = []
+            to_add: list[dict[str, NDArrayType]] = []
+            output: str
+            output_obj: NDArrayType | dict[str, NDArrayType]
+            for output, output_obj in frame_dict.items():
+                if isinstance(output_obj, dict):
+                    to_remove.append(output)
+                    spec_output: str
+                    spec_output: NDArrayType
+                    for spec_output, spec_output_obj in output_obj.items():
+                        if not isinstance(spec_output_obj, np.ndarray):
+                            raise RuntimeError("NOT SURE HOW TO FIX THIS YET!!!")
+                        to_add.append({spec_output: spec_output_obj})
+
+            add_dict: dict[str, NDArrayType]
+            for add_dict in to_add:
+                k: str
+                v: NDArrayType
+                for k, v in add_dict.items():
+                    frame_dict[k] = v
+
+            remove_key: str
+            for remove_key in to_remove:
+                del frame_dict[remove_key]
+
+    if output_mapping is None:
+        output_mapping = {}
 
     hdf5_file: H5PYFileType
     with h5py.File(hdf_path, "w") as hdf5_file:
-        total_name: str = str(hdf_path.stem)
+        total_name: str = hdf_path.stem
         step: str
         for step in data:
-            i: int
-            frame_dict: Dict[int, Dict[str, NDArrayType]]
-            for i, frame_dict in enumerate(data[step].items()):
+            frame_dict : dict[int, dict[str, NDArrayType]]
+            for frame_dict in data[step].items():
                 frame: int
-                data_type_dict: Dict[str, NDArrayType]
+                data_type_dict: dict[str, NDArrayType]
                 frame, data_type_dict = frame_dict
 
-                frame_time = data_type_dict.pop("Time")
-
-                #if data_model == "thermal":
+                frame_time: NDArrayType = data_type_dict.pop("Time")
                 target_len: int = len(list(data_type_dict.values())[0])
-                column_headers: List[str] = [
-                    "Time",
-                ]
+                column_headers: list[str] = ["Node Label", "Time",]
                 column_headers += list(data_type_dict.keys())
-                # Preserve order
-                column_headers = list(dict.fromkeys(column_headers))
+                column_headers = [output_mapping.get(c, c) for c in column_headers]
                 column_dtypes: np.dtype = np.dtype(
                     {
                         "names": column_headers,
                         "formats": [np.float64 for _ in column_headers],
                     }
                 )
-
                 total_data: NDArrayType = np.hstack(
                     (
+                        np.vstack(np.arange(1, target_len + 1, 1)),
                         np.vstack(np.full((target_len), frame_time)),
-                        *list(data_type_dict.values()),
+                        *list(data_type_dict.values())
                     )
                 )
-                total_rec: np.record = np.rec.fromarrays(
+                total_rec: np.rec = np.rec.fromarrays(
                     total_data.T, dtype=column_dtypes
                 )
                 hdf5_file.create_dataset(
                     f"{total_name}/{step}/{frame}",
                     data=total_rec,
                     compression="gzip",
+                    compression_opts=9,
                 )
 
-                #elif data_model == "mechanical":
-                #    target_len: int = len(list(data_type_dict.values())[0])
-                #    column_headers: List[str] = ["Time"]
-                #    column_headers += list(data_type_dict.keys())
-                #    column_headers += ["Node Label", "X", "Y", "Z"]
-                #    # Preserve order
-                #    column_headers = list(dict.fromkeys(column_headers))
-                #    column_dtypes: np.dtype = np.dtype(
-                #        {
-                #            "names": column_headers,
-                #            "formats": [np.float64 for _ in column_headers],
-                #        }
-                #    )
-
-                #    total_data: NDArrayType = np.hstack(
-                #        (
-                #            np.vstack(np.full((target_len), step_frame_times[step][i])),
-                #            *list(data_type_dict.values()),
-                #        )
-                #    )
-                #    total_rec: np.record = np.rec.fromarrays(
-                #        total_data.T, dtype=column_dtypes
-                #    )
-                #    hdf5_file.create_dataset(
-                #        f"{total_name}/{step}/{frame}",
-                #        data=total_rec,
-                #        compression="gzip",
-                #    )
-
-        #if data_model == "thermal" and coordinate_data is not None:
-        if coordinate_data is not None:
-            coordinate_dtypes: np.dtype = np.dtype(
-                {
-                    "names": ["Node Label", "X", "Y", "Z"],
-                    "formats": [np.float64 for _ in range(coordinate_data.shape[1])],
-                }
-            )
-            coord_rec: np.record = np.rec.fromarrays(
-                coordinate_data.T, dtype=coordinate_dtypes
-            )
-            hdf5_file.create_dataset(
-                f"{total_name}/coordinates", data=coord_rec, compression="gzip"
-            )
-
-        #hdf5_file[total_name].attrs["data_model"] = data_model
         if temp_low is not None:
             hdf5_file[total_name].attrs["temp_low"] = temp_low
         if temp_high is not None:
