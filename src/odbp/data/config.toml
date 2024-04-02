@@ -123,14 +123,6 @@ time_step = 1
 # installed, and use abaqus 2019, you would set this to "abq2019"
 abaqus_executable = "abaqus"
 
-# Which value in the .odb or .hdf5 refers to coordinates
-# Defaults to "COORD"
-coord_key = "COORD"
-
-# List of outputs which should be converted
-# Not set by default, which will convert all outputs
-# target_outputs = []
-
 # Which colormap to use for the plots
 # Default "turbo"
 colormap = "turbo"

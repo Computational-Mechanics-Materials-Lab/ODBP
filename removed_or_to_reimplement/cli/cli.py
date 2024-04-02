@@ -9,9 +9,9 @@ import sys
 import cmd
 import pathlib
 import numpy as np
+import pandas as pd
 from typing import Union, List, Tuple, Dict, Optional
 from .odb import Odb
-from .types import DataFrameType
 from .process_input import process_input
 from odbp import __version__
 
@@ -1183,7 +1183,7 @@ class OdbPlotterCLI(cmd.Cmd):
                 "If you do not enter an absolute path, the file will be saved in the results directory if it is set"
             )
             if self._confirm(f"You entered{target}.", "Is this correct?", "yes"):
-                results_df: DataFrameType = self.extract()
+                results_df: pd.DataFrame = self.extract()
                 if target == "show":
                     print(results_df)
 
@@ -1347,7 +1347,7 @@ class OdbPlotterCLI(cmd.Cmd):
         while True:
             temp: str = input("Select the name of the temperature values: ")
             if self._confirm(f"You entered {temp}.", "Is this correct?", "yes"):
-                target_nodes: DataFrameType = self.odb.data[
+                target_nodes: pd.DataFrame = self.odb.data[
                     self.odb.data[temp] >= self.odb.temp_high
                 ]
                 results: List[pathlib.Path] = self.odb.plot_3d_all_times(

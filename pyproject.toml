@@ -14,7 +14,7 @@ dependencies = [
 "tomli_w",
 "pandas",
 "pyreadline3; platform_system == 'Windows'",
-"pyvista",
+"polyscope",
 ]
 dynamic = ["version",]
 
@@ -24,7 +24,7 @@ dynamic = ["version",]
 "Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [tool.setuptools]
-package-data = {odbp = ["data/views.toml", "data/config.toml", "py2_scripts/converter.py", "py2_scripts/extractor.py", "py2_scripts/odb_info_getter.py",]}
+package-data = {odbp = ["data/views.toml", "data/config.toml", "py2_scripts/converter.py", "py2_scripts/odb_info_getter.py",]}
 
 [tool.setuptools.dynamic]
 version = {attr = "odbp.__version__"}

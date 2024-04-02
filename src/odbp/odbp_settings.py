@@ -6,29 +6,169 @@ import multiprocessing
 
 import numpy as np
 
-from typing import BinaryIO, Any
+from typing import BinaryIO, Any, TypeAlias, Collection
+from collections import UserDict
 
 if sys.version_info.major >= 3 and sys.version_info.minor >= 11:
     import tomllib
 else:
     import tomli as tomllib
 
-from .types import NodeType
 from .magic import ensure_magic, H5_MAGIC_NUM, ODB_MAGIC_NUM
 
+# TODO!!!
+NodeType: TypeAlias = Any
 
-class OdbSettings:
+
+class ExtremaDict(UserDict):
+    def __init__(self, bounds: dict[str, tuple[Any, Any]]) -> None:
+        self.bounds = bounds
+        self.data: dict[str, tuple[Any | None, Any | None]] = self.bounds.copy()
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        check_key: str = key.lower()
+        target_key: str
+        old_data: list[Any]
+        if check_key in self.data.keys():
+            if not isinstance(value, Collection) or not (len(value) == 2):
+                raise KeyError(f'To set "{key}", please pass a two-element Collection for the upper- and lower-bounds (these will be sorted). Alternatively set "{key}_upper" and "{key}_lower" individually. To set the same value for both, either pass a 2 element Collection with the same value twice, or set "{key}_both"')
+            upper_val: Any
+            lower_val: Any
+            lower_val, upper_val = sorted(value)
+            self.data[check_key] = (lower_val, upper_val)
+        
+        elif check_key.endswith("_lower"):
+            target_key = check_key.remove("_lower")
+            if not target_key in self.data.keys():
+                raise KeyError(f'Could not set "{key}", {target_key} is not defined.')
+            if isinstance(value, Collection):
+                if len(value) > 1:
+                    raise KeyError(f'To set "{key}", please pass only a single value')
+                else:
+                    value = value[0]
+
+            old_data = list(self.data[target_key])
+            if value > old_data[1]:
+                self.data[target_key] = (value, self.bounds[target_key][1])
+            else:
+                self.data[target_key] = (value, old_data[1])
+            
+        elif check_key.endswith("_upper"):
+            target_key = check_key.remove("_upper")
+            if not target_key in self.data.keys():
+                raise KeyError(f'Could not set "{key}", {target_key} is not defined.')
+            if isinstance(value, Collection):
+                if len(value) > 1:
+                    raise KeyError(f'To set "{key}", please pass only a single value')
+                else:
+                    value = value[0]
+
+            old_data = list(self.data[target_key])
+            if value < old_data[0]:
+                self.data[target_key] = (self.bounds[target_key][0], value)
+            else:
+                self.data[target_key] = (old_data[0], value)
+            
+        elif check_key.endswith("_both"):
+            target_key = check_key.remove("_both")
+            if not target_key in self.data.keys():
+                raise KeyError(f'Could not set "{key}", {target_key} is not defined.')
+            if not isinstance(value, Collection):
+                if len(value) > 1:
+                    raise KeyError(f'To set "{key}", please pass only a single value')
+                else:
+                    value = value[0]
+
+            self.data[target_key] = (value, value)
+
+        else:
+            raise KeyError(f"{key} is not recognized")
+
+    def __getitem__(self, key: str) -> Any:
+        check_key: str = key.lower()
+        target_key: str
+        if check_key in self.data.keys():
+            return self.data[check_key]
+        
+        elif check_key.endswith("_lower"):
+            target_key = check_key.remove("_lower")
+            if target_key not in self.data.keys():
+                raise KeyError(f'Could not get "{key}", {target_key} is not defined.')
+            else:
+                return self.data[target_key][0]
+
+        elif check_key.endswith("_upper"):
+            target_key = check_key.remove("_upper")
+            if target_key not in self.data.keys():
+                raise KeyError(f'Could not get "{key}", {target_key} is not defined.')
+            else:
+                return self.data[target_key][1]
+
+        elif check_key.endswith("_both"):
+            target_key = check_key.remove("_both")
+            if target_key not in self.data.keys():
+                raise KeyError(f'Could not get "{key}", {target_key} is not defined')
+            else:
+                return self.data[target_key]
+
+        else:
+            raise KeyError(f'"{key}" is not recognzied')
+            
+    def __delitem__(self, key: str) -> None:
+        check_key: str = key.lower()
+        target_key: str
+        old_data: list[Any | None]
+        if check_key in self.data.keys():
+            self.data[check_key] = (self.bounds[check_key][0], self.bounds[check_key][0])
+        
+        elif check_key.endswith("_lower"):
+            target_key = check_key.remove("_lower")
+            if target_key not in self.data.keys():
+                raise KeyError(f'Could not delete "{key}", {target_key} is not defined.')
+            else:
+                old_data = list(self.data[target_key])
+                self.data[check_key] = (self.bounds[target_key][0], old_data[1])
+
+        elif check_key.endswith("_upper"):
+            target_key = check_key.remove("_upper")
+            if target_key not in self.data.keys():
+                raise KeyError(f'Could not get "{key}", {target_key} is not defined.')
+            else:
+                old_data = list(self.data[target_key])
+                self.data[check_key] = (old_data[0], self.bounds[target_key][1])
+
+        elif check_key.endswith("_both"):
+            target_key = check_key.remove("_both")
+            if target_key not in self.data.keys():
+                raise KeyError(f'Could not get "{key}", {target_key} is not defined')
+            else:
+                self.data[check_key] = (self.bounds[target_key][0], self.bounds[target_key][1])
+
+        else:
+            raise KeyError(f'"{key}" is not recognzied')
+
+    def get(self) -> NotImplemented:
+        return NotImplemented
+        
+    def pop(self) -> NotImplemented:
+        return NotImplemented
+        
+    def popitem(self) -> NotImplemented:
+        return NotImplemented
+        
+    def clear(self) -> NotImplemented:
+        return NotImplemented
+        
+    def update(self) -> NotImplemented:
+        return NotImplemented
+        
+    def setdefault(self) -> NotImplemented:
+        return NotImplemented
+        
+
+class OdbpSettings:
     __slots__ = (
-        "_x_low",
-        "_x_high",
-        "_y_low",
-        "_y_high",
-        "_z_low",
-        "_z_high",
-        "_temp_low",  # TODO
-        "_temp_high",  # TODO
-        "_time_low",
-        "_time_high",
+        "_extrema"
         "_time_step",
         "_odb_path",
         "_odb_source_dir",  # TODO
@@ -41,8 +181,6 @@ class OdbSettings:
         "_nodes",  # TODO
         "_parts",  # TODO
         "_steps",  # TODO
-        "_coord_key",  # TODO
-        "_target_outputs",  # TODO
         "_views",
         "_view",
         "_interactive",
@@ -60,6 +198,7 @@ class OdbSettings:
         "_title",
         "_show_axes",  # TODO
         "_output_mapping",  # TODO
+        "_defaults_for_outputs",
     )
 
     def __init__(self) -> None:
@@ -81,22 +220,8 @@ class OdbSettings:
         self._parts: list[str] | None = None
         self._steps: list[str] | None = None
 
-        self._coord_key: str = "COORD"
-        self._target_outputs: list[str] | None = None
-
-        self._x_low: float = -1 * np.inf
-        self._x_high: float = np.inf
-        self._y_low: float = -1 * np.inf
-        self._y_high: float = np.inf
-        self._z_low: float = -1 * np.inf
-        self._z_high: float = np.inf
-
-        self._temp_low: float = 0
-        self._temp_high: float = np.inf
-        self._time_step: int = 1
-
-        self._time_low: float = 0
-        self._time_high: float = np.inf
+        # Don't instantiate until the .hdf5 is loaded
+        self._extrema: ExtremaDict
 
         self._cpus: int = multiprocessing.cpu_count()
 
@@ -112,20 +237,24 @@ class OdbSettings:
         self._above_range_color: Any = "#A0A0A0"
         self._axis_text_color: Any = "#000000"
 
-        self._views: dict[tuple[str], tuple[int | tuple[int]]] = {}
         tf: BinaryIO
         with open((pathlib.Path(__file__).parent / "data") / "views.toml", "rb") as tf:
-            temp_views: dict[str, list[str]] = tomllib.load(tf)
+            temp_views: dict[str, list[list[int] | int]] = tomllib.load(tf)
 
-        reversed_views: dict[tuple[int | tuple[int]], tuple[str]] = {}
+        reversed_views: dict[tuple[int | tuple[int, int, int], ...], list[str]] = {}
+        k: str
+        v: list[list[int] | int]
         for k, v in temp_views.items():
-            new_v = [tuple(n) if isinstance(n, list) else n for n in v]
-            new_v = tuple(new_v)
+            new_v: tuple[tuple[int, int, int] | int, ...] = tuple(
+                [tuple(n) if isinstance(n, list) else n for n in v]
+            )
             if new_v not in reversed_views.keys():
                 reversed_views[new_v] = []
             reversed_views[new_v].append(k)
 
-        self._views = {tuple(v): k for k, v in reversed_views.items()}
+        self._views: dict[tuple[str, ...], tuple[int | tuple[int, int, int], ...]] = {
+            tuple(v): k for k, v in reversed_views.items()
+        }
 
         self._view: str = "UFR-U"
 
@@ -142,6 +271,8 @@ class OdbSettings:
             "COORD2": "Y",
             "COORD3": "Z",
         }
+
+        self._defaults_for_outputs: dict[str, Any] = {}
 
     @property
     def x_low(self) -> float:
@@ -549,22 +680,6 @@ class OdbSettings:
         self._steps = value
 
     @property
-    def coord_key(self) -> str:
-        return self._coord_key
-
-    @coord_key.setter
-    def coord_key(self, value: str) -> None:
-        self._coord_key = value
-
-    @property
-    def target_outputs(self) -> list[str] | None:
-        return self._target_outputs
-
-    @target_outputs.setter
-    def target_outputs(self, value: list[str]) -> None:
-        self._target_outputs = value
-
-    @property
     def colormap(self) -> str:
         return self._colormap
 
@@ -698,10 +813,58 @@ class OdbSettings:
     def output_mapping(self) -> dict[str, str]:
         return self._output_mapping
 
-    # TODO
-    # @output_mapping.setter
-    # def output_mapping()
-    # Actually probably a .add() method and .remove() method (and .clear() and .reset()?)
+    def output_mapping_add(
+        self, key: str | dict[str, str], val: str | None = None
+    ) -> None:
+        if isinstance(key, dict):
+            if val is not None:
+                raise ValueError()
+            k: str
+            v: str
+            for k, v in key:
+                self._output_mapping[k] = v
+
+        else:
+            if val is None:
+                raise ValueError()
+
+            self._output_mapping[key] = val
+
+    def output_mapping_remove(self, key: str) -> None:
+        del self._output_mapping[key]
+
+    # self._defaults_for_outputs: dict[str, Any] = {}
+    @property
+    def defaults_for_outputs(self) -> dict[str, Any]:
+        return self._defaults_for_outputs
+
+    @property
+    def extrema(self) -> dict[str, tuple[Any, Any]]:
+        return self._extrema
+
+    @property
+    def bounds(self) -> dict[str, tuple[Any, Any]]:
+        return self._extrema.bounds
+
+    def defaults_for_outputs_add(
+        self, key: str | dict[str, Any], val: Any | None = None
+    ) -> None:
+        if isinstance(key, dict):
+            if val is not None:
+                raise ValueError()
+            k: str
+            v: Any
+            for k, v in key:
+                self._defaults_for_outputs[k] = v
+
+        else:
+            if val is None:
+                raise ValueError()
+
+            self._defaults_for_outputs[key] = val
+
+    def defaults_for_outputs_remove(self, key: str) -> None:
+        del self._defaults_for_outputs[key]
 
     def get_odb_settings_state(self) -> str:
         result: str = "Current state of the ODB Object:"
@@ -784,14 +947,6 @@ class OdbSettings:
         #    if hasattr(self, "nodes") and self.nodes is not None
         #    else "All Nodes"
         # )
-        coord_key: str = (
-            str(self.coord_key) if hasattr(self, "coord_key") else "Not Set"
-        )
-        target_outputs: str = (
-            str(self.target_outputs)
-            if hasattr(self, "target_outputs") and self.target_outputs is not None
-            else "All Outputs"
-        )
         result += f"\n\tSelected Nodesets: {nodesets}"
         result += f"\n\tSelected Parts: {parts}"
         result += f"\n\tSelected Steps: {steps}"
@@ -800,8 +955,6 @@ class OdbSettings:
             str(self.time_step) if hasattr(self, "time_step") else "Not Set"
         )
         result += f"\n\tSample every nth frame where n is: {time_step}"
-        result += f"\n\n\tCoordinate Key: {coord_key}"
-        result += f"\n\tTemperature Key: {target_outputs}"
 
         view: str = str(self.view) if hasattr(self, "view") else "Not Set"
         colormap: str = str(self.colormap) if hasattr(self, "colormap") else "Not Set"
