@@ -16,12 +16,14 @@ import pathlib
 import pickle
 import h5py
 import multiprocessing
+import itertools
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import polyscope as ps
 
+from scipy.spatial import ConvexHull
 from typing import Any, Iterator, BinaryIO, Self
 from io import BufferedReader
 
@@ -170,8 +172,8 @@ class Odbp(OdbpSettings):
         iter_min: Any
         iter_max: Any
         iter_min, iter_max = self.extrema[self._iterator_key]
-        data_for_iteration = data_for_iteration[data_for_iteration > iter_min]
-        data_for_iteration = data_for_iteration[data_for_iteration < iter_max]
+        data_for_iteration = data_for_iteration[data_for_iteration >= iter_min]
+        data_for_iteration = data_for_iteration[data_for_iteration <= iter_max]
         try:
             if self._iterator_ind >= len(data_for_iteration):
                 self._iterator_ind = 0
@@ -188,6 +190,11 @@ class Odbp(OdbpSettings):
                 part_to_element_set=self.data.part_to_element_set,
                 part_to_node_set=self.data.part_to_node_set
             )
+            # go ahead and get the "current time" whether or not we're iterating over time
+            return_data.node_data = return_data.node_data[return_data.node_data[self._iterator_key] == data_for_iteration[ind]]
+            return_data.element_data = return_data.element_data[return_data.element_data[self._iterator_key] == data_for_iteration[ind]]
+            nodes_to_remove: list[int] = []
+            elems_to_remove: list[int] = []
             key: str
             key_min: Any
             key_max: Any
@@ -195,16 +202,37 @@ class Odbp(OdbpSettings):
                 if key == self._iterator_key:
                     continue
 
+                nodes_to_remove_by_node: list[int] = []
                 if key in return_data.node_data:
-                    return_data.node_data = return_data.node_data[return_data.node_data[key] > key_min]
-                    return_data.node_data = return_data.node_data[return_data.node_data[key] < key_max]
+                    nodes_to_remove_by_node.extend(return_data.node_data[return_data.node_data[key] < key_min][["Node Label"]].astype(int).to_numpy() - 1)
+                    nodes_to_remove_by_node.extend(return_data.node_data[return_data.node_data[key] > key_max][["Node Label"]].astype(int).to_numpy() - 1)
+                nodes_to_remove.extend(nodes_to_remove_by_node)
 
+                elems_to_remove_by_elem: list[int] = []
                 if key in return_data.element_data:
-                    return_data.element_data = return_data.element_data[return_data.element_data[key] > key_min]
-                    return_data.element_data = return_data.element_data[return_data.element_data[key] < key_max]
+                    elems_to_remove_by_elem.extend(return_data.element_data[return_data.element_data[key] < key_min][["Element Label"]].astype(int).to_numpy() - 1)
+                    elems_to_remove_by_elem.extend(return_data.element_data[return_data.element_data[key] > key_max][["Element Label"]].astype(int).to_numpy() - 1)
+                elems_to_remove.extend(elems_to_remove_by_elem)
+                    
+            final_nodes_to_remove: npt.NDArray = np.unique(np.array(nodes_to_remove, dtype=np.int64))
+            final_elems_to_remove: npt.NDArray = np.unique(np.array(elems_to_remove, dtype=np.int64))
 
-            return_data.node_data = return_data.node_data[return_data.node_data[self._iterator_key] == data_for_iteration[ind]]
-            return_data.element_data = return_data.element_data[return_data.element_data[self._iterator_key] == data_for_iteration[ind]]
+            node_indices: npt.NDArray = np.copy(return_data.node_data[["Node Label"]].astype(int).to_numpy() - 1)
+            updated_node_indices: npt.NDArray = np.delete(node_indices, final_nodes_to_remove, axis=0)
+
+            elem_indices: npt.NDArray = np.copy(return_data.element_data[["Element Label"]].astype(int).to_numpy() - 1)
+            updated_elem_indices: npt.NDArray = np.delete(elem_indices, final_elems_to_remove, axis=0)
+
+            updated_elem_connectivity: npt.NDArray = return_data.element_connectivity[updated_elem_indices].reshape(-1, 8)
+            elems_with_remaining_nodes_indices: npt.NDArray = np.isin(updated_elem_connectivity - 1, updated_node_indices).all(axis=1)
+            updated_elem_indices = updated_elem_indices[elems_with_remaining_nodes_indices]
+            updated_elem_connectivity = return_data.element_connectivity[updated_elem_indices].reshape(-1, 8)
+            return_data.element_connectivity = updated_elem_connectivity
+
+            if not node_indices.shape == updated_node_indices.shape:
+                remaining_nodes_not_in_elems: pd.DataFrame = return_data.node_data.iloc[np.setdiff1d(updated_node_indices, np.unique(updated_elem_connectivity))]
+                return_data.remaining_nodes_not_in_elements = remaining_nodes_not_in_elems
+
             return return_data
 
         except AttributeError:
@@ -311,7 +339,6 @@ class Odbp(OdbpSettings):
             "cpus": self.cpus,
             "nodes": self.nodes,
             "nodesets": self.nodesets,
-            "time_step": self.time_step,
             "parts": self.parts,
             "steps": self.steps,
             "defaults_for_outputs": self.defaults_for_outputs,
@@ -356,7 +383,6 @@ class Odbp(OdbpSettings):
             result_dir,
             temp_low,
             temp_high,
-            self.time_step,
             self.nodesets,
             self.nodes,
             self.parts,
@@ -533,12 +559,16 @@ class Odbp(OdbpSettings):
         ps.set_front_dir("y_front")
         frame: OdbpData
         for frame in self:
-            nodes: npt.NDArray = frame.node_data[["X", "Y", "Z"]].to_numpy() 
-            target_connectivity: npt.NDArray = frame.element_connectivity - 1
-            status_elems: npt.NDArray = frame.element_data["STATUS"] == 1
-            target_connectivity = target_connectivity[status_elems.to_numpy()]
-            mesh: ps.VolumeMesh = ps.register_volume_mesh(f"mesh", nodes, mixed_cells=target_connectivity, enabled=True, edge_color=(0, 0, 0), edge_width=1)
-            mesh.add_scalar_quantity("temp", frame.node_data["Temp"].to_numpy(), defined_on="vertices", vminmax=(300.0, 1727.0), cmap="turbo", enabled=True)
+            if len(frame.element_connectivity) > 0:
+                nodes: npt.NDArray = frame.node_data[["X", "Y", "Z"]].to_numpy() 
+                mesh: ps.VolumeMesh = ps.register_volume_mesh("mesh", nodes, mixed_cells=(frame.element_connectivity - 1), enabled=True, edge_color=(0, 0, 0), edge_width=1)
+                mesh.add_scalar_quantity("temp", frame.node_data["Temp"].to_numpy(), defined_on="vertices", vminmax=(300.0 + np.finfo(float).eps, 1727.0), cmap="turbo", enabled=True)
+
+            if frame.remaining_nodes_not_in_elements is not None:
+                hull: ConvexHull = ConvexHull(frame.remaining_nodes_not_in_elements[["X", "Y", "Z"]].to_numpy())
+                surf: ps.SurfaceMesh = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0, 0, 0), edge_width=1)
+                surf.add_scalar_quantity("temp", frame.node_data["Temp"].to_numpy()[frame.remaining_nodes_not_in_elements["Node Label"].astype(int).to_numpy() - 1], vminmax=(300.0 + np.finfo(float).eps, 1727.0), cmap="turbo", enabled=True, defined_on="vertices")
+
             ps.show()
     ## 3D Plotting
     # def plot_3d_all_times(

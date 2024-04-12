@@ -108,6 +108,7 @@ def main():
     target_part = input_dict.get("part")
     target_nodeset = input_dict.get("nodeset")
     target_elementset = input_dict.get("elementset")
+    target_outputs = input_dict.get("outputs")
     defaults_for_outputs = input_dict.get("defaults_for_outputs", {})
 
     # result_name = convert_odb_to_npz(
@@ -128,6 +129,7 @@ def main():
         target_part,
         target_nodeset,
         target_elementset,
+        target_outputs,
         defaults_for_outputs,
     )
     try:
@@ -160,6 +162,7 @@ def convert_odb_to_npz(
     target_part,
     target_nodeset,
     target_elementset,
+    target_outputs,
     defaults_for_outputs,
 ):
     """
@@ -202,7 +205,9 @@ def convert_odb_to_npz(
 
         max_idx = base_times[-1][2] + len(steps[base_times[-1][0]].frames) - 1
 
-        target_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
+        if target_outputs is None:
+            target_outputs = list(steps[steps.keys()[0]].frames[0].fieldOutputs.keys())
+
         if "COORD" in target_outputs:
             target_outputs.remove("COORD")
 
@@ -352,8 +357,8 @@ def convert_odb_to_npz(
         elementsets_to_elements_mapping = {}
         part_to_nodesets_mapping = {}
         nodesets_to_nodes_mapping = {}
-        element_connectivity = {}
         node_coords = []
+        element_connectivity = []
 
         connectivity_elementset = ("", "", 0)
         coordinate_nodeset = ("", "", 0)
@@ -397,7 +402,7 @@ def convert_odb_to_npz(
                         elementsets_to_elements_mapping[elementset].append(
                             element.label
                         )
-                        element_connectivity[element.label] = element.connectivity
+                        element_connectivity.append(element.connectivity)
                 else:
                     for element in (
                         assembly.instances[part].elementSets[elementset].elements
@@ -416,12 +421,12 @@ def convert_odb_to_npz(
                 else:
                     for node in assembly.instances[part].nodeSets[nodeset].nodes:
                         nodesets_to_nodes_mapping[nodeset].append(node.label)
+
         output_python_values = [
             ("part_to_elementsets_mapping", part_to_elementsets_mapping),
             ("elementsets_to_elements_mapping", elementsets_to_elements_mapping),
             ("part_to_nodesets_mapping", part_to_nodesets_mapping),
             ("nodesets_to_nodes_mapping", nodesets_to_nodes_mapping),
-            ("element_connectivity", element_connectivity),
         ]
         for name, output in output_python_values:
             try:
@@ -437,8 +442,10 @@ def convert_odb_to_npz(
 
         output_numpy_values = [
             ("node_coords", node_coords),
+            ("element_connectivity", element_connectivity),
         ]
         for name, output in output_numpy_values:
+            # print name, len(output)
             np.savez_compressed(
                 os.path.join(data_dir, name),
                 np.array(output),

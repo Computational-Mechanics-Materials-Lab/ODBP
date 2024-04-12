@@ -26,126 +26,116 @@ class ExtremaDict(UserDict):
         self.data: dict[str, tuple[Any | None, Any | None]] = self.bounds.copy()
 
     def __setitem__(self, key: str, value: Any) -> None:
-        check_key: str = key.lower()
         target_key: str
         old_data: list[Any]
-        if check_key in self.data.keys():
-            if not isinstance(value, Collection) or not (len(value) == 2):
-                raise KeyError(f'To set "{key}", please pass a two-element Collection for the upper- and lower-bounds (these will be sorted). Alternatively set "{key}_upper" and "{key}_lower" individually. To set the same value for both, either pass a 2 element Collection with the same value twice, or set "{key}_both"')
-            upper_val: Any
-            lower_val: Any
-            lower_val, upper_val = sorted(value)
-            self.data[check_key] = (lower_val, upper_val)
+        old_key: str
+
+        for old_key in self.data.keys():
+            if key.lower() == old_key.lower():
+                if not isinstance(value, Collection) or not (len(value) == 2):
+                    raise KeyError(f'To set "{key}", please pass a two-element Collection for the upper- and lower-bounds (these will be sorted). Alternatively set "{key}_upper" and "{key}_lower" individually. To set the same value for both, either pass a 2 element Collection with the same value twice, or set "{key}_both"')
+                upper_val: Any
+                lower_val: Any
+                lower_val, upper_val = sorted(value)
+                self.data[old_key] = (lower_val, upper_val)
+                return
         
-        elif check_key.endswith("_lower"):
-            target_key = check_key.remove("_lower")
-            if not target_key in self.data.keys():
-                raise KeyError(f'Could not set "{key}", {target_key} is not defined.')
-            if isinstance(value, Collection):
-                if len(value) > 1:
-                    raise KeyError(f'To set "{key}", please pass only a single value')
-                else:
-                    value = value[0]
+            elif key.endswith("_lower"):
+                target_key = key[:-6]
+                if target_key.lower() == old_key.lower():
+                    if isinstance(value, Collection):
+                        if len(value) > 1:
+                            raise KeyError(f'To set "{key}", please pass only a single value')
+                        else:
+                            value = value[0]
 
-            old_data = list(self.data[target_key])
-            if value > old_data[1]:
-                self.data[target_key] = (value, self.bounds[target_key][1])
-            else:
-                self.data[target_key] = (value, old_data[1])
-            
-        elif check_key.endswith("_upper"):
-            target_key = check_key.remove("_upper")
-            if not target_key in self.data.keys():
-                raise KeyError(f'Could not set "{key}", {target_key} is not defined.')
-            if isinstance(value, Collection):
-                if len(value) > 1:
-                    raise KeyError(f'To set "{key}", please pass only a single value')
-                else:
-                    value = value[0]
+                    old_data = list(self.data[old_key])
+                    if value > old_data[1]:
+                        self.data[old_key] = (value, self.bounds[old_key][1])
+                    else:
+                        self.data[old_key] = (value, old_data[1])
+                    return
+                
+            elif key.endswith("_upper"):
+                target_key = key[:-6]
+                if target_key.lower() == old_key.lower():
+                    if isinstance(value, Collection):
+                        if len(value) > 1:
+                            raise KeyError(f'To set "{key}", please pass only a single value')
+                        else:
+                            value = value[0]
 
-            old_data = list(self.data[target_key])
-            if value < old_data[0]:
-                self.data[target_key] = (self.bounds[target_key][0], value)
-            else:
-                self.data[target_key] = (old_data[0], value)
-            
-        elif check_key.endswith("_both"):
-            target_key = check_key.remove("_both")
-            if not target_key in self.data.keys():
-                raise KeyError(f'Could not set "{key}", {target_key} is not defined.')
-            if not isinstance(value, Collection):
-                if len(value) > 1:
-                    raise KeyError(f'To set "{key}", please pass only a single value')
-                else:
-                    value = value[0]
+                    old_data = list(self.data[target_key])
+                    if value < old_data[0]:
+                        self.data[old_key] = (self.bounds[old_key][0], value)
+                    else:
+                        self.data[old_key] = (old_data[0], value)
+                    return
+                
+            elif key.endswith("_both"):
+                target_key = key[:-5]
+                if target_key.lower() == old_key.lower():
+                    if isinstance(value, Collection):
+                        if len(value) > 1:
+                            raise KeyError(f'To set "{key}", please pass only a single value')
+                        else:
+                            value = value[0]
 
-            self.data[target_key] = (value, value)
+                    self.data[old_key] = (value, value)
+                    return
 
-        else:
-            raise KeyError(f"{key} is not recognized")
+        raise KeyError(f"{key} is not recognized")
 
     def __getitem__(self, key: str) -> Any:
-        check_key: str = key.lower()
         target_key: str
-        if check_key in self.data.keys():
-            return self.data[check_key]
-        
-        elif check_key.endswith("_lower"):
-            target_key = check_key.remove("_lower")
-            if target_key not in self.data.keys():
-                raise KeyError(f'Could not get "{key}", {target_key} is not defined.')
-            else:
-                return self.data[target_key][0]
+        old_key: str
+        for old_key in self.data.keys():
+            if  key.lower() == old_key.lower():
+                return self.data[old_key]
+            
+            elif key.endswith("_lower"):
+                target_key = key[:-6]
+                if target_key.lower() == old_key.lower():
+                    return self.data[old_key][0]
 
-        elif check_key.endswith("_upper"):
-            target_key = check_key.remove("_upper")
-            if target_key not in self.data.keys():
-                raise KeyError(f'Could not get "{key}", {target_key} is not defined.')
-            else:
-                return self.data[target_key][1]
+            elif key.endswith("_upper"):
+                target_key = key[:-6]
+                if target_key.lower() == old_key.lower():
+                    return self.data[old_key][1]
 
-        elif check_key.endswith("_both"):
-            target_key = check_key.remove("_both")
-            if target_key not in self.data.keys():
-                raise KeyError(f'Could not get "{key}", {target_key} is not defined')
-            else:
-                return self.data[target_key]
+            elif key.endswith("_both"):
+                target_key = key[:-5]
+                if target_key.lower() == old_key.lower():
+                    return self.data[old_key]
 
-        else:
-            raise KeyError(f'"{key}" is not recognzied')
+        raise KeyError(f'"{key}" is not recognzied')
             
     def __delitem__(self, key: str) -> None:
-        check_key: str = key.lower()
         target_key: str
+        old_key: str
         old_data: list[Any | None]
-        if check_key in self.data.keys():
-            self.data[check_key] = (self.bounds[check_key][0], self.bounds[check_key][0])
-        
-        elif check_key.endswith("_lower"):
-            target_key = check_key.remove("_lower")
-            if target_key not in self.data.keys():
-                raise KeyError(f'Could not delete "{key}", {target_key} is not defined.')
-            else:
-                old_data = list(self.data[target_key])
-                self.data[check_key] = (self.bounds[target_key][0], old_data[1])
+        for old_key in self.data.keys():
+            if key.lower() ==  old_key.lower():
+                self.data[old_key] = (self.bounds[old_key][0], self.bounds[old_key][0])
+            
+            elif key.endswith("_lower"):
+                target_key = key[:-6]
+                if target_key.lower() == old_key.lower():
+                    old_data = list(self.data[old_key])
+                    self.data[old_key] = (self.bounds[old_key][0], old_data[1])
 
-        elif check_key.endswith("_upper"):
-            target_key = check_key.remove("_upper")
-            if target_key not in self.data.keys():
-                raise KeyError(f'Could not get "{key}", {target_key} is not defined.')
-            else:
-                old_data = list(self.data[target_key])
-                self.data[check_key] = (old_data[0], self.bounds[target_key][1])
+            elif key.endswith("_upper"):
+                target_key = key[:-6]
+                if target_key.lower() == old_key.lower():
+                    old_data = list(self.data[old_key])
+                    self.data[old_key] = (old_data[0], self.bounds[old_key][1])
 
-        elif check_key.endswith("_both"):
-            target_key = check_key.remove("_both")
-            if target_key not in self.data.keys():
-                raise KeyError(f'Could not get "{key}", {target_key} is not defined')
-            else:
-                self.data[check_key] = (self.bounds[target_key][0], self.bounds[target_key][1])
+            elif key.endswith("_both"):
+                target_key = key[:-5]
+                if target_key.lower() == old_key.lower():
+                    self.data[old_key] = (self.bounds[old_key][0], self.bounds[old_key][1])
 
-        else:
-            raise KeyError(f'"{key}" is not recognzied')
+        raise KeyError(f'"{key}" is not recognzied')
 
     def get(self) -> NotImplemented:
         return NotImplemented
@@ -168,8 +158,7 @@ class ExtremaDict(UserDict):
 
 class OdbpSettings:
     __slots__ = (
-        "_extrema"
-        "_time_step",
+        "_extrema",
         "_odb_path",
         "_odb_source_dir",  # TODO
         "_h5_path",
@@ -515,25 +504,6 @@ class OdbpSettings:
         self._time_high = value
 
     @property
-    def time_step(self) -> int:
-        return self._time_step
-
-    @time_step.setter
-    def time_step(self, value: int) -> None:
-        if not isinstance(value, int):
-            try:
-                value = int(value)
-                if value < 1:
-                    raise ValueError
-
-            except ValueError:
-                raise ValueError(
-                    "time_step must be an integer greater than or equal to 1"
-                )
-
-        self._time_step = value
-
-    @property
     def odb_source_dir(self) -> pathlib.Path | None:
         return self._odb_source_dir
 
@@ -839,7 +809,7 @@ class OdbpSettings:
         return self._defaults_for_outputs
 
     @property
-    def extrema(self) -> dict[str, tuple[Any, Any]]:
+    def extrema(self) -> ExtremaDict:
         return self._extrema
 
     @property
@@ -951,10 +921,6 @@ class OdbpSettings:
         result += f"\n\tSelected Parts: {parts}"
         result += f"\n\tSelected Steps: {steps}"
         result += f"\n\tSelected Nodes: {nodes}"
-        time_step: str = (
-            str(self.time_step) if hasattr(self, "time_step") else "Not Set"
-        )
-        result += f"\n\tSample every nth frame where n is: {time_step}"
 
         view: str = str(self.view) if hasattr(self, "view") else "Not Set"
         colormap: str = str(self.colormap) if hasattr(self, "colormap") else "Not Set"

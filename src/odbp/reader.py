@@ -35,6 +35,7 @@ class OdbpData:
     node_sets_to_nodes: dict[str, npt.NDArray]
     part_to_element_set: dict[str, npt.NDArray]
     part_to_node_set: dict[str, npt.NDArray]
+    remaining_nodes_not_in_elements: pd.DataFrame | None = None
 
 
 def get_odb_data(

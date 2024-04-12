@@ -40,7 +40,6 @@ def convert_npz_to_h5(
     npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
     temp_low: float | None = None,
     temp_high: float | None = None,
-    time_step: int = 1,
     nodesets: list[str] | None = None,
     nodes=None,
     parts: list[str] | None = None,
@@ -336,8 +335,6 @@ def convert_npz_to_h5(
         #    hdf5_file[total_name].attrs["temp_low"] = temp_low
         # if temp_high is not None:
         #    hdf5_file[total_name].attrs["temp_high"] = temp_high
-        # if time_step is not None:
-        #    hdf5_file[total_name].attrs["time_step"] = time_step
         # if nodesets is not None:
         #    hdf5_file[total_name].attrs["nodesets"] = nodesets
         # else:
