@@ -1,6 +1,6 @@
 [project]
-name = "odb-plotter"
-description = "Python3 API for Abaqus .odb Files and related Command Line Visualization Tool. Focused on Additive Manufacturing Thermal Transfer"
+name = "odbp"
+description = "Python3 API for Abaqus .odb files. Focused on Additive Manufacturing Thermal Transfer"
 readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["abaqus", "abq", "fea", "odb", "waam", "wa-ded", "visualization",]
@@ -10,13 +10,20 @@ dependencies = [
 "platformdirs",
 "h5py",
 "numpy",
-"tomli>=1.1.0; python_version < '3.11'",
-"tomli_w",
 "pandas",
 "pyreadline3; platform_system == 'Windows'",
-"polyscope",
 ]
 dynamic = ["version",]
+
+[project.optional-dependencies]
+all = [
+    "plot",
+]
+plot = [
+    "polyscope",
+    "scipy",
+    "tomli>=1.1.0; python_version < '3.11'",
+]
 
 [project.urls]
 "Homepage" = "https://www.cmml.me.msstate.edu"
@@ -24,7 +31,7 @@ dynamic = ["version",]
 "Source" = "https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter"
 
 [tool.setuptools]
-package-data = {odbp = ["data/views.toml", "data/config.toml", "py2_scripts/converter.py", "py2_scripts/odb_info_getter.py",]}
+package-data = {odbp = ["data/odbp_views.toml", "data/config.toml", "py2_scripts/converter.py", "py2_scripts/odb_info_getter.py",]}
 
 [tool.setuptools.dynamic]
 version = {attr = "odbp.__version__"}

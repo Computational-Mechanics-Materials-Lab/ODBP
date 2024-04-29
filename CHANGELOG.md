@@ -21,6 +21,8 @@
         1.0.1: Minor bugfix when populating default config file
         1.0.2: Implementing default plotting views and non-interactive plotting
 
+    1.1.0: Changed name to ODBP to reflect greater general capabilities. Switched to Polyscope for Plotting. Now storing per-frame positional data and re-emulating Abaqus meshing. Improved filtering and putting bounds on outputs. Added more viewing angles.
+
     Upcoming:
         Mechanical/coordinate data in future odbp data
         Improved pyvista functionality, such as .gif .stl or .vtk outputs, etc.

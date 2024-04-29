@@ -14,9 +14,11 @@ import subprocess
 import shutil
 import pathlib
 import pickle
-import h5py
-import multiprocessing
-import itertools
+import operator
+
+# BOTH TODO
+#import h5py
+#import multiprocessing
 
 import numpy as np
 import numpy.typing as npt
@@ -24,10 +26,11 @@ import pandas as pd
 import polyscope as ps
 
 from scipy.spatial import ConvexHull
-from typing import Any, Iterator, BinaryIO, Self
+from scipy.spatial.distance import cdist
+from typing import Any, Iterator, BinaryIO, Self, Callable, assert_never
 from io import BufferedReader
 
-from .odbp_settings import OdbpSettings, ExtremaDict
+from .odbp_settings import OdbpSettings, OdbpOutputs, OdbpPlotType, OdbpOutput
 from .writer import convert_npz_to_h5
 from .reader import get_h5_data, OdbpData
 
@@ -55,6 +58,7 @@ class Odbp(OdbpSettings):
         "_iterator_ind",
         "_iterable_cols_and_vals",
         "_iterator_key",
+        "_data_for_iteration"
         "_frame_keys",
         "_frame_keys_per_step",
         "_frame_range",
@@ -74,7 +78,7 @@ class Odbp(OdbpSettings):
         "_h5_status",
     )
 
-    def __init__(self) -> None:
+    def __init__(self: Self) -> None:
         """
         Type Hints and hard-coded parameters. See the @staticmethod
         "constructors" of this class in order to learn about initialization
@@ -160,93 +164,207 @@ class Odbp(OdbpSettings):
         self._iterable_cols_and_vals: dict[str, list[float]]
         self._iterator_key: str
         self._iterator_ind: int = 0
+        self._data_for_iteration: npt.NDArray | None = None
 
         self._h5_status: dict[str, str]
 
 
-    def __iter__(self) -> Self:
+    def __iter__(self: Self) -> Self:
         return self
 
-    def __next__(self) -> Iterator[OdbpData]:
-        data_for_iteration: npt.NDArray = np.copy(self._iterable_cols_and_vals[self._iterator_key])
-        iter_min: Any
-        iter_max: Any
-        iter_min, iter_max = self.extrema[self._iterator_key]
-        data_for_iteration = data_for_iteration[data_for_iteration >= iter_min]
-        data_for_iteration = data_for_iteration[data_for_iteration <= iter_max]
-        try:
-            if self._iterator_ind >= len(data_for_iteration):
-                self._iterator_ind = 0
-                raise StopIteration
-
-            ind: int = self._iterator_ind
-            self._iterator_ind += 1
-            return_data: OdbpData = OdbpData(
-                element_data=self.data.element_data,
-                node_data = self.data.node_data,
-                element_connectivity=self.data.element_connectivity,
-                element_sets_to_elements=self.data.element_sets_to_elements,
-                node_sets_to_nodes=self.data.node_sets_to_nodes,
-                part_to_element_set=self.data.part_to_element_set,
-                part_to_node_set=self.data.part_to_node_set
-            )
-            # go ahead and get the "current time" whether or not we're iterating over time
-            return_data.node_data = return_data.node_data[return_data.node_data[self._iterator_key] == data_for_iteration[ind]]
-            return_data.element_data = return_data.element_data[return_data.element_data[self._iterator_key] == data_for_iteration[ind]]
-            nodes_to_remove: list[int] = []
-            elems_to_remove: list[int] = []
-            key: str
-            key_min: Any
-            key_max: Any
-            for key, (key_min, key_max) in self.extrema.items():
-                if key == self._iterator_key:
-                    continue
-
-                nodes_to_remove_by_node: list[int] = []
-                if key in return_data.node_data:
-                    nodes_to_remove_by_node.extend(return_data.node_data[return_data.node_data[key] < key_min][["Node Label"]].astype(int).to_numpy() - 1)
-                    nodes_to_remove_by_node.extend(return_data.node_data[return_data.node_data[key] > key_max][["Node Label"]].astype(int).to_numpy() - 1)
-                nodes_to_remove.extend(nodes_to_remove_by_node)
-
-                elems_to_remove_by_elem: list[int] = []
-                if key in return_data.element_data:
-                    elems_to_remove_by_elem.extend(return_data.element_data[return_data.element_data[key] < key_min][["Element Label"]].astype(int).to_numpy() - 1)
-                    elems_to_remove_by_elem.extend(return_data.element_data[return_data.element_data[key] > key_max][["Element Label"]].astype(int).to_numpy() - 1)
-                elems_to_remove.extend(elems_to_remove_by_elem)
-                    
-            final_nodes_to_remove: npt.NDArray = np.unique(np.array(nodes_to_remove, dtype=np.int64))
-            final_elems_to_remove: npt.NDArray = np.unique(np.array(elems_to_remove, dtype=np.int64))
-
-            node_indices: npt.NDArray = np.copy(return_data.node_data[["Node Label"]].astype(int).to_numpy() - 1)
-            updated_node_indices: npt.NDArray = np.delete(node_indices, final_nodes_to_remove, axis=0)
-
-            elem_indices: npt.NDArray = np.copy(return_data.element_data[["Element Label"]].astype(int).to_numpy() - 1)
-            updated_elem_indices: npt.NDArray = np.delete(elem_indices, final_elems_to_remove, axis=0)
-
-            updated_elem_connectivity: npt.NDArray = return_data.element_connectivity[updated_elem_indices].reshape(-1, 8)
-            elems_with_remaining_nodes_indices: npt.NDArray = np.isin(updated_elem_connectivity - 1, updated_node_indices).all(axis=1)
-            updated_elem_indices = updated_elem_indices[elems_with_remaining_nodes_indices]
-            updated_elem_connectivity = return_data.element_connectivity[updated_elem_indices].reshape(-1, 8)
-            return_data.element_connectivity = updated_elem_connectivity
-
-            if not node_indices.shape == updated_node_indices.shape:
-                remaining_nodes_not_in_elems: pd.DataFrame = return_data.node_data.iloc[np.setdiff1d(updated_node_indices, np.unique(updated_elem_connectivity))]
-                return_data.remaining_nodes_not_in_elements = remaining_nodes_not_in_elems
-
-            return return_data
-
-        except AttributeError:
+    def __next__(self: Self) -> Iterator[OdbpData]:
+        if not hasattr(self, "_data"):
             raise AttributeError(
                 "Odbp() object only functions as an iterator"
                 "After load_h5() has been called."
             )
 
+        if self._data_for_iteration is None:
+            data_for_iteration: npt.NDArray = np.copy(self._iterable_cols_and_vals[self._iterator_key])
+            iterator_output: OdbpOutput = self.outputs.outputs_by_names[self._iterator_key]
+            iterator_min_op: Callable
+            iterator_max_op: Callable
+            iterator_min_op, iterator_max_op = self._min_max_op_from_output_for_iter(iterator_output)
+
+            # TODO Hacky
+            data_for_iteration = data_for_iteration[iterator_min_op(data_for_iteration, iterator_output.bound_max)]
+            data_for_iteration = data_for_iteration[iterator_max_op(data_for_iteration, iterator_output.bound_min)]
+            self._data_for_iteration = data_for_iteration
+
+        if self._iterator_ind >= len(self._data_for_iteration):
+            self._iterator_ind = 0
+            del self._data_for_iteration
+            self._data_for_iteration = None
+            raise StopIteration
+
+        ind: int = self._iterator_ind
+        self._iterator_ind += 1
+
+        data_to_filter: OdbpData = OdbpData(
+            element_data=self.data.element_data,
+            node_data = self.data.node_data,
+            element_connectivity=self.data.element_connectivity,
+            element_sets_to_elements=self.data.element_sets_to_elements,
+            node_sets_to_nodes=self.data.node_sets_to_nodes,
+            part_to_element_set=self.data.part_to_element_set,
+            part_to_node_set=self.data.part_to_node_set,
+            remaining_nodes_not_in_elements=self.data.remaining_nodes_not_in_elements
+        )
+
+        data_to_filter.node_data = data_to_filter.node_data[data_to_filter.node_data[self._iterator_key] == self._data_for_iteration[ind]]
+        data_to_filter.element_data = data_to_filter.element_data[data_to_filter.element_data[self._iterator_key] == self._data_for_iteration[ind]]
+
+        return_data: OdbpData = self.filter_by_output_bounds(data_to_filter)
+
+        return return_data
+
+
+    def filter_by_output_bounds(self: Self, data_to_modify: OdbpData | None = None) -> OdbpData:
+        if data_to_modify is None:
+            # TODO this doesn't really work
+            data_to_modify = self.data
+
+        return_data: OdbpData = OdbpData(
+            element_data=data_to_modify.element_data,
+            node_data = data_to_modify.node_data,
+            element_connectivity=data_to_modify.element_connectivity,
+            element_sets_to_elements=data_to_modify.element_sets_to_elements,
+            node_sets_to_nodes=data_to_modify.node_sets_to_nodes,
+            part_to_element_set=data_to_modify.part_to_element_set,
+            part_to_node_set=data_to_modify.part_to_node_set
+        )
+
+        nodes_to_remove: list[int] = []
+        elems_to_remove: list[int] = []
+        output: OdbpOutput
+        node_label_key: list[str] = [self.output_mapping.get("Node Label", "Node Label")]
+        element_label_key: list[str] = [self.output_mapping.get("Element Label", "Element Label")]
+        for output in self.outputs.outputs:
+
+            min_op: Callable
+            max_op: Callable
+            min_op, max_op = self._min_max_op_from_output(output)
+
+            if output.name in return_data.node_data:
+                nodes_to_remove.extend(return_data.node_data[min_op(return_data.node_data[output.name], output.bound_min)][node_label_key].astype(int).to_numpy() - 1)
+                nodes_to_remove.extend(return_data.node_data[max_op(return_data.node_data[output.name], output.bound_max)][node_label_key].astype(int).to_numpy() - 1)
+
+            if output.name in return_data.element_data:
+                elems_to_remove.extend(return_data.element_data[min_op(return_data.element_data[output.name], output.bound_min)][element_label_key].astype(int).to_numpy() - 1)
+                elems_to_remove.extend(return_data.element_data[max_op(return_data.element_data[output.name], output.bound_max)][element_label_key].astype(int).to_numpy() - 1)
+  
+        final_nodes_to_remove: npt.NDArray = np.unique(np.array(nodes_to_remove, dtype=np.int64))
+        final_elems_to_remove: npt.NDArray = np.unique(np.array(elems_to_remove, dtype=np.int64))
+
+        node_indices: npt.NDArray = np.copy(return_data.node_data[node_label_key].astype(int).to_numpy() - 1)
+        updated_node_indices: npt.NDArray = np.delete(node_indices, final_nodes_to_remove, axis=0)
+
+        elem_indices: npt.NDArray = np.copy(return_data.element_data[element_label_key].astype(int).to_numpy() - 1)
+        updated_elem_indices: npt.NDArray = np.delete(elem_indices, final_elems_to_remove, axis=0)
+
+        updated_elem_connectivity: npt.NDArray = return_data.element_connectivity[updated_elem_indices].reshape(-1, 8)
+        elems_with_remaining_nodes_indices: npt.NDArray = np.isin(updated_elem_connectivity - 1, updated_node_indices).all(axis=1)
+        updated_elem_indices = updated_elem_indices[elems_with_remaining_nodes_indices]
+        updated_elem_connectivity = return_data.element_connectivity[updated_elem_indices].reshape(-1, 8)
+        return_data.element_connectivity = updated_elem_connectivity
+
+        if updated_node_indices.shape[0] > 0 and not node_indices.shape == updated_node_indices.shape:
+            remaining_nodes_not_in_elems: pd.DataFrame = return_data.node_data.iloc[np.setdiff1d(updated_node_indices, np.unique(updated_elem_connectivity) - 1)]# - 1]
+            return_data.remaining_nodes_not_in_elements = remaining_nodes_not_in_elems
+
+        return return_data
+
+    # TODO This is gross
+    def _min_max_op_from_output_for_iter(self: Self, output: OdbpOutput) -> tuple[Callable, Callable]:
+        min_op: Callable
+        if output.bound_min_equal:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                min_op = operator.lt
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                min_op = operator.gt
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+        else:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                min_op = operator.le
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                min_op = operator.ge
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+
+        max_op: Callable
+        if output.bound_max_equal:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                max_op = operator.gt
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                max_op = operator.lt
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+        else:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                max_op = operator.ge
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                max_op = operator.le
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+        return min_op, max_op
+        
+    def _min_max_op_from_output(self: Self, output: OdbpOutput) -> tuple[Callable, Callable]:
+        min_op: Callable
+        if output.bound_min_equal:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                # lower <= Foo
+                min_op = operator.le
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                # Foo <= lower --> lower >= Foo
+                min_op = operator.ge
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+        else:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                # lower < Foo
+                min_op = operator.lt
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                # Foo < lower --> lower > Foo
+                min_op = operator.gt
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+
+        max_op: Callable
+        if output.bound_max_equal:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                # Foo <= upper --> upper >= Foo
+                max_op = operator.ge
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                # upper <= Foo
+                max_op = operator.le
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+        else:
+            if output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.BETWEEN:
+                # Foo < upper -> upper > Foo
+                max_op = operator.gt
+            elif output.bounds_between_or_outside == output.ODBPOUTPUTBOUNDSRANGE.OUTSIDE:
+                # upper < Foo
+                max_op = operator.lt
+            else:
+                assert_never(output.bounds_between_or_outside)
+
+        return min_op, max_op
+
     @property
-    def data(self) -> OdbpData:
+    def data(self: Self) -> OdbpData:
         return self._data
 
     @data.deleter
-    def data(self) -> None:
+    def data(self: Self) -> None:
         del self._data
 
     # TODO!!!
@@ -287,11 +405,11 @@ class Odbp(OdbpSettings):
     #    return self._node_ranges_per_part
 
     @property
-    def h5_status(self) -> dict[str, str]:
+    def h5_status(self: Self) -> dict[str, str]:
         return self._h5_status
 
     def convert(
-        self,
+        self: Self,
         h5_path: pathlib.Path | None = None,
         *,
         odb_path: pathlib.Path | None = None,
@@ -330,17 +448,17 @@ class Odbp(OdbpSettings):
         odb_path = pathlib.Path(odb_path)
         cls()._convert(h5_path, odb_path)
 
-    def _convert(self, h5_path: pathlib.Path, odb_path: pathlib.Path | None) -> None:
+    def _convert(self: Self, h5_path: pathlib.Path, odb_path: pathlib.Path | None) -> None:
         if odb_path is None:
             raise ValueError("odb_path attribute is not set!")
         # TODO
         # convert_pickle_input_dict: dict[str, int | str | list[str] | list[int] | list[chain[Any]] None] = {
         convert_pickle_input_dict: dict[str, Any] = {
             "cpus": self.cpus,
-            "nodes": self.nodes,
-            "nodesets": self.nodesets,
-            "parts": self.parts,
-            "steps": self.steps,
+            #"nodes": self.nodes,
+            #"nodesets": self.nodesets,
+            #"parts": self.parts,
+            #"steps": self.steps,
             "defaults_for_outputs": self.defaults_for_outputs,
         }
 
@@ -375,26 +493,26 @@ class Odbp(OdbpSettings):
 
         pathlib.Path.unlink(self._convert_result_path)
 
-        temp_low = self.temp_low if hasattr(self, "temp_low") else None
-        temp_high = self.temp_high if hasattr(self, "temp_high") else None
+        #temp_low = self.temp_low if hasattr(self, "temp_low") else None
+        #temp_high = self.temp_high if hasattr(self, "temp_high") else None
 
         convert_npz_to_h5(
             h5_path,
             result_dir,
-            temp_low,
-            temp_high,
-            self.nodesets,
-            self.nodes,
-            self.parts,
-            self.steps,
+            #temp_low,
+            #temp_high,
+            #self.nodesets,
+            #self.nodes,
+            #self.parts,
+            #self.steps,
             self.output_mapping,
-            odb_path,
+            #odb_path,
         )
 
         if result_dir.exists():
             shutil.rmtree(result_dir)
 
-    def get_odb_info(self) -> None:
+    def get_odb_info(self: Self) -> None:
         # Ideally this would not work this way, but
         # the python2 makes transferring a raw dict the easiest option
         result: dict[
@@ -448,7 +566,7 @@ class Odbp(OdbpSettings):
         return cls()._get_odb_info(path)
 
     def _get_odb_info(
-        self, path: pathlib.Path | None = None
+        self: Self, path: pathlib.Path | None = None
     ) -> dict[str, tuple[int, int] | list[str] | dict[str, tuple[int, int]]]:
         if path is None:
             if hasattr(self, "odb_path"):
@@ -480,7 +598,7 @@ class Odbp(OdbpSettings):
                 f"File {self._get_odb_info_result_path} was not found. See previous Python 2 errors"
             )
 
-    def load_h5(self) -> None:
+    def load_h5(self: Self) -> None:
         if not hasattr(self, "h5_path"):
             raise AttributeError(
                 "h5_path attribute must be set before " "calling load_h5 method."
@@ -489,7 +607,7 @@ class Odbp(OdbpSettings):
         if isinstance(self._data_handler, DataLoader):
             # Only case where this should be set, bypass the setter
             self._h5_status, self._data = self._data_handler.load_h5(
-                self.h5_path, self.cpus
+                self.h5_path, self.cpus, self.output_mapping
             )
             self._data_handler = DataUnloader()
             self._iterable_cols_and_vals = {}
@@ -504,24 +622,8 @@ class Odbp(OdbpSettings):
                 remaining_iterator_vals: list[str] = list(self._iterable_cols_and_vals.keys()).remove(self._iterator_key)
                 print(f"INFO: {self._iterator_key} selection as default iterator value. Other valid options are: {remaining_iterator_vals}")
 
-            col: str
-            col_data: npt.NDArray
-            col_min: Any
-            col_max: Any
-            bounds_dict: dict[str, tuple[Any, Any]] = {}
-            for col in self.data.node_data.columns.values:
-                col_data = self.data.node_data[col].to_numpy()
-                col_min = np.min(col_data)
-                col_max = np.max(col_data)
-                bounds_dict[col] = (col_min, col_max)
-
-            for col in self.data.element_data.columns.values:
-                col_data = self.data.element_data[col].to_numpy()
-                col_min = np.min(col_data)
-                col_max = np.max(col_data)
-                bounds_dict[col] = (col_min, col_max)
-
-            self._extrema = ExtremaDict(bounds_dict)
+            # use a _outputs member because we don't want a normal setter
+            self._outputs = OdbpOutputs(self.data, self.output_mapping, self.defaults_for_outputs)
 
         else:
             raise AttributeError(
@@ -530,7 +632,7 @@ class Odbp(OdbpSettings):
                 "Odbp before calling load_h5."
             )
 
-    def unload_h5(self) -> None:
+    def unload_h5(self: Self) -> None:
         if isinstance(self._data_handler, DataUnloader):
             self._data_handler.unload_h5()
             # Unified deleter
@@ -541,7 +643,7 @@ class Odbp(OdbpSettings):
         else:
             raise AttributeError("unload_h5 can only be called after " "load_h5.")
 
-    def _find_iterable_keys(self) -> None:
+    def _find_iterable_keys(self: Self) -> None:
         node_cols: set[str] = set(self.data.node_data.columns.values)
         elem_cols: set[str] = set(self.data.element_data.columns.values)
         iterable_cols: list[str] = list(node_cols & elem_cols)
@@ -552,259 +654,209 @@ class Odbp(OdbpSettings):
             if np.array_equal(nodal_unique_vals, elemental_unique_vals):
                 self._iterable_cols_and_vals[col] = nodal_unique_vals
 
-    def plot(self) -> None:
+    def plot(self: Self, target_key: str | None = None, *, target_key_lower_bound: float | None = None, target_key_upper_bound: float | None = None) -> None:
+        use_cmap: bool = False
+        if target_key is not None:
+            if target_key not in self.outputs.outputs_by_names:
+                raise ValueError(f"Key {target_key} is not present in the data!")
+
+            use_cmap = True
+
+            mesh_key_quantity_def: str
+            surf_key_quantity_def: str
+            if target_key in self.data.node_data.columns:
+                mesh_key_quantity_def = surf_key_quantity_def = "vertices"
+            elif target_key in self.data.element_data.columns:
+                mesh_key_quantity_def = "cells"
+                surf_key_quantity_def = "faces"
+
+            epsilon: float = np.finfo(float).eps
+            if target_key_lower_bound is None:
+                target_key_lower_bound = self.outputs.outputs_by_names[target_key].cmap_min
+
+            if not self.outputs.outputs_by_names[target_key].cmap_min_equal:
+                target_key_lower_bound += epsilon
+
+            if target_key_upper_bound is None:
+                target_key_upper_bound = self.outputs.outputs_by_names[target_key].cmap_max
+
+            if not self.outputs.outputs_by_names[target_key].cmap_max_equal:
+                target_key_upper_bound -= epsilon
+
+
         ps.init()
         ps.set_ground_plane_mode("none")
         ps.set_up_dir("z_up")
-        ps.set_front_dir("y_front")
+        ps.set_front_dir("x_front")
+        ps.set_background_color(self.background_color)
+        ps.set_view_projection_mode(self.view_projection_mode)
+        ps.set_program_name("ODBP")
         frame: OdbpData
         for frame in self:
-            if len(frame.element_connectivity) > 0:
-                nodes: npt.NDArray = frame.node_data[["X", "Y", "Z"]].to_numpy() 
-                mesh: ps.VolumeMesh = ps.register_volume_mesh("mesh", nodes, mixed_cells=(frame.element_connectivity - 1), enabled=True, edge_color=(0, 0, 0), edge_width=1)
-                mesh.add_scalar_quantity("temp", frame.node_data["Temp"].to_numpy(), defined_on="vertices", vminmax=(300.0 + np.finfo(float).eps, 1727.0), cmap="turbo", enabled=True)
+            plot_type: OdbpPlotType
+            hull: ConvexHull
+            mesh: ps.VolumeMesh
+            cloud: ps.PointCloud
+            surf: ps.SurfaceMesh
+            pc_nodes: npt.NDArray
+            pc_dists: npt.NDArray
 
-            if frame.remaining_nodes_not_in_elements is not None:
-                hull: ConvexHull = ConvexHull(frame.remaining_nodes_not_in_elements[["X", "Y", "Z"]].to_numpy())
-                surf: ps.SurfaceMesh = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0, 0, 0), edge_width=1)
-                surf.add_scalar_quantity("temp", frame.node_data["Temp"].to_numpy()[frame.remaining_nodes_not_in_elements["Node Label"].astype(int).to_numpy() - 1], vminmax=(300.0 + np.finfo(float).eps, 1727.0), cmap="turbo", enabled=True, defined_on="vertices")
+            # We need the coordinate data to plot by. This is how we'll get it
+            c: str
+            coord_index: list[str] = [self.output_mapping.get(c, c) for c in ["COORD1", "COORD2", "COORD3",]]
 
-            ps.show()
-    ## 3D Plotting
-    # def plot_3d_all_times(
-    #    self,
-    #    target_output: str,
-    #    *,
-    #    title: str | None = None,
-    #    target_nodes: pd.DataFrame | None = None,
-    #    plot_type: str | None = None,
-    # ) -> list[pathlib.Path]:
-    #    """ """
-    #    if not PYVISTA_AVAILABLE:
-    #        raise Exception(
-    #            "Plotting cabailities are not included."
-    #            ' Please install pyvista via pip install odb-plotter["plot"]'
-    #            ' or odb-plotter["all"] rather than pip install odb-plotter'
-    #            " Or export the data from Odbp.extract()",
-    #            " or Odbp.convert() to another tool,"
-    #            " such as matplotlib, plotly, or bokeh.",
-    #        )
+            current_frame_structs: list[tuple[npt.NDArray, ps.PointCloud | ps.SurfaceMesh | ps.VolumeMesh, str] | tuple[npt.NDArray, ps.PointCloud | ps.SurfaceMesh | ps.VolumeMesh]] = []
 
-    #    title = self.title
-    #    title = self.h5_path.stem if (title is None or not title) else title
+            match self.plot_type:
+                case self.ODBPPLOTYPE.ONLY_SURFACE | self.ODBPPLOTYPE.ONLY_POINT_CLOUD | self.ODBPPLOTYPE.ONLY_ELEMS as plot_type:
+                    nodes: pd.DataFrame = frame.node_data.iloc[np.unique(frame.element_connectivity - 1)]
+                    if nodes.shape[0] > 0:
+                        new_conn_mapping: dict[int, int] = {o:i for i, o in enumerate(np.sort(np.unique(frame.element_connectivity)))}
+                        new_elem_conn: npt.NDArray
+                        if frame.element_connectivity.shape[0] > 0:
+                            new_elem_conn = np.vectorize(new_conn_mapping.__getitem__)(frame.element_connectivity)
+                        else:
+                            new_elem_conn = frame.element_connectivity
 
-    #    if target_nodes is None:
-    #        if not hasattr(self, "data"):
-    #            self.load_h5()
+                        match plot_type:
+                            case self.ODBPPLOTYPE.ONLY_SURFACE:
+                                hull = ConvexHull(nodes[coord_index].to_numpy())
+                                surf = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0., 0., 0.,), edge_width=1, material=self.material)
+                                if use_cmap:
+                                    current_frame_structs.append((nodes[[target_key]].to_numpy().flatten(), surf, surf_key_quantity_def))
 
-    #        target_nodes = self.data
+                            case self.ODBPPLOTYPE.ONLY_ELEMS:
+                                mesh = ps.register_volume_mesh("mesh", nodes[coord_index].to_numpy(), mixed_cells=new_elem_conn, enabled=True, edge_color=(0, 0, 0), edge_width=1, material=self.material)
+                                if use_cmap:
+                                    current_frame_structs.append((nodes[[target_key]].to_numpy().flatten(), mesh, mesh_key_quantity_def))
 
-    #    if self.results_dir is not None:
-    #        if not self.result_dir.exists():
-    #            self.result_dir.mkdir()
+                            case self.ODBPPLOTYPE.ONLY_POINT_CLOUD:
+                                pc_nodes = nodes[coord_index].to_numpy()
+                                pc_dists = cdist(pc_nodes, pc_nodes, "euclidean")
+                                pc_dists[pc_dists == 0.0] = np.inf
+                                if self.point_cloud_dynamic_radius:
+                                    pc_dists = np.min(pc_dists, axis=0)
+                                else:
+                                    pc_dists = np.full((pc_nodes.shape[0],), np.min(pc_dists))
+                                pc_dists /= 2.0
+                                cloud = ps.register_point_cloud("cloud", pc_nodes, enabled=True, material=self.point_cloud_material)
+                                cloud.add_scalar_quantity("radius", pc_dists)
+                                cloud.set_point_radius_quantity("radius", autoscale=False)
+                                if use_cmap:
+                                    current_frame_structs.append((nodes[[target_key]].to_numpy().flatten(), cloud))
 
-    #    target_times = target_nodes["Time"].unique()
-    #    # There should be more elegant ways to do this, but np.where was misbehaving, and this works fine
-    #    target_times = target_times[target_times >= self.time_low]
-    #    target_times = target_times[target_times <= self.time_high]
-    #    if self.interactive:
-    #        results = []
-    #        for time in target_times:
-    #            results.append(
-    #                self._plot_3d_single(
-    #                    time, title, target_output, target_nodes, plot_type
-    #                )
-    #            )
+                case self.ODBPPLOTYPE.SURFACE_WITH_REMAINING_NODES | self.ODBPPLOTYPE.POINT_CLOUD_WITH_REMAINING_NODES as plot_type:
+                    node_label_key: list[str] = [self.output_mapping.get("Node Label", "Node Label")]
+                    selected_node_indices: npt.NDArray = np.concatenate((np.unique(frame.element_connectivity), frame.remaining_nodes_not_in_elements[node_label_key].to_numpy().flatten()), axis=0).astype(int)
+                    selected_nodes: pd.DataFrame = frame.node_data.iloc[selected_node_indices - 1]
+                    if selected_nodes.shape[0] > 0:
+                        match plot_type:
+                            case self.ODBPPLOTYPE.SURFACE_WITH_REMAINING_NODES:
+                                hull = ConvexHull(selected_nodes[coord_index].to_numpy())
+                                surf = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0,0,0), edge_width=1, material=self.material)
+                                if use_cmap:
+                                    current_frame_structs.append((selected_nodes[[target_key]].to_numpy().flatten(), surf, surf_key_quantity_def))
+                            
+                            case self.ODBPPLOTYPE.POINT_CLOUD_WITH_REMAINING_NODES:
+                                pc_nodes = selected_nodes[coord_index].to_numpy()
+                                pc_dists = cdist(pc_nodes, pc_nodes, "euclidean")
+                                pc_dists[pc_dists == 0.0] = np.inf
+                                if self.point_cloud_dynamic_radius:
+                                    pc_dists = np.min(pc_dists, axis=0)
+                                else:
+                                    pc_dists = np.full((pc_nodes.shape[0],), np.min(pc_dists))
+                                pc_dists /= 2.0
+                                cloud = ps.register_point_cloud("cloud", pc_nodes, enabled=True, material=self.point_cloud_material)
+                                cloud.add_scalar_quantity("radius", pc_dists)
+                                cloud.set_point_radius_quantity("radius", autoscale=False)
+                                if use_cmap:
+                                    current_frame_structs.append((selected_nodes[[target_key]].to_numpy().flatten(), cloud))
 
-    #    else:
-    #        with multiprocessing.Pool(processes=self.cpus) as pool:
-    #            results = pool.starmap(
-    #                self._plot_3d_single,
-    #                (
-    #                    (time, title, target_output, target_nodes, plot_type)
-    #                    for time in target_times
-    #                ),
-    #            )
+                case self.ODBPPLOTYPE.ELEMS_AND_POINT_CLOUD_OF_REMAINING_NODES | self.ODBPPLOTYPE.ELEMS_AND_SURFACE_OF_REMAINING_NODES as plot_type:
+                    nodes: pd.DataFrame = frame.node_data.iloc[np.unique(frame.element_connectivity - 1)]
+                    new_conn_mapping: dict[int, int] = {o:i for i, o in enumerate(np.sort(np.unique(frame.element_connectivity)))}
+                    new_elem_conn: npt.NDArray
+                    if frame.element_connectivity.shape[0] > 0:
+                        new_elem_conn = np.vectorize(new_conn_mapping.__getitem__)(frame.element_connectivity)
+                    else:
+                        new_elem_conn = frame.element_connectivity
 
-    #    return results
+                    if nodes.shape[0] > 0:
+                        mesh = ps.register_volume_mesh("mesh", nodes[coord_index].to_numpy(), mixed_cells=new_elem_conn, enabled=True, edge_color=(0, 0, 0), edge_width=1, material=self.material)
+                        if use_cmap:
+                            current_frame_structs.append((nodes[[target_key]].to_numpy().flatten(), mesh, mesh_key_quantity_def))
 
-    # def _plot_3d_single(
-    #    self,
-    #    time: float,
-    #    title: str,
-    #    target_output: str,
-    #    target_nodes: pd.DataFrame,
-    #    plot_type: str | None,
-    # ) -> pathlib.Path | None:
-    #    """ """
-    #    if not PYVISTA_AVAILABLE:
-    #        raise Exception(
-    #            "Plotting cabailities are not included."
-    #            ' Please install pyvista via pip install odb-plotter["plot"]'
-    #            ' or odb-plotter["all"] rather than pip install odb-plotter'
-    #            " Or export the data from Odbp.extract() to another tool,"
-    #            " such as matplotlib, plotly,  or bokeh."
-    #        )
+                        match plot_type:
+                            case self.ODBPPLOTYPE.ELEMS_AND_POINT_CLOUD_OF_REMAINING_NODES:
+                                if frame.remaining_nodes_not_in_elements is not None:
+                                    pc_nodes = frame.remaining_nodes_not_in_elements[coord_index].to_numpy()
+                                    pc_dists = cdist(pc_nodes, pc_nodes, "euclidean")
+                                    pc_dists[pc_dists == 0.0] = np.inf
+                                    if self.point_cloud_dynamic_radius:
+                                        pc_dists = np.min(pc_dists, axis=0)
+                                    else:
+                                        pc_dists = np.full((pc_nodes.shape[0],), np.min(pc_dists))
+                                    pc_dists /= 2.0
+                                    cloud = ps.register_point_cloud("cloud", pc_nodes, enabled=True, material=self.point_cloud_material)
+                                    cloud.add_scalar_quantity("radius", pc_dists)
+                                    cloud.set_point_radius_quantity("radius", autoscale=False)
+                                    if use_cmap:
+                                        current_frame_structs.append((frame.remaining_nodes_not_in_elements[[target_key]].to_numpy().flatten(), cloud))
 
-    #    combined_label: str = f"{title}-{round(time, 2):.2f}"
+                            case self.ODBPPLOTYPE.ELEMS_AND_SURFACE_OF_REMAINING_NODES: 
+                                if frame.remaining_nodes_not_in_elements is not None:
+                                    hull = ConvexHull(frame.remaining_nodes_not_in_elements[coord_index].to_numpy())
+                                    surf = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0, 0, 0), edge_width=1, material=self.material)
+                                    if use_cmap:
+                                        current_frame_structs.append((frame.remaining_nodes_not_in_elements[[target_key]].to_numpy().flatten(), surf, surf_key_quantity_def))
 
-    #    plotter: pv.Plotter = pv.Plotter(
-    #        off_screen=(not self.interactive), window_size=(1920, 1080)
-    #    )
-    #    plotter.add_light(pv.Light(light_type="headlight"))
+            frame_struct: tuple[npt.NDArray, ps.PointCloud | ps.SurfaceMesh | ps.VolumeMesh, str] | tuple[npt.NDArray, ps.PointCloud | ps.SurfaceMesh | ps.VolumeMesh]
+            struct: ps.PointCloud | ps.SurfaceMesh | ps.VolumeMesh
+            for frame_struct in current_frame_structs:
+                scalar_data: npt.NDArray
+                if len(frame_struct) == 3:
+                    def_key: str
+                    scalar_data, struct, def_key = frame_struct
+                    struct.add_scalar_quantity(target_key, scalar_data, defined_on=def_key, enabled=True, vminmax=(target_key_lower_bound, target_key_upper_bound), cmap=self.colormap)
+                elif len(frame_struct) == 2:
+                    scalar_data, struct = frame_struct
+                    struct.add_scalar_quantity(target_key, scalar_data, enabled=True, vminmax=(target_key_lower_bound, target_key_upper_bound), cmap=self.colormap)
 
-    #    plotter.add_text(
-    #        combined_label,
-    #        position="upper_edge",
-    #        color=self.font_color,
-    #        font=self.font,
-    #        font_size=self.font_size,
-    #    )
+                    
+            bounds: tuple[npt.NDArray, npt.NDArray] = ps.get_bounding_box()
+            dimensions: npt.NDArray = np.abs(bounds[1] - bounds[0])
+            midpoint: npt.NDArray = (bounds[1] + bounds[0]) / 2.0
+            camera_location_scalar: npt.NDArray
+            up_dir: npt.NDArray
+            camera_location_scalar, up_dir = self._views[self.view]
+            camera_location: npt.NDArray = (1.1 * camera_location_scalar * dimensions) + midpoint
+            ps.look_at_dir(camera_location, midpoint, up_dir)
 
-    #    mesh = self.get_mesh(time, target_nodes, target_output)
+            if self.interactive:
+                ps.show()
 
-    #    epsilon: float = np.finfo(float).eps
-    #    plotter.add_mesh(
-    #        mesh,
-    #        scalars=target_output,
-    #        cmap=pv.LookupTable(
-    #            cmap=self._colormap,
-    #            # Handle Epsilon
-    #            scalar_range=(self.temp_low + epsilon, self.temp_high - epsilon),
-    #            above_range_color=self.above_range_color,
-    #            below_range_color=self.below_range_color,
-    #        ),
-    #        scalar_bar_args={
-    #            "vertical": True,
-    #            "title": "Nodal Temperature (Kelvin)",  # TODO !!!
-    #            "font_family": self.font,
-    #            "title_font_size": self.font_size + 4,
-    #            "label_font_size": self.font_size,
-    #            "color": self.font_color,
-    #            "fmt": "%.2f",
-    #            "position_x": 0.05,
-    #            "position_y": 0.05,
-    #        },
-    #    )
+            # Screenshot here
+            if self.save:
+                filename: str = self.filename if self.filename != "" else self.h5_path.stem
+                ext: str = self.save_format if self.save_format.startswith(".") else f".{self.save_format}"
+                target_file_path: pathlib.Path = self._result_dir / pathlib.Path(f"{filename}_{frame.node_data[self._iterator_key].to_numpy()[0]}{ext}")
+                ps.screenshot(str(target_file_path), transparent_bg=self.transparent_background)                
 
-    #    if self.show_axes:
-    #        # TODO Dynamically update these
-    #        x_low, x_high, y_low, y_high, z_low, z_high = mesh.bounds
+            for frame_struct in current_frame_structs:
+                struct = frame_struct[1]
+                struct.remove()
 
-    #        x_pad = (x_high - x_low) / 4.0
-    #        y_pad = (y_high - y_low) / 4.0
-    #        z_pad = (z_high - z_low) / 4.0
-    #        pads = [x_pad, y_pad, z_pad]
-    #        pads.sort()
-    #        pad = pads[1]
-
-    #        ruler_x = plotter.add_ruler(
-    #            pointa=(x_low, y_high + pad, z_low - pad),
-    #            pointb=(x_high, y_high + pad, z_low - pad),
-    #            label_format="%.2f",
-    #            font_size_factor=0.4,
-    #            label_color=self.axis_text_color,
-    #            title="X Axis",
-    #        )
-    #        ruler_x.SetRange(x_low, x_high)
-
-    #        ruler_y = plotter.add_ruler(
-    #            pointa=(x_high + pad, y_low, z_low - pad),
-    #            pointb=(x_high + pad, y_high, z_low - pad),
-    #            label_format="%.2f",
-    #            font_size_factor=0.4,
-    #            label_color=self.axis_text_color,
-    #            title="Y Axis",
-    #        )
-    #        ruler_y.SetRange(y_low, y_high)
-
-    #        ruler_z = plotter.add_ruler(
-    #            pointa=(x_high + pad, y_low - pad, z_low),
-    #            pointb=(x_high + pad, y_low - pad, z_high),
-    #            label_format="%.2f",
-    #            font_size_factor=0.4,
-    #            label_color=self.axis_text_color,
-    #            title="Z Axis",
-    #        )
-    #        ruler_z.SetRange(z_low, z_high)
-
-    #    plotter.set_background(color=self.background_color)
-
-    #    invalid_view = True
-    #    for k in self._views.keys():
-    #        if self.view in k:
-    #            invalid_view = False
-    #            view_angle, viewup, roll = self._views[k]
-    #            break
-
-    #    if invalid_view:
-    #        raise RuntimeError("View Panic")
-    #    plotter.view_vector(view_angle, viewup=viewup)
-    #    plotter.camera.roll = roll
-
-    #    #if not self.save:
-    #    #    plotter.show(interactive_update=True)
-    #    #else:
-    #    #    plotter.show(
-    #    #        before_close_callback=lambda p: p.screenshot(
-    #    #            self.result_dir
-    #    #            / f"{plot_type + '_' if plot_type is not None else ''}{combined_label}{self.save_format}"
-    #    #        )
-    #    #    )
-
-    #    return
-
-    # def get_mesh(self, time, target=None, output=None) -> pv.PolyData:
-    #    if target is None:
-    #        target = self.data
-    #    filtered_target_nodes: pd.DataFrame = target[target["Time"] == time]
-    #    filtered_target_nodes = filtered_target_nodes[
-    #        filtered_target_nodes["X"] >= self.x_low
-    #    ]
-    #    filtered_target_nodes = filtered_target_nodes[
-    #        filtered_target_nodes["X"] <= self.x_high
-    #    ]
-    #    filtered_target_nodes = filtered_target_nodes[
-    #        filtered_target_nodes["Y"] >= self.y_low
-    #    ]
-    #    filtered_target_nodes = filtered_target_nodes[
-    #        filtered_target_nodes["Y"] <= self.y_high
-    #    ]
-    #    filtered_target_nodes = filtered_target_nodes[
-    #        filtered_target_nodes["Z"] >= self.z_low
-    #    ]
-    #    filtered_target_nodes = filtered_target_nodes[
-    #        filtered_target_nodes["Z"] <= self.z_high
-    #    ]
-    #    # points: pv.PointSet = pv.PointSet(
-    #    points = pv.PointSet(filtered_target_nodes[["X", "Y", "Z"]].to_numpy())
-
-    #    # if output is not None:
-    #    #    points[output] = filtered_target_nodes[output].to_numpy()
-
-    #    mesh = points.delaunay_3d()
-    #    mesh.plot()
-
-    #    vox = pv.voxelize(mesh)
-    #    vox.plot()
-
-    #    if output is not None:
-    #        vox[output] = filtered_target_nodes[output].to_numpy()
-
-    #    return pv.voxelize(points.delaunay_3d())
-    #    # return points.delaunay_3d()
-
-    def get_odb_state(self) -> str:
-        return self.get_odb_settings_state()
+    #def get_odb_state(self) -> str:
+    #    return self.get_odb_settings_state()
 
 
 class DataLoader:
     def load_h5(
-        self, h5_path: pathlib.Path, cpus: int
+        self: Self, h5_path: pathlib.Path, cpus: int, output_mapping: dict[str, str]
     ) -> tuple[dict[str, str], OdbpData]:
-        return get_h5_data(h5_path, cpus)
+        return get_h5_data(h5_path, cpus, output_mapping)
 
 
 class DataUnloader:
-    def unload_h5(self) -> None:
+    def unload_h5(self: Self) -> None:
         pass

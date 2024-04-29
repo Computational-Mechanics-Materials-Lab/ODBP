@@ -37,15 +37,8 @@ from .data_model import (
 
 def convert_npz_to_h5(
     h5_path: pathlib.Path,
-    npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
-    temp_low: float | None = None,
-    temp_high: float | None = None,
-    nodesets: list[str] | None = None,
-    nodes=None,
-    parts: list[str] | None = None,
-    steps: list[str] | None = None,
-    output_mapping: dict[str, str] | None = None,
-    odb_path: pathlib.Path | None = None,
+    npz_dir: pathlib.Path,
+    output_mapping: dict[str, str],
 ) -> None:
     h5_path = pathlib.Path(h5_path)
     npz_dir = pathlib.Path(npz_dir)
@@ -271,7 +264,7 @@ def convert_npz_to_h5(
                     total_rec: np.recarray
                     column_dtypes: np.dtype
                     if data_component == "Elemental":
-                        column_headers = ["Element Label"]
+                        column_headers = [output_mapping.get("Element Label", "Element Label")]
                         column_headers.append("Time")
                         column_headers += list(data_type_dict.keys())
                         column_headers = [
@@ -301,7 +294,7 @@ def convert_npz_to_h5(
                         )
                     elif data_component == "Nodal":
                         data_type_dict |= node_coords
-                        column_headers = ["Node Label"]
+                        column_headers = [output_mapping.get("Node Label", "Node Label")]
                         column_headers.append("Time")
                         column_headers += list(data_type_dict.keys())
                         column_headers = [

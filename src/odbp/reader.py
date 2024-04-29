@@ -55,7 +55,7 @@ def get_odb_data(
     return attr_data
 
 
-def get_h5_data(h5_path: pathlib.Path, cpus: int) -> tuple[dict[str, str], OdbpData]:
+def get_h5_data(h5_path: pathlib.Path, cpus: int, output_mapping: dict[str, str]) -> tuple[dict[str, str], OdbpData]:
     """
     get_node_coords(h5_path: pathlib.Path, cpus: int) -> pd.DataFrame
     return a data frame with nodes by integer index and floating point
@@ -133,17 +133,20 @@ def get_h5_data(h5_path: pathlib.Path, cpus: int) -> tuple[dict[str, str], OdbpD
         node_data: pd.DataFrame
         element_data = pd.DataFrame
         quantity_key: str
+        time_key: str = output_mapping.get("Time", "Time")
+        node_label_key: str = output_mapping.get("Node Label", "Node Label")
+        elem_label_key: str = output_mapping.get("Element Label", "Element Label")
         for quantity_key in result_dfs.keys():
             match quantity_key:
                 case "Nodal":
                     node_data = pd.concat(
                         result_dfs[quantity_key]
-                    ).sort_values(["Time", "Node Label"], ascending=True)
+                    ).sort_values([time_key, node_label_key], ascending=True)
 
                 case "Elemental":
                     element_data = pd.concat(
                         result_dfs[quantity_key]
-                    ).sort_values(["Time", "Element Label"], ascending=True)
+                    ).sort_values([time_key, elem_label_key], ascending=True)
 
                 case _:
                     raise Exception(f"ODB Quantity {quantity_key} was not found!")
@@ -161,6 +164,7 @@ def get_h5_data(h5_path: pathlib.Path, cpus: int) -> tuple[dict[str, str], OdbpD
         return final_result_attrs, final_odb_data
 
     except (FileNotFoundError, OSError) as err:
+        print(err)
         raise Exception("Error accessing .hdf5 file") from err
 
 
