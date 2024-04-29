@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-ODBPlotter odb.py
-ODBPlotter
-https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+ODBP odb.py
+ODBP
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBP
 MIT License (c) 2023
 
 Implement the main ODB class, which is used to process the .hdf5 data and

@@ -1,9 +1,9 @@
 
-# config.toml for ODB Plotter
+# config.toml for ODBP
 
 # Change or comment defaults.
 
-# An input file for ODB Plotter can be generated using this as a template
+# An input file for ODBP can be generated using this as a template
 # Just copy it and edit the copy to have your preferred input values
 
 # Many values here are not set by default, and do not make much sense as
