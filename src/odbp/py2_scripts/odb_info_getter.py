@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 """
-ODBPlotter odb_to_npz.py
+ODBP odb_to_npz.py
 
-ODBPlotter
-https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+ODBP
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBP
 MIT License (c) 2023
 
 This is a Python 2 file which implements an Abaqus Python interface to

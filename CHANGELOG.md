@@ -22,6 +22,7 @@
         1.0.2: Implementing default plotting views and non-interactive plotting
 
     1.1.0: Changed name to ODBP to reflect greater general capabilities. Switched to Polyscope for Plotting. Now storing per-frame positional data and re-emulating Abaqus meshing. Improved filtering and putting bounds on outputs. Added more viewing angles.
+        1.1.1: Ensuring everything is using the new ODBP name
 
     Upcoming:
         Mechanical/coordinate data in future odbp data

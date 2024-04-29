@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-ODBPlotter npz_to_hdf.py
-ODBPlotter
-https://www.github.com/Computational-Mechanics-Materials-Lab/ODBPlotter
+ODBP npz_to_hdf.py
+ODBP
+https://www.github.com/Computational-Mechanics-Materials-Lab/ODBP
 MIT License (c) 2023
 
 This file exposes the npz_to_hdf() method, used to translate a hierarchical

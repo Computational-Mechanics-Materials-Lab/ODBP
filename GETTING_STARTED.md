@@ -1,5 +1,7 @@
 # How to use ODBPlotter
 
+April 2024: This information is out-of-date and will be corrected soon!
+
 ## Installation
 ODBPlotter is available via `pip` on [pypi.org](https://pypi.org)
 ```sh
