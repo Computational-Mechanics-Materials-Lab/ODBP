@@ -19,207 +19,332 @@ Originally written by CMML Member CJ Nguyen
 
 import h5py
 import pathlib
-import os
 import warnings
+import pickle
 import numpy as np
-from typing import Dict, List, Optional
-from .types import (
-    NDArrayType,
-    NPZFileType,
-    H5PYFileType,
-    NullableNodeType,
-    NullableStrList,
+import numpy.typing as npt
+from typing import Any, Literal, assert_never
+from io import BufferedReader
+
+from .data_model import (
+    element_connectivity_name,
+    element_sets_to_elements_name,
+    node_sets_to_nodes_name,
+    part_to_element_set_name,
+    part_to_node_set_name,
 )
 
 
-def convert_npz_to_hdf(
-    hdf_path: pathlib.Path,
-    #data_model: str,
-    npz_dir: pathlib.Path = pathlib.Path("tmp_npz"),
-    temp_low: "Optional[float]" = None,
-    temp_high: "Optional[float]" = None,
-    time_step: int = 1,
-    nodesets: NullableStrList = None,
-    nodes: NullableNodeType = None,
-    parts: NullableStrList = None,
-    steps: NullableStrList = None,
-    coord_key: str = "COORD",
-    target_outputs: NullableStrList = None,
-    odb_path: "Optional[str]" = None,
+def convert_npz_to_h5(
+    h5_path: pathlib.Path,
+    npz_dir: pathlib.Path,
+    output_mapping: dict[str, str],
 ) -> None:
-    # Format of the npz_dir:
-    # node_coords.npz (locations per node)
-    # step_frame_times/<step>.npz (times per step)
-    # temps/<step>/<frame>.npz (temperatures per node per frame)
-    # All of these must exist (error if they do not)
-    # They're the only things we care about
-
-    hdf_path = pathlib.Path(hdf_path)
+    h5_path = pathlib.Path(h5_path)
     npz_dir = pathlib.Path(npz_dir)
-
-    coordinate_data: Optional[NDArrayType] = None
-    #if data_model != "mechanical":
-    #step_frame_times_dir: pathlib.Path = npz_dir / "step_frame_times"
-    #step_frame_times: Dict[str, NDArrayType] = dict()
-    #for file in step_frame_times_dir.iterdir():
-    #    key: str = str(file.stem)
-    #    with warnings.catch_warnings():
-    #        warnings.filterwarnings("ignore", category=UserWarning, append=True)
-    #        step_frame_times_file: NPZFileType
-    #        with np.load(file) as step_frame_times_file:
-    #            time_data: NDArrayType = step_frame_times_file[
-    #                step_frame_times_file.files[0]
-    #            ]
-
-    #    step_frame_times[key] = time_data
-    node_coords_path: pathlib.Path = npz_dir / pathlib.Path("node_coords.npz")
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning, append=True)
-        node_coords_file: NPZFileType
-        with np.load(node_coords_path) as node_coords_file:
-            coordinate_data = node_coords_file[node_coords_file.files[0]]
 
     data_dir: pathlib.Path = npz_dir / pathlib.Path("data")
 
-    data: Dict[str, Dict[int, Dict[str, NDArrayType]]] = dict()
-    step: pathlib.Path
-    for step in data_dir.iterdir():
-        step_key = str(step.stem)
-        data[step_key] = dict()
-        file: pathlib.Path
-        for file in step.iterdir():
-            data_type: str
-            frame_str: str
-            data_type, frame_str = file.stem.split("_")
-            frame: int = int(frame_str)
-            if frame not in data[step_key]:
-                data[step_key][frame] = dict()
+    # ew
+    data: dict[
+        str,
+        dict[
+            Literal["Nodal", "Elemental"],
+            dict[int, dict[str, npt.NDArray | dict[str, npt.NDArray]]],
+        ],
+    ] = {}
 
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning, append=1)
-                data_file: NPZFileType
-                with np.load(file) as data_file:
-                    data[step_key][frame][data_type] = np.vstack(
-                        data_file[data_file.files[0]]
-                    )
+    element_connectivity: npt.NDArray
+    node_coords: dict[str, npt.NDArray]
+    elementsets_to_elements_mapping: dict[str, npt.NDArray] = {}
+    nodesets_to_nodes_mapping: dict[str, npt.NDArray] = {}
+    part_to_elementsets_mapping: dict[str, npt.NDArray] = {}
+    part_to_nodesets_mapping: dict[str, npt.NDArray] = {}
 
-    hdf5_file: H5PYFileType
-    with h5py.File(hdf_path, "w") as hdf5_file:
-        total_name: str = str(hdf_path.stem)
-        step: str
-        for step in data:
-            i: int
-            frame_dict: Dict[int, Dict[str, NDArrayType]]
-            for i, frame_dict in enumerate(data[step].items()):
-                frame: int
-                data_type_dict: Dict[str, NDArrayType]
-                frame, data_type_dict = frame_dict
+    step_dir_or_input_pickle_or_npz: pathlib.Path
+    for step_dir_or_input_pickle_or_npz in data_dir.iterdir():
+        if step_dir_or_input_pickle_or_npz.is_dir():
+            step_dir: pathlib.Path = step_dir_or_input_pickle_or_npz
+            step_key: str = step_dir.stem
+            data[step_key] = {}
+            file: pathlib.Path
+            for file in step_dir.iterdir():
+                # location_type_..._frame, ... may be nothing or may be a component label
+                data_parts: list[str] = file.stem.split("_")
+                data_location: str = data_parts.pop(0)
+                if data_location not in data[step_key].keys():
+                    data[step_key][data_location] = {}
+                data_type: str = data_parts.pop(0)
+                frame_str: str = data_parts.pop(-1)
+                component_label: str | None = None
+                frame_val: int = int(frame_str)
+                if frame_val not in data[step_key][data_location].keys():
+                    data[step_key][data_location][frame_val] = {}
+                if len(data_parts) > 0:
+                    # This should always be a 1-element list if it's not empty
+                    component_label = data_parts[0]
 
-                frame_time = data_type_dict.pop("Time")
+                data_file: Any
+                if component_label is not None:
+                    if data_type not in data[step_key][data_location][frame_val].keys():
+                        data[step_key][data_location][frame_val][data_type] = {}
 
-                #if data_model == "thermal":
-                target_len: int = len(list(data_type_dict.values())[0])
-                column_headers: List[str] = [
-                    "Time",
-                ]
-                column_headers += list(data_type_dict.keys())
-                # Preserve order
-                column_headers = list(dict.fromkeys(column_headers))
-                column_dtypes: np.dtype = np.dtype(
-                    {
-                        "names": column_headers,
-                        "formats": [np.float64 for _ in column_headers],
-                    }
-                )
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore", category=UserWarning, append=True
+                        )
+                        with np.load(file) as data_file:
+                            data[step_key][data_location][frame_val][data_type][
+                                component_label
+                            ] = np.vstack(data_file[data_file.files[0]])
 
-                total_data: NDArrayType = np.hstack(
-                    (
-                        np.vstack(np.full((target_len), frame_time)),
-                        *list(data_type_dict.values()),
-                    )
-                )
-                total_rec: np.record = np.rec.fromarrays(
-                    total_data.T, dtype=column_dtypes
-                )
+                else:
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore", category=UserWarning, append=True
+                        )
+                        with np.load(file) as data_file:
+                            data[step_key][data_location][frame_val][data_type] = (
+                                np.vstack(data_file[data_file.files[0]])
+                            )
+
+        else:
+            input_pickle_or_npz: pathlib.Path = step_dir_or_input_pickle_or_npz
+            if input_pickle_or_npz.suffix == ".pickle":
+                input_pickle: pathlib.Path = input_pickle_or_npz
+                pf: BufferedReader
+                match input_pickle.stem:
+                    case "elementsets_to_elements_mapping":
+                        with open(input_pickle, "rb") as pf:
+                            elementsets_to_elements_mapping = pickle.load(pf)
+
+                    case "nodesets_to_nodes_mapping":
+                        with open(input_pickle, "rb") as pf:
+                            nodesets_to_nodes_mapping = pickle.load(pf)
+
+                    case "part_to_elementsets_mapping":
+                        with open(input_pickle, "rb") as pf:
+                            part_to_elementsets_mapping = pickle.load(pf)
+
+                    case "part_to_nodesets_mapping":
+                        with open(input_pickle, "rb") as pf:
+                            part_to_nodesets_mapping = pickle.load(pf)
+
+                    case "element_connectivity":
+                        with open(input_pickle, "rb") as pf:
+                            element_connectivity_dict: dict[int, npt.NDArray] = pickle.load(pf)
+                            k: int
+                            v: npt.NDArray
+                            temp_element_connectivity: list[tuple[int, npt.NDArray]] = [(k, v) for k, v in element_connectivity_dict.items()]
+                            # Sort by label
+                            e: tuple[int, npt.NDArray]
+                            temp_element_connectivity = sorted(temp_element_connectivity, key=lambda e: e[0])
+                            element_connectivity = np.array([e[1] for e in temp_element_connectivity])
+
+                    case _:
+                        raise Exception(f"Unknown pickle file: {input_pickle}")
+
+            elif input_pickle_or_npz.suffix == ".npz":
+                npz_file: pathlib.Path = input_pickle_or_npz
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=UserWarning, append=True)
+                    match npz_file.stem:
+                        case "node_coords":
+                            with np.load(npz_file) as data_file:
+                                node_coords_data: npt.NDArray = data_file[
+                                    data_file.files[0]
+                                ]
+                                data_len: int = node_coords_data.shape[0]
+                                node_coords = {
+                                    "X": node_coords_data[:, 0].reshape((data_len, 1)),
+                                    "Y": node_coords_data[:, 1].reshape((data_len, 1)),
+                                    "Z": node_coords_data[:, 2].reshape((data_len, 1)),
+                                }
+
+                        case _:
+                            raise Exception(f"Unknown npz file: {npz_file}")
+
+            else:
+                raise ValueError(f"Unexpected file: {input_pickle_or_npz}")
+
+    step_dict: dict[str, dict[int, dict[str, npt.NDArray | dict[str, npt.NDArray]]]]
+    for step_dict in data.values():
+        location_dict: dict[int, dict[str, npt.NDArray | dict[str, npt.NDArray]]]
+        for location_dict in step_dict.values():
+            frame_dict: dict[str, npt.NDArray | dict[str, npt.NDArray]]
+            for frame_dict in location_dict.values():
+                to_remove: list[str] = []
+                to_add: list[dict[str, npt.NDArray]] = []
+                output: str
+                output_obj: npt.NDArray | dict[str, npt.NDArray]
+                for output, output_obj in frame_dict.items():
+                    if isinstance(output_obj, dict):
+                        to_remove.append(output)
+                        spec_output: str
+                        spec_output_obj: npt.NDArray
+                        for spec_output, spec_output_obj in output_obj.items():
+                            to_add.append({spec_output: spec_output_obj})
+
+                add_dict: dict[str, npt.NDArray]
+                for add_dict in to_add:
+                    add_k: str
+                    add_v: npt.NDArray
+                    for add_k, add_v in add_dict.items():
+                        frame_dict[add_k] = add_v
+
+                remove_key: str
+                for remove_key in to_remove:
+                    del frame_dict[remove_key]
+
+    if output_mapping is None:
+        output_mapping = {}
+
+    hdf5_file: h5py.File
+    with h5py.File(h5_path, "w") as hdf5_file:
+        total_name: str = h5_path.stem
+        hdf5_file.create_dataset(
+            f"{total_name}/{element_connectivity_name}",
+            data=element_connectivity,
+            compression="gzip",
+            compression_opts=9,
+        )
+
+        name: str
+        mapping: dict[str, npt.NDArray]
+        for name, mapping in (
+            (
+                element_sets_to_elements_name,
+                elementsets_to_elements_mapping,
+            ),
+            (
+                node_sets_to_nodes_name,
+                nodesets_to_nodes_mapping,
+            ),
+            (
+                part_to_element_set_name,
+                part_to_elementsets_mapping,
+            ),
+            (
+                part_to_node_set_name,
+                part_to_nodesets_mapping,
+            ),
+        ):
+            k: str
+            v: npt.NDArray
+            for k, v in mapping.items():
                 hdf5_file.create_dataset(
-                    f"{total_name}/{step}/{frame}",
-                    data=total_rec,
+                    f"{total_name}/{name}/{k}",
+                    data=v,
                     compression="gzip",
+                    compression_opts=9,
                 )
 
-                #elif data_model == "mechanical":
-                #    target_len: int = len(list(data_type_dict.values())[0])
-                #    column_headers: List[str] = ["Time"]
-                #    column_headers += list(data_type_dict.keys())
-                #    column_headers += ["Node Label", "X", "Y", "Z"]
-                #    # Preserve order
-                #    column_headers = list(dict.fromkeys(column_headers))
-                #    column_dtypes: np.dtype = np.dtype(
-                #        {
-                #            "names": column_headers,
-                #            "formats": [np.float64 for _ in column_headers],
-                #        }
-                #    )
+        data_step: str
+        for data_step in data:
+            data_component: Literal["Nodal", "Elemental"]
+            data_frame_dict: dict[int, dict[str, npt.NDArray | dict[str, npt.NDArray]]]
+            for data_component, data_frame_dict in data[data_step].items():
+                data_frame: int
+                data_type_dict: dict[str, npt.NDArray | dict[str, npt.NDArray]]
+                for data_frame, data_type_dict in data_frame_dict.items():
 
-                #    total_data: NDArrayType = np.hstack(
-                #        (
-                #            np.vstack(np.full((target_len), step_frame_times[step][i])),
-                #            *list(data_type_dict.values()),
-                #        )
-                #    )
-                #    total_rec: np.record = np.rec.fromarrays(
-                #        total_data.T, dtype=column_dtypes
-                #    )
-                #    hdf5_file.create_dataset(
-                #        f"{total_name}/{step}/{frame}",
-                #        data=total_rec,
-                #        compression="gzip",
-                #    )
+                    frame_time: npt.NDArray | dict[str, npt.NDArray] = (
+                        data_type_dict.pop("Time")
+                    )
+                    if not isinstance(frame_time, np.ndarray):
+                        raise ValueError("Time should map to only one array!")
+                    target_len: int
+                    if data_component == "Nodal":
+                        target_len = len(node_coords["X"])
+                    elif data_component == "Elemental":
+                        target_len = len(element_connectivity)
 
-        #if data_model == "thermal" and coordinate_data is not None:
-        if coordinate_data is not None:
-            coordinate_dtypes: np.dtype = np.dtype(
-                {
-                    "names": ["Node Label", "X", "Y", "Z"],
-                    "formats": [np.float64 for _ in range(coordinate_data.shape[1])],
-                }
-            )
-            coord_rec: np.record = np.rec.fromarrays(
-                coordinate_data.T, dtype=coordinate_dtypes
-            )
-            hdf5_file.create_dataset(
-                f"{total_name}/coordinates", data=coord_rec, compression="gzip"
-            )
+                    column_headers: list[str]
+                    total_data: npt.NDArray
+                    total_rec: np.recarray
+                    column_dtypes: np.dtype
+                    if data_component == "Elemental":
+                        column_headers = [output_mapping.get("Element Label", "Element Label")]
+                        column_headers.append("Time")
+                        column_headers += list(data_type_dict.keys())
+                        column_headers = [
+                            output_mapping.get(c, c) for c in column_headers
+                        ]
+                        column_dtypes = np.dtype(
+                            {
+                                "names": column_headers,
+                                "formats": [np.float64 for _ in column_headers],
+                            }
+                        )
 
-        #hdf5_file[total_name].attrs["data_model"] = data_model
-        if temp_low is not None:
-            hdf5_file[total_name].attrs["temp_low"] = temp_low
-        if temp_high is not None:
-            hdf5_file[total_name].attrs["temp_high"] = temp_high
-        if time_step is not None:
-            hdf5_file[total_name].attrs["time_step"] = time_step
-        if nodesets is not None:
-            hdf5_file[total_name].attrs["nodesets"] = nodesets
-        else:
-            hdf5_file[total_name].attrs["nodesets"] = "All Nodesets"
-        if nodes is not None:
-            hdf5_file[total_name].attrs["nodes"] = nodes
-        else:
-            hdf5_file[total_name].attrs["nodes"] = "All Nodes"
-        if parts is not None:
-            hdf5_file[total_name].attrs["parts"] = parts
-        else:
-            hdf5_file[total_name].attrs["parts"] = "All Parts"
-        if steps is not None:
-            hdf5_file[total_name].attrs["steps"] = steps
-        else:
-            hdf5_file[total_name].attrs["steps"] = "All Steps"
-        hdf5_file[total_name].attrs["coord_key"] = coord_key
-        if target_outputs is not None:
-            hdf5_file[total_name].attrs["target_outputs"] = target_outputs
-        else:
-            hdf5_file[total_name].attrs["target_outputs"] = "All Fields"
-        if odb_path is not None:
-            hdf5_file[total_name].attrs["odb_path"] = str(odb_path)
-        else:
-            hdf5_file[total_name].attrs["odb_path"] = "Unknown"
+                        total_data = np.hstack(
+                            (
+                                np.vstack(np.arange(1, target_len + 1, 1)),
+                                np.vstack(np.full((target_len), frame_time)),
+                                *list(data_type_dict.values()),
+                            )
+                        )
+
+                        total_rec = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
+                        hdf5_file.create_dataset(
+                            f"{total_name}/{data_step}/{data_component}/{data_frame}",
+                            data=total_rec,
+                            compression="gzip",
+                            compression_opts=9,
+                        )
+                    elif data_component == "Nodal":
+                        data_type_dict |= node_coords
+                        column_headers = [output_mapping.get("Node Label", "Node Label")]
+                        column_headers.append("Time")
+                        column_headers += list(data_type_dict.keys())
+                        column_headers = [
+                            output_mapping.get(c, c) for c in column_headers
+                        ]
+                        column_dtypes = np.dtype(
+                            {
+                                "names": column_headers,
+                                "formats": [np.float64 for _ in column_headers],
+                            }
+                        )
+                        total_data = np.hstack(
+                            (
+                                np.vstack(np.arange(1, target_len + 1, 1)),
+                                np.vstack(np.full((target_len), frame_time)),
+                                *list(data_type_dict.values()),
+                            )
+                        )
+                        total_rec = np.rec.fromarrays(total_data.T, dtype=column_dtypes)
+                        hdf5_file.create_dataset(
+                            f"{total_name}/{data_step}/{data_component}/{data_frame}",
+                            data=total_rec,
+                            compression="gzip",
+                            compression_opts=9,
+                        )
+                    else:
+                        assert_never(data_component)
+
+        # TODO!!!
+        # if temp_low is not None:
+        #    hdf5_file[total_name].attrs["temp_low"] = temp_low
+        # if temp_high is not None:
+        #    hdf5_file[total_name].attrs["temp_high"] = temp_high
+        # if nodesets is not None:
+        #    hdf5_file[total_name].attrs["nodesets"] = nodesets
+        # else:
+        #    hdf5_file[total_name].attrs["nodesets"] = "All Nodesets"
+        # if nodes is not None:
+        #    hdf5_file[total_name].attrs["nodes"] = nodes
+        # else:
+        #    hdf5_file[total_name].attrs["nodes"] = "All Nodes"
+        # if parts is not None:
+        #    hdf5_file[total_name].attrs["parts"] = parts
+        # else:
+        #    hdf5_file[total_name].attrs["parts"] = "All Parts"
+        # if steps is not None:
+        #    hdf5_file[total_name].attrs["steps"] = steps
+        # else:
+        #    hdf5_file[total_name].attrs["steps"] = "All Steps"
+        # if odb_path is not None:
+        #    hdf5_file[total_name].attrs["odb_path"] = str(odb_path)
+        # else:
+        #    hdf5_file[total_name].attrs["odb_path"] = "Unknown"

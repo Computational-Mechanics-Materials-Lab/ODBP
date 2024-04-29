@@ -12,7 +12,7 @@
 
 # Path (relative or absolute) to .hdf5 files
 # Default "." (present working directory)
-hdf_source_dir = "."
+h5_source_dir = "."
 
 # Path (relative or absolute) to .odb files
 # Default "." (present working directory)
@@ -25,7 +25,7 @@ result_dir = "results"
 
 # path to the .hdf5 file
 # Not set by default. Enter a value and uncomment to pass a default value
-# hdf_path =
+# h5_path =
 
 # path to the .odb file
 # Not set by default. Enter a value and uncomment to pass a default value
@@ -122,14 +122,6 @@ time_step = 1
 # Defaults to "abaqus" but, for example, if you have both abaqus 2019 and 2022
 # installed, and use abaqus 2019, you would set this to "abq2019"
 abaqus_executable = "abaqus"
-
-# Which value in the .odb or .hdf5 refers to coordinates
-# Defaults to "COORD"
-coord_key = "COORD"
-
-# List of outputs which should be converted
-# Not set by default, which will convert all outputs
-# target_outputs = []
 
 # Which colormap to use for the plots
 # Default "turbo"

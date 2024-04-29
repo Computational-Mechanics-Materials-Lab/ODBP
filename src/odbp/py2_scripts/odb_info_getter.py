@@ -53,11 +53,10 @@ def get_odb_info(odb_path):
         # Parts --> Nodesets
         # # Nodes --> Nodesets
         steps = odb.steps
-        step_lens = dict()
-        all_frames = list()
-        all_parts = list()
-        frame_keys = list()
-        frame_keys_per_step = dict()
+        step_lens = {}
+        all_parts = []
+        frame_keys = []
+        frame_keys_per_step = {}
         frame_range = 0
         for step_key, step_data in steps.items():
             step_lens[step_key] = len(step_data.frames)
@@ -73,16 +72,52 @@ def get_odb_info(odb_path):
 
         assembly = odb.rootAssembly
         nodesets = assembly.nodeSets.keys()
+        elementsets = assembly.elementSets.keys()
 
         all_parts = assembly.instances.keys()
 
-        all_nodes = list()
-        parts_to_nodes = dict()
+        target_part = all_parts[0]
+
+        target_nodeset = list(assembly.instances[target_part].elementSets.keys())[0]
+        node_range = len(assembly.instances[key].nodeSets[target_nodeset].nodes)
+        nodes_per_part = {}
+        nodeset_per_part = {}
+        nodes_per_nodeset = {}
         for key in all_parts:
-            parts_to_nodes[key] = list()
-            for node in assembly.instances[key].nodes:
-                parts_to_nodes[key].append(node.label)
-                all_nodes.append(node.label)
+            nodes_per_part[key] = []
+            nodeset_per_part[key] = []
+            for node in assembly.instances[key].nodeSets[target_nodeset].nodes:
+                nodes_per_part[key].append(node.label)
+
+            for nodeset in assembly.instances[key].nodeSets.keys():
+                nodeset_per_part[key].append(nodeset)
+                if nodeset not in nodes_per_nodeset:
+                    nodes_per_nodeset[nodeset] = []
+                    for node in assembly.instances[key].nodeSets[nodeset].nodes:
+                        nodes_per_nodeset[nodeset].append(node.label)
+
+        target_elementset = list(assembly.instances[target_part].elementSets.keys())[0]
+        element_range = len(
+            assembly.instances[key].elementSets[target_elementset].elements
+        )
+        elements_per_part = {}
+        elementset_per_part = {}
+        elements_per_elementset = {}
+        for key in all_parts:
+            elements_per_part[key] = []
+            for element in (
+                assembly.instances[key].elementSets[target_elementset].elements
+            ):
+                elements_per_part[key].append(element.label)
+
+            for elementset in assembly.instances[key].elementsets.keys():
+                elementset_per_part[key].append(elementset)
+                if elementset not in elements_per_elementset:
+                    elements_per_elementset[elementset] = []
+                    for element in (
+                        assembly.instances[key].elementSets[elementset].elements
+                    ):
+                        elements_per_elementset[elementset].append(element.label)
 
         # Temporal
         result["frame_keys"] = frame_keys
@@ -93,13 +128,17 @@ def get_odb_info(odb_path):
 
         # Spatial
         result["nodeset_names"] = nodesets
+        result["elementset_names"] = elementsets
         result["part_names"] = list(all_parts)
 
-        result["node_range"] = (all_nodes[0], all_nodes[-1])
-        node_ranges_per_part = dict()
-        for s, f in parts_to_nodes.items():
-            node_ranges_per_part[s] = (min(f), max(f))
-        result["node_ranges_per_part"] = node_ranges_per_part
+        result["node_range"] = node_range
+        result["element_range"] = element_range
+        result["nodes_per_part"] = nodes_per_part
+        result["nodeset_per_part"] = nodeset_per_part
+        result["nodes_per_nodeset"] = nodes_per_nodeset
+        result["elements_per_part"] = elements_per_part
+        result["elementset_per_part"] = elementset_per_part
+        result["elements_per_elementset"] = elements_per_elementset
 
     finally:
         odb.close()

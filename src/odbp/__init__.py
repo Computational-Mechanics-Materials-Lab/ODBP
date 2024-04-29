@@ -1,3 +1,5 @@
-from .odb import Odb
+from .odbp import Odbp, OdbpPlotType
 
-__version__ = "1.0.2"
+__all__ = ["Odbp"]
+
+__version__ = "1.1.0"

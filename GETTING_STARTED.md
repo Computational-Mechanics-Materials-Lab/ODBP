@@ -10,16 +10,16 @@ python -m pip install odb-plotter
 ## API usage
 ODBPlotter can be used as a Python module in Python code.
 
-Generally, processing a .odb file comes from the Odb object type.
+Generally, processing a .odb file comes from the Odbp object type.
 Assuming you have an Abaqus .odb called `example.odb`, loading it with ODBPlotter looks like this:
 ```py
-from odbp import Odb
+from odbp import Odbp
 
-odb = Odb()
+odb = Odbp()
 odb.odb_path = <"path/to/example.odb">
 
 # Give the resulting .hdf5 file a path and name
-odb.hdf_path = <"path/to/example.hdf5">
+odb.h5_path = <"path/to/example.hdf5">
 
 # Assuming you have a working Abaqus installation, you can automatically convert from a .odb to a .hdf5
 odb.convert()
@@ -29,19 +29,19 @@ This will result in the `example.hdf5` file being created in the desired directo
 
 Opening a .hdf5 reads the data into memory and tidies the data into a useable [pandas](https://pandas.pydata.org/) DataFrame.
 ```py
-from odbp import Odb
-odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this like above
+from odbp import Odbp
+odb = Odbp()
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this like above
 odb.load_hdf()
-odb.odb # This is now a standard pandas dataframe with the .odb data
+odb.data # This is now a dataclass with five simple arrays and two pandas DataFrames with the .odb data
 ```
 As such, the .odb data can now be used just as any other Python 3 pandas DataFrame.
 
 Before loading data in, it may be necessary to define bounds, such as for not loading substrate, or only loading desired frames:
 ```py
-from odbp import Odb
-odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
+from odbp import Odbp
+odb = Odbp()
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this
 
 # Spatial constraints use the same coordinate axes as in Abaqus
 odb.x_low = -1
@@ -64,25 +64,11 @@ odb.temp_high = 1727.0
 ```
 Thus, to show a cut view from any plane, simply update the spatial constraints, even after loading. To view different times, simply update the time range.
 
-2D Plotting is as follows:
+3D Plotting is as follows:
 ```py
-from odbp import Odb
-odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
-
-# Plot the thermal history of a single node:
-odb.plot_single_node(<node_number_int>)
-
-# Plot a stored output value versus time:
-odb.plot_key_versus_time("<target_output>")
-# The "target output" is the name given to the output. For example, "NT11" or "Temp"
-```
-
-And 3D Plotting is as follows:
-```py
-from odbp import Odb
-odb = Odb()
-odb.hdf_path = <"path/to/example.hdf5"> # Assuming we've already created this
+from odbp import Odbp
+odb = Odbp()
+odb.h5_path = <"path/to/example.hdf5"> # Assuming we've already created this
 
 # Choose whether to open the interactive PyVista plotter,
 # allowing for panning and zooming (interactive = True)
@@ -102,92 +88,11 @@ odb.plot_3d_all_times("<target_output>")
 
 # Ensure that the melting point is set
 odb.temp_high = 1727.0
-meltpool_only = self.odb.odb[self.odb.odb["Temp"] >= self.odb.temp_high]
-self.odb.plot_3d_all_times(
+meltpool_only = odb.data[odb.data["Temp"] >= odb.temp_high]
+odb.plot_3d_all_times(
 "Temp",
 target_nodes=meltpool_only
 )
-```
-
-## Command Line Usage
-ODBPlotter also ships a command line interface (CLI) to perform all of these capabilities:
-
-Access the command line interface as follows:
-```sh
-python -m odbp
-```
-
-A list of commands and their documentation can be found with:
-```
-> help
-> help <command>
-```
-
-Selecting and loading a .odb file:
-```
-> select
-...
-"<path/to/example.odb>"
-
-> process
-# Enter .hdf5 files name to create when provided
-```
-
-Select ranges:
-```
-> ranges
-...
-Enter the lower x you would like to use (Leave blank for negative infinity)
-Enter the upper x you would like to use (Leave blank for infinity)  1.0
-You entered the lower x value as -inf and the upper x value as 1.0.
-
-Is this correct? (Y/n)? y
-Enter the lower y you would like to use (Leave blank for negative infinity)  -1
-Enter the upper y you would like to use (Leave blank for infinity)  25.5
-You entered the lower y value as -1.0 and the upper y value as 25.5.
-
-Is this correct? (Y/n)? y
-Enter the lower z you would like to use (Leave blank for negative infinity)
-Enter the upper z you would like to use (Leave blank for infinity)  2.0
-You entered the lower z value as -inf and the upper z value as 2.0.
-
-Is this correct? (Y/n)?
-Enter the start time you would like to use (Leave blank for zero)
-Enter the end time you would like to use (Leave blank for infinity)  1.0
-You entered the start time value as 0.0 and the stop time value as 1.0.
-
-Is this correct? (Y/n)?
-Enter the lower temperature you would like to use (Leave blank for zero)  300.0
-Enter the upper temperature you would like to use (Leave blank for infinity)  1727.0
-You entered the lower temperature value as 300.0 and the upper temperature value as 1727.0.
-
-Is this correct? (Y/n)? y
-```
-
-Set Plotting Criteria:
-```
-> views # view and select views
-> interactive # toggle interactive plotting
-``` 
-
-Plot 3D:
-```
-> plot_3d
-...
-> plot_meltpool
-```
-
-Plot 2D:
-```
-> plot_node
-...
-> plot_val_v_time
-...
-```
-
-View the current settings of the CLI Plotter
-```
-> status
 ```
 
 Full Documentation can be found at: **COMING SOON!**

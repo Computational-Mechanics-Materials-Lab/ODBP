@@ -9,9 +9,9 @@ import sys
 import cmd
 import pathlib
 import numpy as np
+import pandas as pd
 from typing import Union, List, Tuple, Dict, Optional
 from .odb import Odb
-from .types import DataFrameType
 from .process_input import process_input
 from odbp import __version__
 
@@ -148,17 +148,17 @@ class OdbPlotterCLI(cmd.Cmd):
         _ = arg
         self._quit()
 
-    def _hdf(self) -> None:
+    def _h5(self) -> None:
         while True:
             try:
-                hdf_str: str = input(
+                h5_str: str = input(
                     "Please enter the path of the hdf5 file, or the name of the hdf5 file in the hdfs directory: "
                 )
-                if not hdf_str.endswith(".hdf5"):
-                    hdf_str += ".hdf5"
-                hdf_path: pathlib.Path = pathlib.Path(hdf_str)
-                if self._confirm(f"You entered {hdf_path}", "Is this correct", "yes"):
-                    self.odb.hdf_path = hdf_path
+                if not h5_str.endswith(".hdf5"):
+                    h5_str += ".hdf5"
+                h5_path: pathlib.Path = pathlib.Path(h5_str)
+                if self._confirm(f"You entered {h5_path}", "Is this correct", "yes"):
+                    self.odb.h5_path = h5_path
                     return
 
             except ValueError:
@@ -196,15 +196,20 @@ class OdbPlotterCLI(cmd.Cmd):
         _ = arg
         self._odb()
 
-    def do_hdf(self, arg: str) -> None:
-        """Select the .hdf5 file to load (same as hdf5)"""
+    def do_h5(self, arg: str) -> None:
+        """Select the .hdf5 file to load (same as hdf and hdf5)"""
         _ = arg
-        self._hdf()
+        self._h5()
+
+    def do_hdf(self, arg: str) -> None:
+        """Select the .hdf5 file to load (same as h5 and hdf5)"""
+        _ = arg
+        self._h5()
 
     def do_hdf5(self, arg: str) -> None:
-        """Select the .hdf5 file to load (same as hdf)"""
+        """Select the .hdf5 file to load (same as h5 and hdf)"""
         _ = arg
-        self._hdf()
+        self._h5()
 
     def _convert(self) -> None:
         if not hasattr(self.odb, "odb_path"):
@@ -219,11 +224,11 @@ class OdbPlotterCLI(cmd.Cmd):
         else:
             print(f"{self.odb.odb_path} is set as current .odb file")
 
-        if not hasattr(self.odb, "hdf_path"):
-            self._hdf()
+        if not hasattr(self.odb, "h5_path") or self.odb.h5_path is None:
+            self._h5()
 
         else:
-            print(f"{self.odb.hdf_path} is set as the target .hdf5 file")
+            print(f"{self.odb.h5_path} is set as the target .hdf5 file")
 
         self.odb.convert()
 
@@ -441,12 +446,12 @@ class OdbPlotterCLI(cmd.Cmd):
 
     def _filename(self) -> None:
         while True:
-            if hasattr(self.odb, "hdf_path"):
+            if hasattr(self.odb, "h5_path") and self.odb.h5_path is not None:
                 filename: str = input(
-                    f"Enter the filename to save images as. The time will be appended (Leave blank for default value {self.odb.hdf_path.stem}): "
+                    f"Enter the filename to save images as. The time will be appended (Leave blank for default value {self.odb.h5_path.stem}): "
                 )
                 if filename == "":
-                    filename = self.odb.hdf_path.stem
+                    filename = self.odb.h5_path.stem
             else:
                 filename: str = input(
                     "Enter the filename to save images as. The time wiill be appended: "
@@ -728,12 +733,13 @@ class OdbPlotterCLI(cmd.Cmd):
             if self._confirm(f"You entered {color}.", "Is this correct?", "yes"):
                 return color
 
-
     def do_axis_color(self, arg: str) -> None:
         """Set the color of the axis text"""
         _ = arg
         while True:
-            color: str = input(f'Please enter the desired axis color, either "white" or "black": ')
+            color: str = input(
+                f'Please enter the desired axis color, either "white" or "black": '
+            )
             if self._confirm(f"You entered {color}.", "Is this correct?", "yes"):
                 self.odb.axis_text_color = color
                 return
@@ -1031,7 +1037,7 @@ class OdbPlotterCLI(cmd.Cmd):
                         return
                     else:
                         break
- 
+
             if not view_valid:
                 print("Error. Invalid View")
 
@@ -1151,17 +1157,17 @@ class OdbPlotterCLI(cmd.Cmd):
 
         print("Target outputs list has been cleared.")
 
-    def do_get_hdf_status(self, arg: str) -> None:
+    def do_get_hd5_status(self, arg: str) -> None:
         """Get the metadata about the loaded .hdf5"""
         _ = arg
-        if hasattr(self.odb, "hdf_status"):
-            if hasattr(self.odb, "hdf_path"):
-                print(f"Metadata for {self.odb.hdf_path}:")
+        if hasattr(self.odb, "h5_status"):
+            if hasattr(self.odb, "h5_path"):
+                print(f"Metadata for {self.odb.h5_path}:")
             else:
                 print("Metadata for Currently Loaded .hdf5 file:")
             k: str
             v: str
-            for k, v in self.odb.hdf_status.items():
+            for k, v in self.odb.h5_status.items():
                 print(f"\t{k}:{v}")
 
         else:
@@ -1177,7 +1183,7 @@ class OdbPlotterCLI(cmd.Cmd):
                 "If you do not enter an absolute path, the file will be saved in the results directory if it is set"
             )
             if self._confirm(f"You entered{target}.", "Is this correct?", "yes"):
-                results_df: DataFrameType = self.extract()
+                results_df: pd.DataFrame = self.extract()
                 if target == "show":
                     print(results_df)
 
@@ -1341,8 +1347,8 @@ class OdbPlotterCLI(cmd.Cmd):
         while True:
             temp: str = input("Select the name of the temperature values: ")
             if self._confirm(f"You entered {temp}.", "Is this correct?", "yes"):
-                target_nodes: DataFrameType = self.odb.odb[
-                    self.odb.odb[temp] >= self.odb.temp_high
+                target_nodes: pd.DataFrame = self.odb.data[
+                    self.odb.data[temp] >= self.odb.temp_high
                 ]
                 results: List[pathlib.Path] = self.odb.plot_3d_all_times(
                     temp,
