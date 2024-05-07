@@ -16,9 +16,7 @@ dependencies = [
 dynamic = ["version",]
 
 [project.optional-dependencies]
-all = [
-    "plot",
-]
+all = ["odbp[plot]"]
 plot = [
     "polyscope",
     "scipy",

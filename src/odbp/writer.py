@@ -130,17 +130,6 @@ def convert_npz_to_h5(
                         with open(input_pickle, "rb") as pf:
                             part_to_nodesets_mapping = pickle.load(pf)
 
-                    case "element_connectivity":
-                        with open(input_pickle, "rb") as pf:
-                            element_connectivity_dict: dict[int, npt.NDArray] = pickle.load(pf)
-                            k: int
-                            v: npt.NDArray
-                            temp_element_connectivity: list[tuple[int, npt.NDArray]] = [(k, v) for k, v in element_connectivity_dict.items()]
-                            # Sort by label
-                            e: tuple[int, npt.NDArray]
-                            temp_element_connectivity = sorted(temp_element_connectivity, key=lambda e: e[0])
-                            element_connectivity = np.array([e[1] for e in temp_element_connectivity])
-
                     case _:
                         raise Exception(f"Unknown pickle file: {input_pickle}")
 
@@ -160,6 +149,10 @@ def convert_npz_to_h5(
                                     "Y": node_coords_data[:, 1].reshape((data_len, 1)),
                                     "Z": node_coords_data[:, 2].reshape((data_len, 1)),
                                 }
+
+                        case "element_connectivity":
+                            with np.load(npz_file) as data_file:
+                                element_connectivity: npt.NDArray = data_file[data_file.files[0]]
 
                         case _:
                             raise Exception(f"Unknown npz file: {npz_file}")
