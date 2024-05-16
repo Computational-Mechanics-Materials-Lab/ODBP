@@ -23,10 +23,20 @@ import operator
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-import polyscope as ps
 
-from scipy.spatial import ConvexHull
-from scipy.spatial.distance import cdist
+PLOTTING_AVAILABLE: bool
+try:
+    import polyscope as ps
+except (ImportError, ModuleNotFoundError):
+    PLOTTING_AVAILABLE = False
+else:
+    PLOTTING_AVAILABLE = True
+
+
+if PLOTTING_AVAILABLE:
+    from scipy.spatial import ConvexHull
+    from scipy.spatial.distance import cdist
+
 from typing import Any, Iterator, BinaryIO, Self, Callable, assert_never
 from io import BufferedReader
 
@@ -655,6 +665,8 @@ class Odbp(OdbpSettings):
                 self._iterable_cols_and_vals[col] = nodal_unique_vals
 
     def plot(self: Self, target_key: str | None = None, *, target_key_lower_bound: float | None = None, target_key_upper_bound: float | None = None) -> None:
+        if not PLOTTING_AVAILABLE:
+            raise RuntimeError('You have used the minimal odbp installation method without Polyscope for visualization. Please install via `pip install odbp["plot"]` to install these features, or `pip install odbp["all"]` to install all optional dependencies.')
         use_cmap: bool = False
         if target_key is not None:
             if target_key not in self.outputs.outputs_by_names:
@@ -818,6 +830,8 @@ class Odbp(OdbpSettings):
                     def_key: str
                     scalar_data, struct, def_key = frame_struct
                     struct.add_scalar_quantity(target_key, scalar_data, defined_on=def_key, enabled=True, vminmax=(target_key_lower_bound, target_key_upper_bound), cmap=self.colormap)
+                    if hasattr(struct, "set_back_face_policy"):
+                        struct.set_back_face_policy("identical")
                 elif len(frame_struct) == 2:
                     scalar_data, struct = frame_struct
                     struct.add_scalar_quantity(target_key, scalar_data, enabled=True, vminmax=(target_key_lower_bound, target_key_upper_bound), cmap=self.colormap)
