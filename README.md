@@ -14,6 +14,5 @@ pip install odbp
 ```
 
 ## See [GETTING STARTED](./GETTING_STARTED.md) for basic tutorial.
-### April 2024: The above GETTING STARTED is out of date. It will be fixed soon!
 
 ## See [the example odbs repository](https://data.mendeley.com/datasets/g9m574ybt8/2) for the small .odb files used to benchmark ODBP
