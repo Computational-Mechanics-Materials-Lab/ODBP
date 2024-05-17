@@ -15,4 +15,4 @@ pip install odbp
 
 ## See [GETTING STARTED](./GETTING_STARTED.md) for basic tutorial.
 
-## See [the example odbs repository](https://data.mendeley.com/datasets/g9m574ybt8/2) for the small .odb files used to benchmark ODBP
+## See [the example odbs repository](https://data.mendeley.com/datasets/g9m574ybt8) for the small .odb files used to benchmark ODBP
