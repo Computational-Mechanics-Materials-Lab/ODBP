@@ -733,6 +733,11 @@ class Odbp(OdbpSettings):
                         match plot_type:
                             case self.ODBPPLOTYPE.ONLY_SURFACE:
                                 hull = ConvexHull(nodes[coord_index].to_numpy())
+                                print(f"Hull Volume: {hull.volume}")
+                                hull_center_x = np.mean(hull.points[hull.vertices, 0])
+                                hull_center_y = np.mean(hull.points[hull.vertices, 1])
+                                hull_center_z = np.mean(hull.points[hull.vertices, 2])
+                                print(f"Hull Center: ({hull_center_x}, {hull_center_y}, {hull_center_z})")
                                 surf = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0., 0., 0.,), edge_width=1, material=self.material)
                                 if use_cmap:
                                     current_frame_structs.append((nodes[[target_key]].to_numpy().flatten(), surf, surf_key_quantity_def))
@@ -765,6 +770,11 @@ class Odbp(OdbpSettings):
                         match plot_type:
                             case self.ODBPPLOTYPE.SURFACE_WITH_REMAINING_NODES:
                                 hull = ConvexHull(selected_nodes[coord_index].to_numpy())
+                                print(f"Hull Volume: {hull.volume}")
+                                hull_center_x = np.mean(hull.points[hull.vertices, 0])
+                                hull_center_y = np.mean(hull.points[hull.vertices, 1])
+                                hull_center_z = np.mean(hull.points[hull.vertices, 2])
+                                print(f"Hull Center: ({hull_center_x}, {hull_center_y}, {hull_center_z})")
                                 surf = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0,0,0), edge_width=1, material=self.material)
                                 if use_cmap:
                                     current_frame_structs.append((selected_nodes[[target_key]].to_numpy().flatten(), surf, surf_key_quantity_def))
@@ -818,6 +828,11 @@ class Odbp(OdbpSettings):
                             case self.ODBPPLOTYPE.ELEMS_AND_SURFACE_OF_REMAINING_NODES: 
                                 if frame.remaining_nodes_not_in_elements is not None:
                                     hull = ConvexHull(frame.remaining_nodes_not_in_elements[coord_index].to_numpy())
+                                    print(f"Hull Volume: {hull.volume}")
+                                    hull_center_x = np.mean(hull.points[hull.vertices, 0])
+                                    hull_center_y = np.mean(hull.points[hull.vertices, 1])
+                                    hull_center_z = np.mean(hull.points[hull.vertices, 2])
+                                    print(f"Hull Center: ({hull_center_x}, {hull_center_y}, {hull_center_z})")
                                     surf = ps.register_surface_mesh("surf", hull.points, hull.simplices, enabled=True, edge_color=(0, 0, 0), edge_width=1, material=self.material)
                                     if use_cmap:
                                         current_frame_structs.append((frame.remaining_nodes_not_in_elements[[target_key]].to_numpy().flatten(), surf, surf_key_quantity_def))
